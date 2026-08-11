@@ -34,6 +34,10 @@ python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json
                                                         # write out/desk_brief_2026-08-10.md
 python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json --digests
                                                         # ...plus out/digests/<as_of>/<owner>.md
+python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json --team "Team EMEA-1"
+                                                        # filtered brief for one team (repeatable
+                                                        # --team/--owner/--region, case-insensitive;
+                                                        # writes a suffixed file, never records a run)
 streamlit run app/dashboard.py                          # read-only dashboard
 pytest -q                                               # full test suite
 ```
@@ -91,14 +95,18 @@ since-last-run (desk score, open pipeline, at-risk dollars — at-risk uses
 `delta_color="inverse"` so rising risk reads red), the violation counts as
 colored text, and the severity mix as a compact stacked bar. The sidebar
 holds the data source (stored snapshot picker or CSV upload), the explicit
-`as_of` evaluation date, and owner/stage/severity filters.
+`as_of` evaluation date, and owner/team/stage/severity filters (team
+selections expand to their rosters; the sidebar states which tables the
+filters apply to — headline metrics and team/region rollups stay
+desk-wide).
 
 ### Forecast call (landing tab)
 
 Built to stand alone for a Monday meeting: the risky commits table — every
 open commit/best_case deal carrying a risk flag, dollar-ranked, each with
 the deterministic coaching prompt of its dominant rule — plus the
-since-last-run summary line.
+since-last-run summary line. Sidebar filters apply here too, so a
+frontline manager can run her 9:00 call on just her team's risky commits.
 
 ![Forecast call tab](docs/screenshots/tab-forecast-call.png)
 
@@ -117,16 +125,19 @@ Altair charts across stored snapshots: coverage (open vs required pipeline
 at 1 / trailing win rate, with the basis printed underneath),
 created-vs-closed weekly flow bars, and the desk score trend from recorded
 brief runs. Needs at least 2 stored snapshots; with fewer it degrades to a
-clear caption instead of a one-point trend.
+clear caption instead of a one-point trend. Below the charts: commit
+accuracy by committed-for quarter (the fiscal quarter of the close date
+when the deal was first called commit — immune to later pushes, so a
+slipped commit stays counted against the quarter it was promised for).
 
 ![Trajectory tab](docs/screenshots/tab-trajectory.png)
 
 ### Owners
 
 Owner scoreboard (progress-bar scores, pipeline dollars, coverage, small_n
-and low_coverage flags) plus the forecast-integrity patterns — overcall /
-undercall, always rendered with the "coaching signal, not a comp input"
-disclaimer. Coverage is open pipeline vs required pipeline (remaining quota
+and low_coverage flags), the forecast-integrity patterns — overcall /
+undercall — and the per-owner commit-accuracy ledger, all rendered with
+the "coaching signal, not a comp input" disclaimer. Coverage is open pipeline vs required pipeline (remaining quota
 net of wins this quarter x the win-rate-derived required multiple — the same
 basis as the desk headline), and `low_coverage` means exactly under 1.00x,
 so the shown ratio and the flag can never disagree.
@@ -137,10 +148,10 @@ so the shown ratio and the flag can never disagree.
 
 Team and region roll-ups over the same open opps — owners, open pipeline,
 roster quota, coverage, violations, at-risk dollars — sorted worst coverage
-first so ordering itself carries the signal. Team/region membership comes
-from the `owners` block of the `--quotas`/`PIPELINE_HYGIENE_QUOTAS` JSON
-(the seed manifest already carries it); without that metadata the tab
-degrades to a clear caption.
+first so ordering itself carries the signal, plus commit accuracy by team
+and region. Team/region membership comes from the `owners` block of the
+`--quotas`/`PIPELINE_HYGIENE_QUOTAS` JSON (the seed manifest already
+carries it); without that metadata the tab degrades to a clear caption.
 
 ![Teams tab](docs/screenshots/tab-teams.png)
 
@@ -344,6 +355,49 @@ never by running the rules engine, so the comparison is non-circular.
   coaching evidence favors private weekly digests; published rankings
   raise attrition.
 
+- Commit accuracy (forecast ledger): of opps ever forecast `commit` in
+  stored history (`src/patterns.commit_ledger`), one mutually exclusive
+  outcome to date — won / lost / pushed (still open with a later
+  close-date move after the first commit snapshot) / still open — so
+  shares sum to 100%. The committed-for quarter anchors to the close date
+  at the FIRST commit snapshot, so a later push can never move a
+  commitment between quarters. Rolled up by owner, team, and quarter in
+  the brief appendix and the dashboard Owners/Teams/Trajectory tabs;
+  tables sort alphabetically/chronologically, deliberately NOT worst-first
+  (an accuracy leaderboard is one sort away from a comp weapon), and
+  always carry the coaching-signal disclaimer. Recomputed
+  deterministically from the store on every run — nothing persisted,
+  nothing to drift. "Won/resolved" counts closed opps only, shown as a
+  won/closed fraction; the percentage renders only once
+  `min_opps_for_owner_score`+ commits have resolved (both persona sims
+  independently hit a bare "100%" on n=1 — exactly the number that gets
+  screenshot into a leaderboard). Each private digest carries its owner's
+  own ledger row ("Of your N ever-commit deals ...") so a flagged seller
+  sees the same numbers, and nothing more, that the brief shows.
+- Coverage basis strings carry the exact fraction ("trailing win rate
+  20/32 closed won (62.5%) -> required multiple 32/20 = 1.60x") so a
+  reader can reproduce required pipeline to the dollar; a rounded
+  multiple alone broke the napkin check by ~$285K in the persona sim
+  (Dana's "math she has to trust rather than see").
+- Filtered brief: `--owner`/`--team`/`--region` (repeatable, combinable)
+  restrict the whole brief to a selection; team/region membership comes
+  from the `--quotas` `owners` block. Matching is case-insensitive and
+  the "Team " prefix is optional (`--team na-east-1` finds
+  `Team NA-East-1`); unknown names are errors listing the known values,
+  never guesses. Every rollup and dollar figure recomputes over the
+  selection (headline says "Selection score"), EXCEPT the required
+  coverage multiple, which stays desk-wide
+  (one coverage basis everywhere: a team's filtered coverage equals its
+  row in the unfiltered Teams table). Filtered briefs are marked
+  "FILTERED BRIEF" under the title, are never recorded in the `runs`
+  table (a partial open-opp map would corrupt flag streaks and
+  since-last-run for later full briefs), and write to
+  `desk_brief_<as_of>_<filter-slug>.md` so the canonical brief survives.
+  The previous run's desk score is dropped from a filtered "since last
+  run" (it was desk-wide, not comparable), and opps that left the
+  snapshot cannot be owner-attributed, so a filtered "removed" list is
+  always empty. `--digests` under a filter writes digests for the
+  selection only (content identical to unfiltered digests).
 - Dashboard tabs mirror the brief structure (Forecast call landing,
   Slippage, Trajectory, Owners, Appendix) rather than inventing a second
   information architecture; each tab is designed to fit one screen. Charts

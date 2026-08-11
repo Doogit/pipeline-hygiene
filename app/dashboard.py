@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src import brief
 from src.ingest import AllRowsRejectedError, IngestError, load_config, \
     snapshot_date_from_filename, validate_csv
-from src.patterns import owner_patterns
+from src.patterns import commit_ledger, ledger_rollups, owner_patterns
 from src.rules import RULE_LABELS, is_open
 from src.scoring import opp_score
 from src.snapshots import SnapshotStore
@@ -119,10 +119,12 @@ else:
 as_of = st.sidebar.date_input("Evaluate as of", value=snapshot_date)
 patterns = (owner_patterns(store, as_of, config, snapshot_date)
             if store else None)
+ledger = (commit_ledger(store, as_of, config, snapshot_date)
+          if store else None)
 data = brief.build_from_rows(rows, snapshot_date, as_of, config,
                              validation=validation, prev_summary=prev_summary,
                              outcomes=outcomes, prev_opens=prev_opens,
-                             patterns=patterns)
+                             patterns=patterns, ledger=ledger)
 results, desk = data["results"], data["desk"]
 rows_by_id = {r["opp_id"]: r for r in rows}
 delta = data["since_last_run"]
@@ -194,15 +196,26 @@ st.sidebar.header("Filters")
 owners_all = sorted({r["owner"] for r in rows if is_open(r)})
 stages_all = sorted({r["stage"] for r in rows if is_open(r)})
 f_owners = st.sidebar.multiselect("Owner", owners_all)
+_owner_meta = config.get("owner_meta") or {}
+teams_all = sorted({(m or {}).get("team")
+                    for m in _owner_meta.values()} - {None})
+f_teams = st.sidebar.multiselect("Team", teams_all) if teams_all else []
 f_stages = st.sidebar.multiselect("Stage", stages_all)
 f_sev = st.sidebar.multiselect("Severity", ["high", "medium", "low"])
-st.sidebar.caption("Severity filter: an opp appears under **each** severity "
-                   "it carries, so one opp can match several selections; "
-                   "empty filters mean no restriction.")
+st.sidebar.caption("Filters apply to the Risky commits, Slippage, Owners "
+                   "and Appendix tables; headline metrics and team/region "
+                   "rollups stay desk-wide. Severity filter: an opp appears "
+                   "under **each** severity it carries, so one opp can "
+                   "match several selections; empty filters mean no "
+                   "restriction.")
+# Team selections expand to their rosters and union with the Owner picks,
+# so a frontline manager filters to her team without picking 8 of 60 names.
+f_owner_set = set(f_owners) | {o for o, m in _owner_meta.items()
+                               if (m or {}).get("team") in f_teams}
 
 
 def _matches(row, result):
-    if f_owners and row["owner"] not in f_owners:
+    if f_owner_set and row["owner"] not in f_owner_set:
         return False
     if f_stages and row["stage"] not in f_stages:
         return False
@@ -215,6 +228,41 @@ _MONEY_COL = st.column_config.NumberColumn(format="$%d")
 _SCORE_COL = st.column_config.ProgressColumn(format="%d", min_value=0,
                                              max_value=100)
 
+LEDGER_CAPTION = ("Of opps ever forecast commit in stored history: outcome "
+                  "to date. Pushed = still open with a close-date move after "
+                  "the first commit snapshot. Won/resolved counts closed "
+                  "opps only, shown as won/closed; the percentage appears "
+                  "once {min_n}+ have resolved (small-n rates mislead). "
+                  "Coaching signal, not a comp input.")
+
+
+def _ledger_df(entries, key_fn, label):
+    rollups = ledger_rollups(entries, key_fn)
+    min_n = config["min_opps_for_owner_score"]
+    records = []
+    for key in sorted(rollups, key=lambda k: (k is None, k or "")):
+        g = rollups[key]
+        records.append({
+            label: "unknown" if key is None else key,
+            "ever commit": g["n"], "won": g["won"], "lost": g["lost"],
+            "pushed": g["pushed"], "still open": g["open"],
+            "won/resolved": brief.ledger_rate(g, min_n),
+        })
+    return pd.DataFrame(records)
+
+
+def _ledger_section(entries, key_fn, label):
+    """One commit-accuracy table with the standing disclaimer; degrades to a
+    clear caption outside the store or with no ever-commit history."""
+    st.caption(LEDGER_CAPTION.format(min_n=config["min_opps_for_owner_score"]))
+    if entries is None:
+        st.caption("Unavailable outside the snapshot store.")
+    elif not entries:
+        st.caption("No opp in stored history has ever been forecast commit.")
+    else:
+        st.dataframe(_ledger_df(entries, key_fn, label), width="stretch",
+                     hide_index=True)
+
 tab_call, tab_slip, tab_traj, tab_owners, tab_teams, tab_appendix = st.tabs(
     ["Forecast call", "Slippage", "Trajectory", "Owners", "Teams", "Appendix"])
 
@@ -222,15 +270,18 @@ tab_call, tab_slip, tab_traj, tab_owners, tab_teams, tab_appendix = st.tabs(
 
 with tab_call:
     st.subheader("Risky commits")
-    entries = data["risky_commits"]
+    entries = [e for e in data["risky_commits"]
+               if _matches(e["row"], e["result"])]
     if not entries:
         st.caption("No commit/best_case opp carries a risk flag "
-                   f"({', '.join(brief.RISKY_RULES)}).")
+                   f"({', '.join(brief.RISKY_RULES)}) matching the filters.")
     else:
         total = sum(e["row"]["amount"] or 0.0 for e in entries)
+        filtered_note = (" matching the filters"
+                         if f_owner_set or f_stages or f_sev else "")
         st.markdown(f"**{len(entries)}** commit/best_case opps carry a risk "
-                    f"flag — **${total:,.0f}** (distinct opps), "
-                    f"dollar-ranked. Coaching prompts, not gotchas.")
+                    f"flag{filtered_note} — **${total:,.0f}** (distinct "
+                    f"opps), dollar-ranked. Coaching prompts, not gotchas.")
         risky_df = pd.DataFrame([{
             "opp_id": e["row"]["opp_id"], "account": e["row"]["account"],
             "owner": e["row"]["owner"],
@@ -413,13 +464,20 @@ with tab_traj:
         st.caption("Desk score trend appears after 2+ recorded brief runs "
                    "(python -m src.brief).")
 
+    st.subheader("Commit accuracy by committed-for quarter")
+    st.caption("Committed-for quarter = fiscal quarter of the close date "
+               "when the deal was first called commit — immune to later "
+               "pushes, so a slipped commit stays counted against the "
+               "quarter it was promised for.")
+    _ledger_section(ledger, lambda e: e.committed_quarter, "quarter")
+
 # --- Owners ---
 
 with tab_owners:
     st.subheader("Owner scoreboard")
     owner_records = []
     for stats in data["owners"].values():
-        if f_owners and stats.owner not in f_owners:
+        if f_owner_set and stats.owner not in f_owner_set:
             continue
         owner_records.append({
             "owner": stats.owner, "open": stats.n_open,
@@ -471,6 +529,12 @@ with tab_owners:
         st.caption(f"Suppressed as small_n: {small} owners with too little "
                    f"history to score.")
 
+    st.subheader("Commit accuracy")
+    owner_entries = (None if ledger is None else
+                     [e for e in ledger
+                      if not f_owner_set or e.owner in f_owner_set])
+    _ledger_section(owner_entries, lambda e: e.owner, "owner")
+
 # --- Teams (team/region rollups) ---
 
 with tab_teams:
@@ -510,6 +574,18 @@ with tab_teams:
             st.markdown(f"**{label}**")
             st.dataframe(_group_df(groups), width="stretch", hide_index=True,
                          column_config=_GROUP_COLS)
+
+        st.subheader("Commit accuracy by team and region")
+        owner_meta = config.get("owner_meta") or {}
+        _ledger_section(
+            ledger,
+            lambda e: (owner_meta.get(e.owner) or {}).get("team"), "team")
+        if ledger:
+            st.dataframe(
+                _ledger_df(ledger,
+                           lambda e: (owner_meta.get(e.owner) or {})
+                           .get("region"), "region"),
+                width="stretch", hide_index=True)
 
 # --- Appendix: full exception list + validation (drill-down only) ---
 

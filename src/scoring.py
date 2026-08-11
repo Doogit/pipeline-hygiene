@@ -20,6 +20,15 @@ def opp_score(result, config):
     return max(0, 100 - sum(weights[v.rule_id] for v in result.violations))
 
 
+def fiscal_quarter(d, fy_start_month):
+    """FY<year>-Q<n>; fiscal years are named for the calendar year they end in
+    (fy_start_month 7 puts 2026-08 in FY2027-Q1). Lives here so brief and
+    patterns share one definition without an import cycle."""
+    quarter = (d.month - fy_start_month) % 12 // 3 + 1
+    fy_year = d.year + (1 if fy_start_month > 1 and d.month >= fy_start_month else 0)
+    return f"FY{fy_year}-Q{quarter}"
+
+
 @dataclass(frozen=True)
 class OwnerStats:
     owner: str
@@ -87,9 +96,12 @@ def required_coverage_multiple(outcomes, config):
     if n_closed >= config["min_closed_for_win_rate"] and won:
         win_rate = len(won) / n_closed
         multiple = 1.0 / win_rate
-        basis = (f"trailing win rate {win_rate:.0%} over {n_closed} "
-                 f"stored closed outcomes -> required multiple "
-                 f"{multiple:.1f}x")
+        # The fraction lets a reader reproduce the required-pipeline number
+        # exactly (remaining quota x n_closed/n_won); a rounded multiple
+        # alone breaks the napkin check by thousands of dollars.
+        basis = (f"trailing win rate {len(won)}/{n_closed} closed won "
+                 f"({win_rate:.1%}) -> required multiple "
+                 f"{n_closed}/{len(won)} = {multiple:.2f}x")
     else:
         multiple = config["coverage_ratio_min"]
         basis = (f"config coverage_ratio_min {multiple:.1f}x (stored "

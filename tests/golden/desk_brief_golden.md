@@ -36,8 +36,8 @@ Snapshot 2026-08-10 (opps_2026-08-10.csv), evaluated as of 2026-08-10.
 
 - Flow since last run: no previous run recorded.
 - Coverage (FY2027-Q1): open pipeline $43,165,232 vs required $78,988,984 -> 0.55x
-  - Remaining quota $49,368,115 (quota $50,620,000 - won this quarter $1,251,885) x 1.6
-  - Basis: trailing win rate 62% over 32 stored closed outcomes -> required multiple 1.6x
+  - Remaining quota $49,368,115 (quota $50,620,000 - won this quarter $1,251,885) x 1.60
+  - Basis: trailing win rate 20/32 closed won (62.5%) -> required multiple 32/20 = 1.60x
 
 ## Since last run
 
@@ -77,7 +77,7 @@ Drill-down detail. The forecast call runs off page 1.
 
 ### Owners
 
-Coverage = open pipeline vs required pipeline (remaining quota net of wins this quarter x the required multiple); low_coverage means under 1.00x. Basis: trailing win rate 62% over 32 stored closed outcomes -> required multiple 1.6x.
+Coverage = open pipeline vs required pipeline (remaining quota net of wins this quarter x the required multiple); low_coverage means under 1.00x. Basis: trailing win rate 20/32 closed won (62.5%) -> required multiple 32/20 = 1.60x.
 
 | Owner | Open | Mean | Median | Violations | Pipeline | Coverage | Flags |
 |---|---|---|---|---|---|---|---|
@@ -144,7 +144,7 @@ Coverage = open pipeline vs required pipeline (remaining quota net of wins this 
 
 ### Teams and regions
 
-Coverage = open pipeline vs required pipeline (remaining quota net of wins this quarter x the required multiple); low_coverage means under 1.00x. Basis: trailing win rate 62% over 32 stored closed outcomes -> required multiple 1.6x.
+Coverage = open pipeline vs required pipeline (remaining quota net of wins this quarter x the required multiple); low_coverage means under 1.00x. Basis: trailing win rate 20/32 closed won (62.5%) -> required multiple 32/20 = 1.60x.
 
 ### Teams
 
@@ -211,6 +211,60 @@ Coaching signal, not a comp input.
 - Undercall pattern: Sage Vantrease — open pipeline 43% omitted, 40% far-out (n=6)
 - Undercall pattern: Wren Ivesdale — open pipeline 43% omitted, 43% far-out (n=5)
 - Suppressed as small_n: 4 owners with too little history to score
+
+### Commit accuracy (forecast ledger)
+
+Coaching signal, not a comp input.
+
+Of opps ever forecast commit in stored history: outcome to date. Pushed = still open with a close-date move after the first commit snapshot; committed-for quarter = fiscal quarter of the close date when first called commit (immune to later pushes). Won/resolved counts closed opps only, shown as won/closed; the percentage appears once 5+ have resolved (small-n rates mislead).
+
+| Owner | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
+|---|---|---|---|---|---|---|
+| Avery Calloway | 1 | 0 | 0 | 0 | 1 | n/a |
+| Avery Ristori | 4 | 0 | 0 | 0 | 4 | n/a |
+| Casey Grantley | 2 | 0 | 0 | 0 | 2 | n/a |
+| Corin Farrow | 5 | 0 | 0 | 0 | 5 | n/a |
+| Darby Bramwell | 2 | 0 | 0 | 0 | 2 | n/a |
+| Frankie Denholm | 2 | 0 | 0 | 0 | 2 | n/a |
+| Harper Bramwell | 2 | 0 | 0 | 0 | 2 | n/a |
+| Harper Ivesdale | 1 | 0 | 0 | 0 | 1 | n/a |
+| Hollis Underhill | 3 | 0 | 0 | 0 | 3 | n/a |
+| Kendall Lindqvist | 1 | 0 | 0 | 0 | 1 | n/a |
+| Logan Ivesdale | 3 | 0 | 0 | 0 | 3 | n/a |
+| Marlow Bramwell | 4 | 0 | 0 | 0 | 4 | n/a |
+| Quinn Lindqvist | 1 | 0 | 0 | 0 | 1 | n/a |
+| Quinn Ristori | 3 | 0 | 0 | 0 | 3 | n/a |
+| Reese Northcote | 1 | 0 | 0 | 0 | 1 | n/a |
+| Sage Bramwell | 1 | 0 | 0 | 0 | 1 | n/a |
+| Sage Oakhurst | 3 | 0 | 0 | 0 | 3 | n/a |
+| Vesper Calloway | 1 | 0 | 0 | 0 | 1 | n/a |
+| Vesper Westerley | 1 | 0 | 0 | 0 | 1 | n/a |
+
+| Team | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
+|---|---|---|---|---|---|---|
+| Team APAC-1 | 9 | 0 | 0 | 0 | 9 | n/a |
+| Team APAC-2 | 8 | 0 | 0 | 0 | 8 | n/a |
+| Team EMEA-1 | 3 | 0 | 0 | 0 | 3 | n/a |
+| Team EMEA-2 | 2 | 0 | 0 | 0 | 2 | n/a |
+| Team NA-East-1 | 6 | 0 | 0 | 0 | 6 | n/a |
+| Team NA-East-2 | 2 | 0 | 0 | 0 | 2 | n/a |
+| Team NA-West-1 | 1 | 0 | 0 | 0 | 1 | n/a |
+| Team NA-West-2 | 5 | 0 | 0 | 0 | 5 | n/a |
+| Team NA-West-3 | 5 | 0 | 0 | 0 | 5 | n/a |
+
+| Region | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
+|---|---|---|---|---|---|---|
+| APAC | 17 | 0 | 0 | 0 | 17 | n/a |
+| EMEA | 5 | 0 | 0 | 0 | 5 | n/a |
+| NA-East | 8 | 0 | 0 | 0 | 8 | n/a |
+| NA-West | 11 | 0 | 0 | 0 | 11 | n/a |
+
+| Committed-for quarter | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
+|---|---|---|---|---|---|---|
+| FY2027-Q1 | 25 | 0 | 0 | 0 | 25 | n/a |
+| FY2027-Q2 | 13 | 0 | 0 | 0 | 13 | n/a |
+| FY2027-Q3 | 2 | 0 | 0 | 0 | 2 | n/a |
+| FY2028-Q1 | 1 | 0 | 0 | 0 | 1 | n/a |
 
 ### Since last run (detail)
 

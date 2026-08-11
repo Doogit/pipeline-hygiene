@@ -123,6 +123,14 @@ class SnapshotStore:
         dates = self.snapshot_dates()
         return dates[-1] if dates else None
 
+    def owners(self, snapshot_date):
+        """Distinct owners present in one stored snapshot, sorted."""
+        cur = self.conn.execute(
+            "SELECT DISTINCT owner FROM opportunities "
+            "WHERE snapshot_date = ? ORDER BY owner",
+            (snapshot_date.isoformat(),))
+        return [r[0] for r in cur.fetchall()]
+
     def validation_report_dict(self, snapshot_date):
         """Stored ValidationReport.to_dict() for a snapshot, or None."""
         row = self.conn.execute(

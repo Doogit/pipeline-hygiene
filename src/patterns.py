@@ -22,9 +22,17 @@ Per owner, over stored history <= as_of (explicit as_of; no date.today()):
 
 Metrics are reported with their n and suppressed (never flagged) under
 min_opps_for_owner_score, carrying small_n flags instead.
+
+commit_ledger extends the same history walk into a forecast-accuracy ledger:
+one entry per opp ever forecast commit, with a mutually exclusive outcome to
+date (won / lost / pushed / open) and the fiscal quarter the deal was
+committed FOR. Recomputed deterministically from the store on every run —
+nothing to persist, nothing to drift.
 """
 from dataclasses import dataclass
 from datetime import date, timedelta
+
+from .scoring import fiscal_quarter
 
 
 @dataclass(frozen=True)
@@ -58,6 +66,16 @@ def _histories(store, snapshot_date):
         histories.setdefault(opp_id, []).append(
             (snap, owner, stage, forecast, close))
     return histories
+
+
+def _pushed_after(history, first_snap):
+    """Any later close-date move in a consecutive-snapshot pair strictly
+    after first_snap (the shared push test for overcall and the ledger)."""
+    return any(
+        prev_close is not None and cur_close is not None
+        and cur_close > prev_close and cur_snap > first_snap
+        for (_, _, _, _, prev_close), (cur_snap, _, _, _, cur_close)
+        in zip(history, history[1:]))
 
 
 def owner_patterns(store, as_of, config, snapshot_date=None):
@@ -96,12 +114,7 @@ def owner_patterns(store, as_of, config, snapshot_date=None):
                           if forecast == "commit"), None)
         if commit_at is not None:
             stats["ever_commit"] += 1
-            pushed = any(
-                prev_close is not None and cur_close is not None
-                and cur_close > prev_close and cur_snap > commit_at
-                for (_, _, _, _, prev_close), (cur_snap, _, _, _, cur_close)
-                in zip(history, history[1:]))
-            if pushed or last_stage == "closed_lost":
+            if _pushed_after(history, commit_at) or last_stage == "closed_lost":
                 stats["overcalled"] += 1
 
         # undercall: wins observed open before the winning snapshot
@@ -169,3 +182,63 @@ def owner_patterns(store, as_of, config, snapshot_date=None):
                     >= thresholds["undercall_farout_share_min"])),
         )
     return patterns
+
+
+@dataclass(frozen=True)
+class CommitLedgerEntry:
+    opp_id: str
+    owner: str                     # from the opp's last observed row
+    first_commit_snapshot: date
+    committed_quarter: str         # fiscal quarter of the close_date at the
+                                   # first commit snapshot; None when blank
+    outcome: str                   # won | lost | pushed | open
+
+
+def commit_ledger(store, as_of, config, snapshot_date=None):
+    """Forecast-accuracy ledger: one CommitLedgerEntry per opp that ever
+    showed forecast_category commit in stored history <= snapshot_date
+    (defaulting to as_of, same anchoring contract as owner_patterns).
+
+    Outcomes are mutually exclusive so shares sum to 100%: won / lost (stage
+    at the last observed row), pushed (still open with a later close-date
+    move after the first commit snapshot), open (still open, untouched).
+    committed_quarter anchors to the close_date recorded when first called
+    commit — the quarter the deal was committed FOR, immune to later pushes.
+    """
+    snapshot_date = snapshot_date or as_of
+    fy_start = config["fiscal_year_start_month"]
+    entries = []
+    for opp_id, history in sorted(_histories(store, snapshot_date).items()):
+        commit = next(((snap, close) for snap, _o, _s, forecast, close
+                       in history if forecast == "commit"), None)
+        if commit is None:
+            continue
+        commit_snap, commit_close = commit
+        _, owner, last_stage, _, _ = history[-1]
+        if last_stage == "closed_won":
+            outcome = "won"
+        elif last_stage == "closed_lost":
+            outcome = "lost"
+        else:
+            outcome = ("pushed" if _pushed_after(history, commit_snap)
+                       else "open")
+        entries.append(CommitLedgerEntry(
+            opp_id=opp_id, owner=owner,
+            first_commit_snapshot=date.fromisoformat(commit_snap),
+            committed_quarter=(
+                fiscal_quarter(date.fromisoformat(commit_close), fy_start)
+                if commit_close else None),
+            outcome=outcome))
+    return entries
+
+
+def ledger_rollups(entries, key_fn):
+    """Aggregate ledger entries into {key_fn(entry): outcome counts}. Pure;
+    callers derive shares from the counts (rendering owns the formatting)."""
+    groups = {}
+    for entry in entries:
+        g = groups.setdefault(key_fn(entry), {"n": 0, "won": 0, "lost": 0,
+                                              "pushed": 0, "open": 0})
+        g["n"] += 1
+        g[entry.outcome] += 1
+    return groups
