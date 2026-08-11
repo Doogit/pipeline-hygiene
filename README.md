@@ -44,30 +44,61 @@ pytest -q                                               # full test suite
 streamlit run app/dashboard.py
 ```
 
-![Forecast call tab](docs/screenshots/tab-forecast-call.png)
-
 The dashboard is a read-only Streamlit app whose tabs mirror the brief
 structure — it never writes to the store or to source data, and viewing or
-downloading a brief from it does not record a run.
+downloading a brief from it does not record a run. Every view shares the
+same headline: an `st.metric` row with week-over-week delta arrows wired to
+since-last-run (desk score, open pipeline, at-risk dollars — at-risk uses
+`delta_color="inverse"` so rising risk reads red), the violation counts as
+colored text, and the severity mix as a compact stacked bar. The sidebar
+holds the data source (stored snapshot picker or CSV upload), the explicit
+`as_of` evaluation date, and owner/stage/severity filters.
 
-- **Forecast call** (landing tab): headline `st.metric` row with
-  week-over-week delta arrows wired to since-last-run (desk score, open
-  pipeline, at-risk dollars — at-risk uses `delta_color="inverse"` so rising
-  risk reads red), the severity mix as a compact stacked bar, and the risky
-  commits table with per-deal coaching prompts. Built to stand alone for a
-  Monday meeting.
-- **Slippage**: the Task 8 push analytics, including a per-opp close-date
-  drift sparkline (`st.column_config.LineChartColumn`).
-- **Trajectory**: Altair charts — coverage (open vs required pipeline at
-  1 / trailing win rate) across stored snapshots, created-vs-closed weekly
-  flow bars, and the desk score trend from recorded brief runs. Needs at
-  least 2 stored snapshots; with fewer it degrades to a clear caption
-  instead of a one-point trend.
-- **Owners**: owner scoreboard plus the forecast-integrity patterns
-  (coaching signal, not a comp input).
-- **Appendix**: the full exception list (the only place it appears —
-  drill-down, never the headline), validation report, and the
-  download-brief button.
+### Forecast call (landing tab)
+
+Built to stand alone for a Monday meeting: the risky commits table — every
+open commit/best_case deal carrying a risk flag, dollar-ranked, each with
+the deterministic coaching prompt of its dominant rule — plus the
+since-last-run summary line.
+
+![Forecast call tab](docs/screenshots/tab-forecast-call.png)
+
+### Slippage
+
+The push analytics derived from snapshot history: pushes, cumulative
+later-drift, max push, H11 badges, the disqualification-review marker at
+3+ pushes, and a per-opp close-date drift sparkline
+(`st.column_config.LineChartColumn`).
+
+![Slippage tab](docs/screenshots/tab-slippage.png)
+
+### Trajectory
+
+Altair charts across stored snapshots: coverage (open vs required pipeline
+at 1 / trailing win rate, with the basis printed underneath),
+created-vs-closed weekly flow bars, and the desk score trend from recorded
+brief runs. Needs at least 2 stored snapshots; with fewer it degrades to a
+clear caption instead of a one-point trend.
+
+![Trajectory tab](docs/screenshots/tab-trajectory.png)
+
+### Owners
+
+Owner scoreboard (progress-bar scores, pipeline dollars, coverage, small_n
+and low_coverage flags) plus the forecast-integrity patterns — overcall /
+undercall, always rendered with the "coaching signal, not a comp input"
+disclaimer.
+
+![Owners tab](docs/screenshots/tab-owners.png)
+
+### Appendix
+
+The full exception list — the only place it appears; drill-down, never the
+headline — with streak annotations ("flagged N runs") and per-opp score
+history sparklines, plus the validation report and the download-brief
+button.
+
+![Appendix tab](docs/screenshots/tab-appendix.png)
 
 Implementation notes:
 
@@ -87,12 +118,8 @@ Implementation notes:
   `PIPELINE_HYGIENE_DB`, and `PIPELINE_HYGIENE_QUOTAS` (used by the
   `streamlit.testing.v1.AppTest` suite in `tests/test_dashboard.py` to run
   the app against isolated fixtures).
-- Per-tab screenshots live in `docs/screenshots/`:
-  [Forecast call](docs/screenshots/tab-forecast-call.png),
-  [Slippage](docs/screenshots/tab-slippage.png),
-  [Trajectory](docs/screenshots/tab-trajectory.png),
-  [Owners](docs/screenshots/tab-owners.png),
-  [Appendix](docs/screenshots/tab-appendix.png).
+- Source screenshots live in `docs/screenshots/` (captured from the app
+  running headless on 127.0.0.1 against the committed series data).
 
 ## Clock determinism
 
