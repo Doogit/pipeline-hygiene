@@ -77,3 +77,8 @@ def test_series_dates_weekly(config):
         total = (len(delta["cleared"]) + len(delta["introduced"])
                  + len(delta["closed"]) + len(delta["close_dates_pushed"]))
         assert total > 0
+        # mid-series creation: every week records new opps with their
+        # field-by-field expected sets
+        assert delta["added"]
+        for opp_id, rules in delta["added"].items():
+            assert rules == manifest["expected_by_snapshot"][delta["to"]][opp_id]

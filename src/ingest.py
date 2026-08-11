@@ -130,6 +130,7 @@ _OPTIONAL_CONFIG = {
     "quotas": dict,
     "owner_meta": dict,
     "display_currency_symbol": str,
+    "pipeline_gen_weekly_target": _NUMBER,
 }
 
 

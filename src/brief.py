@@ -156,6 +156,21 @@ def _money(amount, config=None):
             else f"{currency_symbol(config)}{amount:,.0f}")
 
 
+def pacing_data(waterfalls, config):
+    """Pipeline-generation pacing from the per-pair waterfalls: created
+    dollars/count per snapshot week, vs the optional
+    pipeline_gen_weekly_target (default null -> no target comparison is
+    rendered — a target is configured, never guessed)."""
+    if not waterfalls:
+        return None
+    weekly = [{"week": w["cur_date"], "n": w["created"]["n"],
+               "dollars": w["created"]["dollars"]} for w in waterfalls]
+    return {"weekly": weekly,
+            "mean_dollars": (sum(w["dollars"] for w in weekly)
+                             / len(weekly)),
+            "target": config.get("pipeline_gen_weekly_target")}
+
+
 def quota_owner_mismatch(quota_owners, snapshot_owners):
     """Symmetric difference between configured quota owners and the owners
     present in the evaluated snapshot. Returns None when no quotas are
@@ -296,6 +311,11 @@ def build(store, snapshot_date, as_of, config, owner_filter=None,
     if owner_filter is None:
         mismatch = quota_owner_mismatch(config.get("quotas") or {},
                                         store.owners(snapshot_date))
+    # One waterfall per consecutive stored pair <= the evaluated snapshot:
+    # the last one renders as the bridge table, the whole list feeds pacing.
+    stored = [d for d in store.snapshot_dates() if d <= snapshot_date]
+    waterfalls = [store.waterfall(a, b, owners=owner_filter)
+                  for a, b in zip(stored, stored[1:])]
     return build_from_rows(
         store.rows_with_history(snapshot_date), snapshot_date, as_of, config,
         validation=store.validation_report_dict(snapshot_date),
@@ -304,14 +324,14 @@ def build(store, snapshot_date, as_of, config, owner_filter=None,
         prev_opens=store.run_opens(before_snapshot_date=snapshot_date),
         patterns=owner_patterns(store, as_of, config, snapshot_date),
         ledger=commit_ledger(store, as_of, config, snapshot_date),
-        owner_mismatch=mismatch,
+        owner_mismatch=mismatch, waterfalls=waterfalls,
         owner_filter=owner_filter, filter_label=filter_label)
 
 
 def build_from_rows(rows, snapshot_date, as_of, config,
                     validation=None, prev_summary=None, outcomes=None,
                     prev_opens=None, patterns=None, ledger=None,
-                    owner_mismatch=None, owner_filter=None,
+                    owner_mismatch=None, waterfalls=None, owner_filter=None,
                     filter_label=None):
     """Compute all brief data from in-memory rows (e.g. a validated upload).
     outcomes: stored closed outcomes (store.closed_outcomes) for the
@@ -391,6 +411,8 @@ def build_from_rows(rows, snapshot_date, as_of, config,
         "coverage_basis": basis,
         "validation": validation,
         "owner_mismatch": owner_mismatch,
+        "waterfall": waterfalls[-1] if waterfalls else None,
+        "pacing": pacing_data(waterfalls, config),
         "insufficient": insufficient,
         "since_last_run": delta,
         "risky_commits": risky_commits(rows, results, config),
@@ -497,6 +519,8 @@ def _trajectory(lines, data, config):
                      f"{flow['won_n'] + flow['lost_n']} closed "
                      f"({flow['won_n']} won {_money(flow['won_dollars'], config)}, "
                      f"{flow['lost_n']} lost {_money(flow['lost_dollars'], config)})")
+    _waterfall_table(lines, data, config)
+    _pacing_line(lines, data, config)
     coverage = trajectory["coverage"]
     if coverage is None:
         lines.append("- Coverage: no quotas configured.")
@@ -511,6 +535,52 @@ def _trajectory(lines, data, config):
                  f"quarter {_money(coverage['won_this_quarter'], config)}) x "
                  f"{coverage['required_multiple']:.2f}")
     lines.append(f"  - Basis: {coverage['basis']}")
+
+
+def _waterfall_table(lines, data, config):
+    """Open-pipeline bridge between the last two stored snapshots. Pushes
+    move no dollars — they render as the annotation line, never a bucket."""
+    wf = data["waterfall"]
+    if wf is None:
+        lines.append("- Pipeline waterfall: needs a previous stored "
+                     "snapshot.")
+        return
+    lines.append(f"- Pipeline waterfall ({wf['prev_date'].isoformat()} -> "
+                 f"{wf['cur_date'].isoformat()}):")
+    lines.append("")
+    lines.append("| Bucket | Opps | Dollars |")
+    lines.append("|---|---|---|")
+    for sign, name in (("", "beginning"), ("+ ", "created"),
+                       ("+ ", "increased"), ("- ", "decreased"),
+                       ("- ", "won"), ("- ", "lost"), ("- ", "removed"),
+                       ("= ", "ending")):
+        bucket = wf[name]
+        label = {"beginning": "beginning open", "ending": "ending open"} \
+            .get(name, name)
+        lines.append(f"| {sign}{label} | {bucket['n']} "
+                     f"| {_money(bucket['dollars'], config)} |")
+    lines.append("")
+    pushed = wf["pushed"]
+    lines.append(f"  - Close-date pushes moved no dollars: {pushed['n']} "
+                 f"open opp(s) ({_money(pushed['dollars'], config)}) pushed "
+                 f"later.")
+
+
+def _pacing_line(lines, data, config):
+    pacing = data["pacing"]
+    if pacing is None:
+        return
+    latest = pacing["weekly"][-1]
+    line = (f"- Pipeline generation: {_money(latest['dollars'], config)} "
+            f"created across {latest['n']} opp(s) since the last snapshot; "
+            f"mean {_money(pacing['mean_dollars'], config)}/week over "
+            f"{len(pacing['weekly'])} snapshot pair(s)")
+    target = pacing["target"]
+    if target:
+        line += (f"; weekly target {_money(target, config)} "
+                 f"(latest {latest['dollars'] / target:.2f}x, "
+                 f"mean {pacing['mean_dollars'] / target:.2f}x)")
+    lines.append(line)
 
 
 def _since_last_run_summary(lines, data):

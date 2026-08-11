@@ -130,6 +130,14 @@ results, desk = data["results"], data["desk"]
 rows_by_id = {r["opp_id"]: r for r in rows}
 delta = data["since_last_run"]
 
+# One waterfall per consecutive stored snapshot pair <= the selected
+# snapshot: the single source of the created/won/lost flow numbers (the Flow
+# tab renders them; nothing else recomputes its own "created").
+snapshot_dates_all = ([d for d in store.snapshot_dates()
+                       if d <= snapshot_date] if store else [])
+waterfalls = [store.waterfall(a, b)
+              for a, b in zip(snapshot_dates_all, snapshot_dates_all[1:])]
+
 # --- headline metrics with since-last-run deltas ---
 
 open_pipeline = sum(r["amount"] or 0.0 for r in rows if is_open(r))
@@ -264,8 +272,10 @@ def _ledger_section(entries, key_fn, label):
         st.dataframe(_ledger_df(entries, key_fn, label), width="stretch",
                      hide_index=True)
 
-tab_call, tab_slip, tab_traj, tab_owners, tab_teams, tab_appendix = st.tabs(
-    ["Forecast call", "Slippage", "Trajectory", "Owners", "Teams", "Appendix"])
+(tab_call, tab_slip, tab_traj, tab_flow, tab_owners, tab_teams,
+ tab_appendix) = st.tabs(
+    ["Forecast call", "Slippage", "Trajectory", "Flow", "Owners", "Teams",
+     "Appendix"])
 
 # --- Forecast call (landing view; stands alone for a Monday meeting) ---
 
@@ -370,8 +380,7 @@ with tab_slip:
 
 with tab_traj:
     st.subheader("Trajectory")
-    snapshot_dates = ([d for d in store.snapshot_dates() if d <= snapshot_date]
-                      if store else [])
+    snapshot_dates = snapshot_dates_all
     if store is None or len(snapshot_dates) < 2:
         st.caption("Trajectory charts need at least 2 stored snapshots; "
                    "showing nothing rather than a one-point trend.")
@@ -405,41 +414,6 @@ with tab_traj:
         if basis:
             st.caption(f"Coverage basis: {basis}")
 
-        # created-vs-closed weekly flow
-        flow_records = []
-        for prev_d, cur_d in zip(snapshot_dates, snapshot_dates[1:]):
-            prev_ids = {r["opp_id"] for r in snap_rows[prev_d]}
-            prev_open = {r["opp_id"] for r in snap_rows[prev_d] if is_open(r)}
-            cur = snap_rows[cur_d]
-            week = cur_d.isoformat()
-            created = [r for r in cur if r["opp_id"] not in prev_ids]
-            closed = [r for r in cur
-                      if r["opp_id"] in prev_open and not is_open(r)]
-            flow_records.append({"week": week, "flow": "created",
-                                 "dollars": sum(r["amount"] or 0.0
-                                                for r in created),
-                                 "count": len(created)})
-            for stage, label in (("closed_won", "won"),
-                                 ("closed_lost", "lost")):
-                subset = [r for r in closed if r["stage"] == stage]
-                flow_records.append({"week": week, "flow": label,
-                                     "dollars": sum(r["amount"] or 0.0
-                                                    for r in subset),
-                                     "count": len(subset)})
-        st.altair_chart(
-            alt.Chart(pd.DataFrame(flow_records)).mark_bar().encode(
-                x=alt.X("week:N", title=None),
-                y=alt.Y("dollars:Q", title=CURRENCY),
-                color=alt.Color("flow:N",
-                                scale=alt.Scale(domain=list(FLOW_COLORS),
-                                                range=list(FLOW_COLORS.values())),
-                                legend=alt.Legend(title=None)),
-                xOffset="flow:N",
-                tooltip=["week", "flow", "count",
-                         alt.Tooltip("dollars:Q", format=",.0f")])
-            .properties(height=220, width=950,
-                        title="Created vs closed per snapshot week"))
-
     # desk score trend from the runs table
     run_scores = []
     if store is not None:
@@ -471,6 +445,98 @@ with tab_traj:
                "pushes, so a slipped commit stays counted against the "
                "quarter it was promised for.")
     _ledger_section(ledger, lambda e: e.committed_quarter, "quarter")
+
+# --- Flow (pipeline waterfall + generation pacing + created vs closed) ---
+
+with tab_flow:
+    st.subheader("Pipeline flow")
+    if not waterfalls:
+        st.caption("Flow needs at least 2 stored snapshots; showing nothing "
+                   "rather than a one-point bridge.")
+    else:
+        latest = waterfalls[-1]
+        st.markdown(f"**Waterfall {latest['prev_date'].isoformat()} → "
+                    f"{latest['cur_date'].isoformat()}**")
+        _WF_ORDER = ["beginning open", "+ created", "+ increased",
+                     "- decreased", "- won", "- lost", "- removed",
+                     "= ending open"]
+        _WF_KEYS = ["beginning", "created", "increased", "decreased",
+                    "won", "lost", "removed", "ending"]
+        wf_df = pd.DataFrame([
+            {"bucket": label, "opps": latest[key]["n"],
+             "dollars": latest[key]["dollars"],
+             "kind": ("level" if key in ("beginning", "ending")
+                      else "in" if label.startswith("+") else "out")}
+            for label, key in zip(_WF_ORDER, _WF_KEYS)])
+        st.altair_chart(
+            alt.Chart(wf_df).mark_bar().encode(
+                x=alt.X("bucket:N", sort=_WF_ORDER, title=None),
+                y=alt.Y("dollars:Q", title=CURRENCY),
+                color=alt.Color(
+                    "kind:N",
+                    scale=alt.Scale(domain=["level", "in", "out"],
+                                    range=["#0072B2", "#009E73", "#D55E00"]),
+                    legend=alt.Legend(orient="right", title=None)),
+                tooltip=["bucket", "opps",
+                         alt.Tooltip("dollars:Q", format=",.0f")])
+            .properties(height=240, width=950,
+                        title="Open-pipeline waterfall (latest snapshot "
+                              "pair)"))
+        pushed = latest["pushed"]
+        st.caption(f"Reconciles exactly: beginning + created + increased − "
+                   f"decreased − won − lost − removed = ending. Close-date "
+                   f"pushes moved no dollars: {pushed['n']} open opp(s) "
+                   f"({CURRENCY}{pushed['dollars']:,.0f}) pushed later — "
+                   f"an annotation, never a bucket.")
+
+        # pipeline-generation pacing
+        pacing = brief.pacing_data(waterfalls, config)
+        pace_df = pd.DataFrame([{"week": w["week"].isoformat(),
+                                 "created": w["dollars"], "opps": w["n"]}
+                                for w in pacing["weekly"]])
+        pace_chart = alt.Chart(pace_df).mark_bar(
+            size=26, color=FLOW_COLORS["created"]).encode(
+            x=alt.X("week:N", title=None),
+            y=alt.Y("created:Q", title=CURRENCY),
+            tooltip=["week", "opps",
+                     alt.Tooltip("created:Q", format=",.0f")])
+        if pacing["target"]:
+            rule = alt.Chart(pd.DataFrame(
+                [{"target": pacing["target"]}])).mark_rule(
+                color="#D55E00", strokeDash=[6, 3]).encode(y="target:Q")
+            pace_chart = pace_chart + rule
+            pace_note = (f" Weekly target {CURRENCY}"
+                         f"{pacing['target']:,.0f} (dashed).")
+        else:
+            pace_note = (" No pipeline_gen_weekly_target configured — no "
+                         "target line is guessed.")
+        st.altair_chart(pace_chart.properties(
+            height=200, width=950,
+            title="Pipeline generation: created per snapshot week"))
+        st.caption(f"Mean {CURRENCY}{pacing['mean_dollars']:,.0f}/week over "
+                   f"{len(pacing['weekly'])} snapshot pair(s).{pace_note}")
+
+        # created vs closed, from the same waterfall buckets
+        flow_records = []
+        for w in waterfalls:
+            week = w["cur_date"].isoformat()
+            for label in ("created", "won", "lost"):
+                flow_records.append({"week": week, "flow": label,
+                                     "dollars": w[label]["dollars"],
+                                     "count": w[label]["n"]})
+        st.altair_chart(
+            alt.Chart(pd.DataFrame(flow_records)).mark_bar().encode(
+                x=alt.X("week:N", title=None),
+                y=alt.Y("dollars:Q", title=CURRENCY),
+                color=alt.Color("flow:N",
+                                scale=alt.Scale(domain=list(FLOW_COLORS),
+                                                range=list(FLOW_COLORS.values())),
+                                legend=alt.Legend(title=None)),
+                xOffset="flow:N",
+                tooltip=["week", "flow", "count",
+                         alt.Tooltip("dollars:Q", format=",.0f")])
+            .properties(height=220, width=950,
+                        title="Created vs closed per snapshot week"))
 
 # --- Owners ---
 

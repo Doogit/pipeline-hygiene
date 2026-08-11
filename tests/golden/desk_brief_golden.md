@@ -35,6 +35,7 @@ Snapshot 2026-08-10 (opps_2026-08-10.csv), evaluated as of 2026-08-10.
 ## Trajectory
 
 - Flow since last run: no previous run recorded.
+- Pipeline waterfall: needs a previous stored snapshot.
 - Coverage (FY2027-Q1): open pipeline $43,165,232 vs required $78,988,984 -> 0.55x
   - Remaining quota $49,368,115 (quota $50,620,000 - won this quarter $1,251,885) x 1.60
   - Basis: trailing win rate 20/32 closed won (62.5%) -> required multiple 32/20 = 1.60x

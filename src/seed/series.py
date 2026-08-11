@@ -1,9 +1,13 @@
 """Longitudinal weekly snapshot series with a controlled delta script.
 
 Between consecutive snapshots the script: clears X violations, introduces Y,
-closes Z deals, pushes N close dates. All other open rows get maintenance
-shifts (activity/next-step dates advance with the calendar) so their expected
-violation sets are invariant by construction as the evaluation date moves.
+closes Z deals, pushes N close dates, and creates W new opps. All other open
+rows get maintenance shifts (activity/next-step dates advance with the
+calendar) so their expected violation sets are invariant by construction as
+the evaluation date moves. Created rows are built by build_row with the same
+stability hooks as T0 rows (min_close/entered_headroom/h10_base anchored to
+the series end), so their field-by-field expected sets also hold at every
+later snapshot; they are recorded in the delta manifest under "added".
 
 Couplings are bookkept field-by-field, never by running the rules engine:
 - a close-date push increments close_date_changes and may introduce H3;
@@ -20,13 +24,14 @@ Couplings are bookkept field-by-field, never by running the rules engine:
 """
 from datetime import timedelta
 
-from .pathologies import generate_snapshot
+from .pathologies import build_row, generate_snapshot, sample_cohort
 
 CLEARS_PER_WEEK = 6
 INTRODUCES_PER_WEEK = 5
 CLOSES_PER_WEEK = 4
 PUSHES_PER_WEEK = 5
 BIG_PUSHES_PER_WEEK = 1
+CREATES_PER_WEEK = 3
 
 CLEARABLE = ("H1", "H4", "H7", "H8", "H9")
 
@@ -75,14 +80,20 @@ def _apply_clear(row, rule, d_next, org, config, rng):
         row["amount"] = sample_amount(rng, org.by_name(row["owner"]).segment)
 
 
-def evolve_week(rows, exp, d_prev, d_next, d0, org, config, rng, pushed_days):
-    """Mutate rows/exp from snapshot d_prev to d_next; return the delta record.
+def evolve_week(rows, exp, d_prev, d_next, d0, d_last, org, config, rng,
+                pushed_days, next_opp_num):
+    """Mutate rows/exp from snapshot d_prev to d_next; return
+    (delta record, created opp_ids, next_opp_num).
 
     pushed_days: per-opp cumulative later-drift (days) scripted so far across
     the series — the field-by-field book that keeps regular pushes under the
-    H11 thresholds and makes scripted big pushes the only H11 source."""
+    H11 thresholds and makes scripted big pushes the only H11 source.
+    d_last/next_opp_num anchor the created cohort: new rows get build_row's
+    stability hooks (min_close/entered_headroom/h10_base) computed for the
+    REMAINING weeks, so their expected sets hold at every later snapshot."""
     delta = {"from": d_prev.isoformat(), "to": d_next.isoformat(),
-             "cleared": {}, "introduced": {}, "closed": {}, "close_dates_pushed": {}}
+             "cleared": {}, "introduced": {}, "closed": {},
+             "close_dates_pushed": {}, "added": {}}
     _maintenance(rows, exp, rng)
     touched = set()
     horizon = config["close_date_horizon_days"]
@@ -214,7 +225,27 @@ def evolve_week(rows, exp, d_prev, d_next, d0, org, config, rng, pushed_days):
                        (cum_alarm - 1) - pushed_days.get(opp_id, 0))
         row["close_date"] = old + timedelta(days=rng.randint(7, headroom))
         _record_push(opp_id, old, introduces_h11=False)
-    return delta
+
+    # 5) create new opps (pipeline generation): same field-by-field
+    #    discipline as T0 — build_row constructs the expected set, anchored
+    #    to d_next with stability hooks for the remaining weeks so it holds
+    #    at every later snapshot.
+    weeks_left = (d_last - d_next).days // 7
+    created_ids = []
+    for _ in range(CREATES_PER_WEEK):
+        opp_id = f"OPP-{next_opp_num:04d}"
+        next_opp_num += 1
+        seller = rng.choice(org.sellers)
+        cohort = sample_cohort(rng, seller.persona)
+        row, exp_rules = build_row(
+            rng, seller, cohort, opp_id, d_next, config,
+            min_close=d_last, entered_headroom=7 * weeks_left,
+            h10_base=d_last)
+        rows[opp_id] = row
+        exp[opp_id] = set(exp_rules)
+        delta["added"][opp_id] = sorted(exp_rules)
+        created_ids.append(opp_id)
+    return delta, created_ids, next_opp_num
 
 
 def generate_series(org, n_rows, weeks, as_of, config, rng):
@@ -233,9 +264,13 @@ def generate_series(org, n_rows, weeks, as_of, config, rng):
     expected_by_snapshot = {d0.isoformat(): {o: sorted(exp[o]) for o in order}}
     deltas = []
     pushed_days = {}
+    next_opp_num = n_rows + 1
     for d_prev, d_next in zip(dates, dates[1:]):
-        deltas.append(evolve_week(rows, exp, d_prev, d_next, d0, org, config,
-                                  rng, pushed_days))
+        delta, created_ids, next_opp_num = evolve_week(
+            rows, exp, d_prev, d_next, d0, d_last, org, config, rng,
+            pushed_days, next_opp_num)
+        deltas.append(delta)
+        order.extend(created_ids)
         snapshots.append((d_next, [dict(rows[o]) for o in order]))
         expected_by_snapshot[d_next.isoformat()] = {o: sorted(exp[o]) for o in order}
 

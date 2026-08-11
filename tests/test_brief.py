@@ -105,7 +105,10 @@ def test_series_since_last_run_matches_delta_manifest(tmp_path, config):
         assert delta["cleared_violations"] == \
             {o: sorted(v) for o, v in scripted["cleared"].items()}
         assert delta["closed"] == scripted["closed"]
-        assert delta["added"] == [] and delta["removed"] == []
+        # created cohort: the run diff's "added" list is oracled by the
+        # delta manifest's field-by-field "added" record
+        assert delta["added"] == sorted(scripted["added"])
+        assert delta["removed"] == []
         assert delta["prev_snapshot_date"] == dates[i - 1].isoformat()
 
 
