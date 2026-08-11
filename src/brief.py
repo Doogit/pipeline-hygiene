@@ -6,7 +6,7 @@ pushed/stale deals). Page 1: headline, risky commits with deterministic
 coaching prompts (questions to ask the seller — never gotchas), trajectory
 (created-vs-closed flow + coverage vs remaining quota), since-last-run
 summary, slipping pipeline. Everything else — fiscal quarters, exceptions,
-owners, H5 detail — is drill-down under the Appendix header.
+owners, teams/regions, H5 detail — is drill-down under the Appendix header.
 
 Every time evaluation takes the explicit as_of; date.today() appears only as
 the CLI --as-of default. Since-last-run semantics match the seed delta

@@ -126,9 +126,23 @@ clear caption instead of a one-point trend.
 Owner scoreboard (progress-bar scores, pipeline dollars, coverage, small_n
 and low_coverage flags) plus the forecast-integrity patterns — overcall /
 undercall, always rendered with the "coaching signal, not a comp input"
-disclaimer.
+disclaimer. Coverage is open pipeline vs required pipeline (remaining quota
+net of wins this quarter x the win-rate-derived required multiple — the same
+basis as the desk headline), and `low_coverage` means exactly under 1.00x,
+so the shown ratio and the flag can never disagree.
 
 ![Owners tab](docs/screenshots/tab-owners.png)
+
+### Teams
+
+Team and region roll-ups over the same open opps — owners, open pipeline,
+roster quota, coverage, violations, at-risk dollars — sorted worst coverage
+first so ordering itself carries the signal. Team/region membership comes
+from the `owners` block of the `--quotas`/`PIPELINE_HYGIENE_QUOTAS` JSON
+(the seed manifest already carries it); without that metadata the tab
+degrades to a clear caption.
+
+![Teams tab](docs/screenshots/tab-teams.png)
 
 ### Appendix
 
@@ -209,7 +223,12 @@ never by running the rules engine, so the comparison is non-circular.
   2026-08 falls in FY2027-Q1).
 - The brief CLI takes `--quotas <json>` (e.g. `data/seed_manifest.json`) and
   merges its `"quotas"` mapping into `config["quotas"]` at run time, per the
-  seed-does-not-mutate-config decision above.
+  seed-does-not-mutate-config decision above. When the same file carries an
+  `"owners"` block (`{owner: {team, region, ...}}`), it also feeds
+  `config["owner_meta"]` for the team/region rollups — one file, one flag,
+  no schema change. For your own data:
+  `{"quotas": {"Ada Lovelace": 900000}, "owners": {"Ada Lovelace":
+  {"team": "Team North", "region": "EMEA"}}}`.
 - Since-last-run semantics mirror the delta manifest: violations that vanish
   because a deal closed are reported under "Closed", never under "Cleared";
   newly appearing opps are listed under "Opps added" and their violations are
@@ -222,7 +241,8 @@ never by running the rules engine, so the comparison is non-circular.
   `date.today()` outside CLI defaults); an uploaded CSV runs the same ingest
   validation but is evaluated in memory and never written to the store; the
   download-brief button renders from the displayed data and does not record a
-  run; quotas auto-merge from `data/seed_manifest.json` when present. Runtime
+  run; quotas and team/region metadata auto-merge from
+  `data/seed_manifest.json` when present. Runtime
   paths can be overridden with `PIPELINE_HYGIENE_CONFIG`,
   `PIPELINE_HYGIENE_DB`, and `PIPELINE_HYGIENE_QUOTAS` for isolated tests or
   alternate deployments.
@@ -274,6 +294,22 @@ never by running the rules engine, so the comparison is non-circular.
   falls back to `coverage_ratio_min`. The basis used is always printed.
   Remaining quota = sum of configured quotas minus closed-won dollars whose
   close_date falls in the current fiscal quarter of as_of.
+- Owner and team/region coverage share the desk headline's basis
+  (`scoring.required_coverage_multiple` is the single source of truth): the
+  shown ratio is open pipeline / (remaining quota x required multiple) and
+  `low_coverage` fires exactly when it is under 1.00x — the ratio and the
+  flag can never contradict each other, and the definition + basis line
+  renders adjacent to every table that carries a Coverage column. (The
+  persona pass caught the first cut showing raw pipeline/quota beside a
+  flag computed on the remaining-quota basis: "Coverage 1.18" next to
+  `low_coverage` read as a broken flag.)
+- Team/region rollups: the `--quotas` JSON's `owners` block (owner ->
+  {team, region}, already in the seed manifest) feeds `owner_meta`; Teams
+  and Regions tables render in the brief appendix and the dashboard Teams
+  tab, worst coverage first, with roster-summed quota so group coverage
+  stays comparable to per-owner coverage. Owners with a quota but no open
+  opps still count toward their group's required pipeline. No metadata ->
+  a clear "not configured" note, never a guess.
 - Forecast-integrity patterns (src/patterns.py) — a coaching signal, never a
   comp input (the disclaimer renders wherever shown). Overcall = share of an
   owner's ever-commit opps subsequently pushed (later close-date move in a
