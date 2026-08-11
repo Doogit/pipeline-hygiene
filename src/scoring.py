@@ -42,6 +42,12 @@ def fiscal_quarter_end(d, fy_start_month):
     return date(year, month, 1) - timedelta(days=1)
 
 
+def days_left_in_quarter(as_of, fy_start_month):
+    """Calendar days from as_of (exclusive) to the last day of its fiscal
+    quarter (inclusive); 0 on the quarter's final day."""
+    return (fiscal_quarter_end(as_of, fy_start_month) - as_of).days
+
+
 @dataclass(frozen=True)
 class OwnerStats:
     owner: str

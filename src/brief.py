@@ -24,9 +24,9 @@ from .ingest import load_config
 from .patterns import commit_ledger, ledger_rollups, owner_patterns
 from .rules import (RULE_LABELS, evaluate_snapshot, is_open,
                     staleness_tier)
-from .scoring import (desk_rollup, fiscal_quarter, fiscal_quarter_end,
-                      group_rollups, opp_score, owner_rollups,
-                      required_coverage_multiple)
+from .scoring import (days_left_in_quarter, desk_rollup, fiscal_quarter,
+                      fiscal_quarter_end, group_rollups, opp_score,
+                      owner_rollups, required_coverage_multiple)
 from .snapshots import SnapshotStore
 
 _SEV_RANK = {"high": 0, "medium": 1, "low": 2}
@@ -1280,6 +1280,85 @@ def run(store, snapshot_date, as_of, config, out_dir, owner_filter=None,
     return path, data
 
 
+def _scrub_rows(data):
+    """EVERY open commit/best_case opp (flagged or not), dollar-ranked."""
+    rows = [r for r in data["rows"] if is_open(r)
+            and r["forecast_category"] in ("commit", "best_case")]
+    rows.sort(key=lambda r: (-(r["amount"] or 0.0), r["opp_id"]))
+    return rows
+
+
+def render_commit_scrub(data, config):
+    """Pre-forecast-call scrub sheet: every open commit/best_case opp with
+    its ledger context and blank confirmation checkboxes. No advice copy —
+    the checklist is the cadence."""
+    as_of = data["as_of"]
+    fy_start = config["fiscal_year_start_month"]
+    lines = [f"# Commit scrub — {as_of.isoformat()}",
+             "",
+             f"Snapshot {data['snapshot_date'].isoformat()}, evaluated as "
+             f"of {as_of.isoformat()}. "
+             f"{days_left_in_quarter(as_of, fy_start)} day(s) left in "
+             f"{fiscal_quarter(as_of, fy_start)}.",
+             ""]
+    if data.get("filter_label"):
+        lines.append(f"FILTERED — {data['filter_label']}. Covers only this "
+                     "selection.")
+        lines.append("")
+    rows = _scrub_rows(data)
+    total = sum(r["amount"] or 0.0 for r in rows)
+    lines.append(f"{len(rows)} open commit/best_case opp(s), "
+                 f"{_money(total, config)}.")
+    lines.append("")
+    if not rows:
+        return "\n".join(lines)
+    ledger_by_id = {e.opp_id: e for e in (data.get("ledger") or [])}
+    lines.append("| Opp | Account | Owner | Stage | Forecast | Amount "
+                 "| Close date | Committed-for | Pushes | Streak | Rules "
+                 "| Close date confirmed | Next step confirmed "
+                 "| Budget confirmed |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---"
+                 "|---|---|---|")
+    for row in rows:
+        result = data["results"][row["opp_id"]]
+        badges = " ".join(v.rule_id for v in result.violations) or "-"
+        streak = opp_streak(data["streaks"], result)
+        streak_cell = f"flagged {streak} runs" if streak >= 2 else "-"
+        entry = ledger_by_id.get(row["opp_id"])
+        committed = (entry.committed_quarter or "-") if entry else "-"
+        pushes = row.get("push_count")
+        lines.append(f"| {row['opp_id']} | {row['account']} "
+                     f"| {row['owner']} | {row['stage']} "
+                     f"| {row['forecast_category']} "
+                     f"| {_money(row['amount'], config)} "
+                     f"| {row['close_date'].isoformat()} | {committed} "
+                     f"| {'-' if pushes is None else pushes} "
+                     f"| {streak_cell} | {badges} | [ ] | [ ] | [ ] |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def run_commit_scrub(store, snapshot_date, as_of, config, out_dir,
+                     owner_filter=None, filter_label=None, filter_slug=None):
+    """Build and write the scrub sheet to out/commit_scrub_<as_of>.md.
+    Returns (path, data). NEVER goes through run(): no run is recorded and
+    the brief filename is untouched; a filtered scrub gets a suffix like a
+    filtered brief."""
+    data = build(store, snapshot_date, as_of, config,
+                 owner_filter=owner_filter, filter_label=filter_label)
+    markdown = render_commit_scrub(data, config)
+    name = f"commit_scrub_{as_of.isoformat()}.md"
+    if owner_filter is not None:
+        slug = filter_slug or owner_slug(filter_label)
+        name = f"commit_scrub_{as_of.isoformat()}_{slug}.md"
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / name
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(markdown)
+    return path, data
+
+
 def resolve_owner_filter(config, snapshot_owners, owners, teams,
                          regions=None):
     """Resolve --owner/--team/--region values into (owner set, label, slug).
@@ -1346,6 +1425,11 @@ def main(argv=None):
     p.add_argument("--digests", action="store_true",
                    help="also write private per-owner coaching digests to "
                         "<out-dir>/digests/<as-of>/<owner_slug>.md")
+    p.add_argument("--commit-scrub", action="store_true",
+                   help="write ONLY the pre-forecast-call scrub sheet "
+                        "(every open commit/best_case opp with checklist "
+                        "columns) to <out-dir>/commit_scrub_<as-of>.md; "
+                        "no brief, no run recorded")
     p.add_argument("--owner", action="append", metavar="NAME",
                    help="repeatable; restrict the whole brief to these owners "
                         "(all numbers recomputed over the selection; the run "
@@ -1391,6 +1475,17 @@ def main(argv=None):
         except ValueError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
+
+    if args.commit_scrub:
+        path, data = run_commit_scrub(store, snapshot_date, as_of, config,
+                                      args.out_dir,
+                                      owner_filter=owner_filter,
+                                      filter_label=filter_label,
+                                      filter_slug=filter_slug)
+        filtered = f", filtered to {filter_label}" if filter_label else ""
+        print(f"wrote {path} ({len(_scrub_rows(data))} open "
+              f"commit/best_case opps{filtered})")
+        return 0
 
     path, data = run(store, snapshot_date, as_of, config, args.out_dir,
                      owner_filter=owner_filter, filter_label=filter_label,
