@@ -25,15 +25,19 @@ from src.snapshots import SnapshotStore
 AS_OF = date(2026, 8, 10)
 
 
-def _env(tmp_path, monkeypatch, config, org):
+def _env(tmp_path, monkeypatch, config, org, quota_payload=None):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
     quotas_path = tmp_path / "seed_manifest.json"
+    if quota_payload is None:
+        quota_payload = {
+            "quotas": {s.name: s.quota for s in org.sellers},
+            "owners": {s.name: {"team": s.team, "region": s.region,
+                                "quota": s.quota}
+                       for s in org.sellers},
+        }
     quotas_path.write_text(
-        json.dumps({"quotas": {s.name: s.quota for s in org.sellers},
-                    "owners": {s.name: {"team": s.team, "region": s.region,
-                                        "quota": s.quota}
-                               for s in org.sellers}}),
+        json.dumps(quota_payload),
         encoding="utf-8")
     db_path = tmp_path / "pipeline.db"
     monkeypatch.setenv("PIPELINE_HYGIENE_CONFIG", str(config_path))
@@ -47,6 +51,13 @@ def _find_exceptions_df(app):
         if "detail" in df.value.columns:
             return df
     raise AssertionError("exceptions table not rendered")
+
+
+def _find_owner_df(app):
+    for df in app.dataframe:
+        if {"owner", "coverage", "pipeline", "flags"} <= set(df.value.columns):
+            return df
+    raise AssertionError("owner scoreboard not rendered")
 
 
 def test_dashboard_series_tabs_charts_and_filters(tmp_path, config,
@@ -120,3 +131,24 @@ def test_dashboard_single_snapshot_degrades_gracefully(tmp_path, config,
     assert "Desk score trend appears after" in captions
     # severity mix still renders from a single snapshot
     assert len(app.get("vega_lite_chart")) >= 1
+
+
+def test_dashboard_accepts_bare_quota_json(tmp_path, config, monkeypatch):
+    rng = random.Random(42)
+    org = build_org(rng)
+    quota_payload = {s.name: s.quota for s in org.sellers}
+    rows, _ = generate_snapshot(org, 120, AS_OF, config, rng)
+    db_path = _env(tmp_path, monkeypatch, config, org, quota_payload)
+    store = SnapshotStore(db_path, config)
+    csv_path = tmp_path / f"opps_{AS_OF.isoformat()}.csv"
+    write_csv(csv_path, rows)
+    assert store.ingest_csv(csv_path, AS_OF).rejected == 0
+    store.close()
+
+    app = AppTest.from_file(str(Path("app") / "dashboard.py"))
+    app.run(timeout=60)
+    assert not app.exception
+    owners = _find_owner_df(app).value
+    assert owners["coverage"].notna().any()
+    captions = " ".join(c.value for c in app.caption)
+    assert "No team/region metadata configured" in captions

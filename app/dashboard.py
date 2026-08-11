@@ -50,12 +50,7 @@ config = load_config(CONFIG_PATH)
 if Path(QUOTAS_PATH).exists():
     with open(QUOTAS_PATH, encoding="utf-8") as f:
         payload = json.load(f)
-    config["quotas"] = {**(config.get("quotas") or {}),
-                        **payload.get("quotas", {})}
-    config["owner_meta"] = {
-        **(config.get("owner_meta") or {}),
-        **{name: {"team": m.get("team"), "region": m.get("region")}
-           for name, m in (payload.get("owners") or {}).items()}}
+    config = brief.merge_quota_payload(config, payload)
     st.sidebar.caption(f"Quotas and team/region merged from `{QUOTAS_PATH}`.")
 
 # --- data source ---

@@ -153,6 +153,25 @@ def _money(amount):
     return "n/a" if amount is None else f"${amount:,.0f}"
 
 
+def merge_quota_payload(config, payload):
+    """Return config with quotas and optional owner metadata merged in.
+
+    Supports both the seed manifest shape:
+    {"quotas": {...}, "owners": {...}}
+    and the older bare quota mapping:
+    {"Owner Name": 900000}
+    """
+    merged = dict(config)
+    merged["quotas"] = {**(config.get("quotas") or {}),
+                        **payload.get("quotas", payload)}
+    owners_block = payload.get("owners") or {}
+    merged["owner_meta"] = {
+        **(config.get("owner_meta") or {}),
+        **{name: {"team": m.get("team"), "region": m.get("region")}
+           for name, m in owners_block.items()}}
+    return merged
+
+
 def run_summary(snapshot_date, as_of, desk, results):
     """Compact per-run record stored in the runs table; the next run diffs
     against it, so it carries the full open-opp rule sets."""
@@ -884,13 +903,7 @@ def main(argv=None):
     if args.quotas:
         with open(args.quotas, encoding="utf-8") as f:
             payload = json.load(f)
-        config["quotas"] = {**(config.get("quotas") or {}),
-                            **payload.get("quotas", payload)}
-        owners_block = payload.get("owners") or {}
-        config["owner_meta"] = {
-            **(config.get("owner_meta") or {}),
-            **{name: {"team": m.get("team"), "region": m.get("region")}
-               for name, m in owners_block.items()}}
+        config = merge_quota_payload(config, payload)
 
     store = SnapshotStore(args.db, config)
     snapshot_date = args.snapshot_date
