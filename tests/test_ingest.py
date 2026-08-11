@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from src.ingest import IngestError, MixedCurrencyError, main as ingest_main, validate_csv
+from src.ingest import AllRowsRejectedError, IngestError, MixedCurrencyError, \
+    main as ingest_main, validate_csv
 from src.seed import write_csv
 from src.seed.org import build_org
 from src.seed.pathologies import CSV_COLUMNS, generate_snapshot
@@ -158,6 +159,53 @@ def test_single_snapshot_without_optional_columns_stays_none(tmp_path, config):
     rows = store.rows_with_history(AS_OF)
     assert rows[0]["close_date_changes"] is None
     assert rows[0]["stage_entered_date"] is None
+
+
+def test_all_rejected_is_fatal_and_not_stored(tmp_path, config, capsys):
+    """A non-empty snapshot with zero accepted rows is fatal: nothing is
+    stored and the CLI exits nonzero (a silent empty snapshot would let a
+    scheduled ingest report success while the brief runs on nothing)."""
+    p = tmp_path / "opps_2026-08-10.csv"
+    _write_fixture(p, [_row(opp_id="OPP-0001", stage="Nope"),
+                       _row(opp_id="OPP-0002", stage="Nope")])
+    store = SnapshotStore(":memory:", config)
+    with pytest.raises(AllRowsRejectedError, match="all 2 rows rejected") as exc:
+        store.ingest_csv(p, AS_OF)
+    assert exc.value.report.row_reasons == [
+        (2, "OPP-0001", "unknown stage: 'Nope' not in stage_map"),
+        (3, "OPP-0002", "unknown stage: 'Nope' not in stage_map"),
+    ]
+    assert store.snapshot_dates() == []          # nothing persisted
+    test_config = Path(__file__).parent / "config_test.yaml"
+    code = ingest_main([str(p), "--db", str(tmp_path / "t.db"),
+                        "--config", str(test_config)])
+    assert code != 0
+    err = capsys.readouterr().err
+    assert "error: all 2 rows rejected" in err
+    assert "line 2 OPP-0001: unknown stage" in err
+    assert "line 3 OPP-0002: unknown stage" in err
+
+
+def test_since_last_run_anchors_to_prior_snapshot(tmp_path, config):
+    """Re-running a brief on the same snapshot diffs against the previous
+    snapshot's run (not itself) and never accumulates duplicate runs."""
+    from src import brief
+    store = SnapshotStore(":memory:", config)
+    d0, d1 = date(2026, 8, 3), date(2026, 8, 10)
+    for d in (d0, d1):
+        p = tmp_path / f"opps_{d.isoformat()}.csv"
+        _write_fixture(p, [_row(last_activity_date=d.isoformat(),
+                               next_step="", next_step_date="")])
+        store.ingest_csv(p, d)
+    brief.run(store, d0, d0, config, tmp_path / "out")
+    _, first = brief.run(store, d1, d1, config, tmp_path / "out")
+    assert first["streaks"][("OPP-0001", "H4")] == 2
+    # re-run d1: still anchors to d0, and does not add a third run or streak
+    _, again = brief.run(store, d1, d1, config, tmp_path / "out")
+    assert again["since_last_run"]["prev_snapshot_date"] == d0.isoformat()
+    assert again["streaks"][("OPP-0001", "H4")] == 2
+    runs = store.conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+    assert runs == 2
 
 
 def test_source_columns_take_precedence(tmp_path, config):

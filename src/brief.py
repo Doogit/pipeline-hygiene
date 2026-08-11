@@ -47,6 +47,23 @@ COACHING_PROMPTS = {
            "re-committing this deal?",
 }
 
+# Every rule gets a "what to do about it" ask for the private digest's coaching
+# focus, so the focus line is never advice-free. RISKY_RULES reuse the
+# forecast-call prompt above; the rest are covered here.
+COACHING_ASKS = {
+    **COACHING_PROMPTS,
+    "H3": "The close date keeps moving — what has to be true for this date to "
+          "hold?",
+    "H6": "This deal has sat in stage past the norm — what is the next stage "
+          "gate and when does it clear?",
+    "H8": "The amount is missing or zero — what is the current expected deal "
+          "value?",
+    "H9": "The next step is vague — can you restate it as a specific action "
+          "with a date?",
+    "H10": "The close date is parked far out — is this a real timeline or a "
+           "placeholder to revisit?",
+}
+
 
 def risky_commits(rows, results, config):
     """Open commit/best_case opps carrying any RISKY_RULES violation,
@@ -228,13 +245,13 @@ def opp_streak(streaks, result):
 
 def build(store, snapshot_date, as_of, config):
     """Compute all brief data for one stored snapshot. No side effects."""
-    prev = store.last_run()
+    prev = store.last_run_before_snapshot(snapshot_date)
     return build_from_rows(
         store.rows_with_history(snapshot_date), snapshot_date, as_of, config,
         validation=store.validation_report_dict(snapshot_date),
         prev_summary=prev["summary"] if prev else None,
         outcomes=store.closed_outcomes(snapshot_date),
-        prev_opens=store.run_opens(),
+        prev_opens=store.run_opens(before_snapshot_date=snapshot_date),
         patterns=owner_patterns(store, as_of, config, snapshot_date))
 
 
@@ -334,12 +351,13 @@ def _risky_commits(lines, data, config):
                  + (", top 10 shown" if len(entries) > 10 else "")
                  + ". Coaching prompts, not gotchas.")
     lines.append("")
-    lines.append("| # | Opp | Owner | Stage | Amount | Forecast | Flags "
-                 "| Ask the seller |")
-    lines.append("|---|---|---|---|---|---|---|---|")
+    lines.append("| # | Opp | Account | Owner | Stage | Amount | Forecast "
+                 "| Flags | Ask the seller |")
+    lines.append("|---|---|---|---|---|---|---|---|---|")
     for i, entry in enumerate(entries[:10], start=1):
         row = entry["row"]
-        lines.append(f"| {i} | {row['opp_id']} | {row['owner']} "
+        lines.append(f"| {i} | {row['opp_id']} | {row['account']} "
+                     f"| {row['owner']} "
                      f"| {row['stage']} | {_money(row['amount'])} "
                      f"| {row['forecast_category']} "
                      f"| {' '.join(entry['risky_rules'])} "
@@ -408,14 +426,20 @@ def _since_last_run_detail(lines, data):
     if delta is None:
         lines.append("No previous run recorded.")
         return
+    rows_by_id = {r["opp_id"]: r for r in data["rows"]}
+
+    def _who(opp_id):
+        row = rows_by_id.get(opp_id)
+        return f" {row['account']} — {row['owner']}" if row else ""
+
     for label, key in (("New violations", "new_violations"),
                        ("Cleared violations", "cleared_violations")):
         opps = delta[key]
         total = sum(len(v) for v in opps.values())
         lines.append(f"- {label}: {total} on {len(opps)} opps")
         for opp_id in sorted(opps):
-            lines.append(f"  - {opp_id}: {', '.join(opps[opp_id])}")
-    rows_by_id = {r["opp_id"]: r for r in data["rows"]}
+            lines.append(f"  - {opp_id}{_who(opp_id)}: "
+                         f"{', '.join(opps[opp_id])}")
     lines.append(f"- Closed: {len(delta['closed'])} opps")
     for opp_id in sorted(delta["closed"]):
         info = delta["closed"][opp_id]
@@ -574,22 +598,36 @@ def _forecast_patterns(lines, data):
     if not over and not under:
         lines.append("No overcall/undercall patterns flagged.")
     for p in over:
-        lines.append(f"- Overcall (happy ears): {p.owner} — "
+        lines.append(f"- Overcall pattern: {p.owner} — "
                      f"{p.overcall_share:.0%} of {p.n_ever_commit} "
                      f"ever-commit opps later pushed or lost")
     def pct(value):
         return "n/a" if value is None else f"{value:.0%}"
 
     for p in under:
-        lines.append(f"- Undercall (sandbagging): {p.owner} — wins never "
-                     f"called commit/best_case: "
-                     f"{pct(p.undercall_won_share)} (n={p.n_won}); open "
+        # Lead with the evidence actually present; only cite the won-share
+        # basis when there are observed wins (printing "n/a (n=0)" beside a
+        # name reads as an accusation with no evidence).
+        won_clause = (f"wins never called commit/best_case "
+                      f"{pct(p.undercall_won_share)} (n={p.n_won}); "
+                      if p.n_won else "")
+        lines.append(f"- Undercall pattern: {p.owner} — {won_clause}open "
                      f"pipeline {pct(p.omitted_share)} omitted, "
                      f"{pct(p.farout_share)} far-out (n={p.n_open})")
     small = sum(1 for p in patterns.values()
                 if p.overcall_small_n and p.undercall_small_n)
     lines.append(f"- Suppressed as small_n: {small} owners with too little "
                  f"history to score")
+
+
+def _rule_legend(lines, config):
+    lines.append("### Rule legend")
+    lines.append("")
+    lines.append("| Rule | Meaning | Score weight |")
+    lines.append("|---|---|---|")
+    weights = config["rule_weights"]
+    for rule_id, label in RULE_LABELS.items():
+        lines.append(f"| {rule_id} | {label} | -{weights.get(rule_id, 0)} |")
 
 
 def render(data, config):
@@ -627,6 +665,8 @@ def render(data, config):
     _forecast_patterns(lines, data)
     lines.append("")
     _since_last_run_detail(lines, data)
+    lines.append("")
+    _rule_legend(lines, config)
     lines.append("")
     return "\n".join(lines)
 
@@ -667,9 +707,12 @@ def digest_markdown(data, owner, config):
         result = results[row["opp_id"]]
         streak = opp_streak(streaks, result)
         note = f" — flagged {streak} runs" if streak >= 2 else ""
-        lines.append(f"- {row['opp_id']} ({row['stage']}, "
-                     f"{_money(row['amount'])}): "
-                     f"{' '.join(result.rule_ids())}{note}")
+        # Show the observed value and threshold per flag (from the engine's
+        # own detail strings), so "why" is a checkable fact, not a bare code.
+        evidence = "; ".join(f"{v.rule_id} ({RULE_LABELS[v.rule_id]}: "
+                             f"{v.detail})" for v in result.violations)
+        lines.append(f"- {row['opp_id']} {row['account']} ({row['stage']}, "
+                     f"{_money(row['amount'])}): {evidence}{note}")
 
     lines.append("")
     lines.append("## Week over week")
@@ -724,8 +767,8 @@ def digest_markdown(data, owner, config):
         lines.append(f"{focus} — {RULE_LABELS[focus]}: "
                      f"{_money(exposure[focus])} at risk across "
                      f"{deals[focus]} deal(s).")
-        if focus in COACHING_PROMPTS:
-            lines.append(f"Ask: {COACHING_PROMPTS[focus]}")
+        if focus in COACHING_ASKS:
+            lines.append(f"Ask: {COACHING_ASKS[focus]}")
     lines.append("")
     return "\n".join(lines)
 

@@ -19,18 +19,18 @@ Snapshot 2026-08-10 (opps_2026-08-10.csv), evaluated as of 2026-08-10.
 
 51 commit/best_case opps carry a risk flag — $5,939,535 (distinct opps), dollar-ranked, top 10 shown. Coaching prompts, not gotchas.
 
-| # | Opp | Owner | Stage | Amount | Forecast | Flags | Ask the seller |
-|---|---|---|---|---|---|---|---|
-| 1 | OPP-0193 | Kendall Lindqvist | commit | $616,126 | commit | H2 | The close date has passed — what close date has the buyer actually committed to? |
-| 2 | OPP-0046 | Hollis Underhill | prospect | $474,715 | commit | H5 | What buyer evidence supports commit while the deal is still early-stage or has no valid next step? |
-| 3 | OPP-0137 | Logan Ivesdale | qualify | $385,849 | commit | H5 | What buyer evidence supports commit while the deal is still early-stage or has no valid next step? |
-| 4 | OPP-0317 | Logan Ivesdale | propose | $368,677 | commit | H4 H5 | What buyer evidence supports commit while the deal is still early-stage or has no valid next step? |
-| 5 | OPP-0368 | Riley Southgate | qualify | $271,731 | best_case | H7 | Who beyond the single contact has confirmed budget and sign-off? |
-| 6 | OPP-0393 | Zion Calloway | develop | $232,101 | best_case | H1 H4 | What specific step did the buyer agree to take next, and by when? |
-| 7 | OPP-0205 | Tatum Ivesdale | propose | $226,050 | best_case | H2 | The close date has passed — what close date has the buyer actually committed to? |
-| 8 | OPP-0342 | Quinn Ristori | qualify | $205,327 | commit | H5 | What buyer evidence supports commit while the deal is still early-stage or has no valid next step? |
-| 9 | OPP-0182 | Blair Hollowell | propose | $182,079 | best_case | H7 | Who beyond the single contact has confirmed budget and sign-off? |
-| 10 | OPP-0215 | Parker Thistlewood | qualify | $166,628 | best_case | H7 | Who beyond the single contact has confirmed budget and sign-off? |
+| # | Opp | Account | Owner | Stage | Amount | Forecast | Flags | Ask the seller |
+|---|---|---|---|---|---|---|---|---|
+| 1 | OPP-0193 | Zenithnetworks Group | Kendall Lindqvist | commit | $616,126 | commit | H2 | The close date has passed — what close date has the buyer actually committed to? |
+| 2 | OPP-0046 | Vertexenergy Group | Hollis Underhill | prospect | $474,715 | commit | H5 | What buyer evidence supports commit while the deal is still early-stage or has no valid next step? |
+| 3 | OPP-0137 | Vertexsoftware Corp | Logan Ivesdale | qualify | $385,849 | commit | H5 | What buyer evidence supports commit while the deal is still early-stage or has no valid next step? |
+| 4 | OPP-0317 | Blueretail Group | Logan Ivesdale | propose | $368,677 | commit | H4 H5 | What buyer evidence supports commit while the deal is still early-stage or has no valid next step? |
+| 5 | OPP-0368 | Harborlogistics Group | Riley Southgate | qualify | $271,731 | best_case | H7 | Who beyond the single contact has confirmed budget and sign-off? |
+| 6 | OPP-0393 | Novafoods LLC | Zion Calloway | develop | $232,101 | best_case | H1 H4 | What specific step did the buyer agree to take next, and by when? |
+| 7 | OPP-0205 | Granitelogistics Corp | Tatum Ivesdale | propose | $226,050 | best_case | H2 | The close date has passed — what close date has the buyer actually committed to? |
+| 8 | OPP-0342 | Crimsonmanufacturing Co | Quinn Ristori | qualify | $205,327 | commit | H5 | What buyer evidence supports commit while the deal is still early-stage or has no valid next step? |
+| 9 | OPP-0182 | Lunarnetworks LLC | Blair Hollowell | propose | $182,079 | best_case | H7 | Who beyond the single contact has confirmed budget and sign-off? |
+| 10 | OPP-0215 | Novaaerospace Corp | Parker Thistlewood | qualify | $166,628 | best_case | H7 | Who beyond the single contact has confirmed budget and sign-off? |
 
 ## Trajectory
 
@@ -177,12 +177,28 @@ Drill-down detail. The forecast call runs off page 1.
 
 Coaching signal, not a comp input.
 
-- Undercall (sandbagging): Finley Underhill — wins never called commit/best_case: n/a (n=0); open pipeline 50% omitted, 25% far-out (n=6)
-- Undercall (sandbagging): Sage Eastvale — wins never called commit/best_case: n/a (n=0); open pipeline 62% omitted, 24% far-out (n=6)
-- Undercall (sandbagging): Sage Vantrease — wins never called commit/best_case: n/a (n=0); open pipeline 43% omitted, 40% far-out (n=6)
-- Undercall (sandbagging): Wren Ivesdale — wins never called commit/best_case: n/a (n=0); open pipeline 43% omitted, 43% far-out (n=5)
+- Undercall pattern: Finley Underhill — open pipeline 50% omitted, 25% far-out (n=6)
+- Undercall pattern: Sage Eastvale — open pipeline 62% omitted, 24% far-out (n=6)
+- Undercall pattern: Sage Vantrease — open pipeline 43% omitted, 40% far-out (n=6)
+- Undercall pattern: Wren Ivesdale — open pipeline 43% omitted, 43% far-out (n=5)
 - Suppressed as small_n: 4 owners with too little history to score
 
 ### Since last run (detail)
 
 No previous run recorded.
+
+### Rule legend
+
+| Rule | Meaning | Score weight |
+|---|---|---|
+| H1 | stale by stage | -15 |
+| H2 | close date in past | -20 |
+| H3 | serial slippage | -10 |
+| H4 | missing/expired next step | -20 |
+| H5 | forecast mismatch | -25 |
+| H6 | aging in stage | -10 |
+| H7 | single-threaded big deal | -10 |
+| H8 | amount hygiene | -5 |
+| H9 | vague next step | -5 |
+| H10 | parked close date | -10 |
+| H11 | lost deal control | -20 |

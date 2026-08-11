@@ -19,7 +19,7 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
-from .ingest import validate_csv
+from .ingest import AllRowsRejectedError, validate_csv
 
 _DATE_COLS = ("created_date", "close_date", "last_activity_date",
               "next_step_date", "stage_entered_date")
@@ -91,8 +91,15 @@ class SnapshotStore:
     # --- ingest ---
 
     def ingest_csv(self, csv_path, snapshot_date, stage_map_name="default"):
-        """Validate then store a snapshot (replacing any same-date snapshot)."""
+        """Validate then store a snapshot (replacing any same-date snapshot).
+
+        A snapshot with rows but zero accepted is fatal: storing an empty
+        snapshot would let a scheduled ingest report success while the brief
+        silently runs on nothing. The prior same-date snapshot is left intact.
+        """
         rows, report = validate_csv(csv_path, self.config, stage_map_name)
+        if report.total_rows > 0 and not rows:
+            raise AllRowsRejectedError(snapshot_date, report)
         sd = snapshot_date.isoformat()
         with self.conn:
             self.conn.execute("DELETE FROM opportunities WHERE snapshot_date = ?", (sd,))
@@ -220,7 +227,14 @@ class SnapshotStore:
     # --- runs ---
 
     def record_run(self, as_of, snapshot_date, summary, validation_report=None):
+        """Record a run, replacing any prior run for the same snapshot_date.
+
+        Idempotent per snapshot so re-running a brief on the same snapshot
+        does not accumulate duplicate runs — which would inflate flag streaks
+        and plant duplicate points in the score trend."""
         with self.conn:
+            self.conn.execute("DELETE FROM runs WHERE snapshot_date = ?",
+                              (snapshot_date.isoformat(),))
             cur = self.conn.execute(
                 "INSERT INTO runs (as_of, snapshot_date, summary_json, validation_json) "
                 "VALUES (?, ?, ?, ?)",
@@ -230,11 +244,16 @@ class SnapshotStore:
                  if validation_report else None))
         return cur.lastrowid
 
-    def run_opens(self):
+    def run_opens(self, before_snapshot_date=None):
         """The per-run open-opp rule-set maps ({opp_id: [rules]}), ascending
-        by run_id — the memory that flag streaks are computed from."""
-        cur = self.conn.execute(
-            "SELECT summary_json FROM runs ORDER BY run_id")
+        by snapshot/run — the memory that flag streaks are computed from."""
+        query = "SELECT summary_json FROM runs"
+        params = ()
+        if before_snapshot_date is not None:
+            query += " WHERE snapshot_date < ?"
+            params = (before_snapshot_date.isoformat(),)
+        query += " ORDER BY snapshot_date, run_id"
+        cur = self.conn.execute(query, params)
         return [json.loads(row[0]).get("open", {})
                 for row in cur.fetchall() if row[0]]
 
@@ -246,6 +265,25 @@ class SnapshotStore:
             params = (before_run_id,)
         query += " ORDER BY run_id DESC LIMIT 1"
         row = self.conn.execute(query, params).fetchone()
+        if row is None:
+            return None
+        return {"run_id": row[0], "as_of": date.fromisoformat(row[1]),
+                "snapshot_date": date.fromisoformat(row[2]),
+                "summary": json.loads(row[3]) if row[3] else None}
+
+    def last_run_before_snapshot(self, snapshot_date):
+        """The most recent run recorded for an EARLIER snapshot than this one.
+
+        "Since last run" means since the previous weekly snapshot, so the diff
+        must anchor to a run for a strictly earlier snapshot_date. This makes
+        re-running the brief on the same snapshot diff against the real prior
+        week (not against itself), and re-running an older snapshot after a
+        newer one diff against a still-older week (not time-inverted)."""
+        row = self.conn.execute(
+            "SELECT run_id, as_of, snapshot_date, summary_json FROM runs "
+            "WHERE snapshot_date < ? ORDER BY snapshot_date DESC, run_id DESC "
+            "LIMIT 1",
+            (snapshot_date.isoformat(),)).fetchone()
         if row is None:
             return None
         return {"run_id": row[0], "as_of": date.fromisoformat(row[1]),

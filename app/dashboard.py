@@ -26,8 +26,8 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src import brief
-from src.ingest import IngestError, load_config, snapshot_date_from_filename, \
-    validate_csv
+from src.ingest import AllRowsRejectedError, IngestError, load_config, \
+    snapshot_date_from_filename, validate_csv
 from src.patterns import owner_patterns
 from src.rules import RULE_LABELS, is_open
 from src.scoring import opp_score
@@ -65,22 +65,31 @@ stage_map_name = st.sidebar.selectbox(
 
 store = None
 if uploaded is not None:
+    snapshot_date = snapshot_date_from_filename(uploaded.name)
+    if snapshot_date is None:
+        st.error("No YYYY-MM-DD snapshot date found in the uploaded filename; "
+                 "rename the file like opps_2026-08-10.csv.")
+        st.stop()
     with tempfile.NamedTemporaryFile("wb", suffix=".csv", delete=False) as tmp:
         tmp.write(uploaded.getvalue())
         tmp_path = tmp.name
     try:
         rows, report = validate_csv(tmp_path, config, stage_map_name)
+        if report.total_rows > 0 and not rows:
+            raise AllRowsRejectedError(snapshot_date, report)
+    except AllRowsRejectedError as exc:
+        st.error(f"Upload rejected: {exc}")
+        if exc.report.row_reasons:
+            st.dataframe(pd.DataFrame(exc.report.row_reasons,
+                                      columns=["row", "opp_id", "reason"]),
+                         width="stretch", hide_index=True)
+        st.stop()
     except IngestError as exc:
         st.error(f"Upload rejected: {exc}")
         st.stop()
     finally:
         Path(tmp_path).unlink(missing_ok=True)
     validation = dict(report.to_dict(), source_file=uploaded.name)
-    snapshot_date = snapshot_date_from_filename(uploaded.name)
-    if snapshot_date is None:
-        st.error("No YYYY-MM-DD snapshot date found in the uploaded filename; "
-                 "rename the file like opps_2026-08-10.csv.")
-        st.stop()
     st.sidebar.caption(f"Uploaded snapshot {snapshot_date} — single snapshot, "
                        f"so H3/H6 may report insufficient history.")
     prev_summary, prev_opens, outcomes, patterns = None, [], None, None
@@ -99,9 +108,12 @@ else:
                                          format_func=lambda d: d.isoformat())
     rows = store.rows_with_history(snapshot_date)
     validation = store.validation_report_dict(snapshot_date)
-    prev = store.last_run()
+    # Diff against the run for the previous snapshot, not the globally latest
+    # run — otherwise the selected snapshot diffs against itself (every delta
+    # reads +0.0), and an older selection diffs backwards against a newer run.
+    prev = store.last_run_before_snapshot(snapshot_date)
     prev_summary = prev["summary"] if prev else None
-    prev_opens = store.run_opens()
+    prev_opens = store.run_opens(before_snapshot_date=snapshot_date)
     outcomes = store.closed_outcomes(snapshot_date)
 
 as_of = st.sidebar.date_input("Evaluate as of", value=snapshot_date)
@@ -220,7 +232,8 @@ with tab_call:
                     f"flag — **${total:,.0f}** (distinct opps), "
                     f"dollar-ranked. Coaching prompts, not gotchas.")
         risky_df = pd.DataFrame([{
-            "opp_id": e["row"]["opp_id"], "owner": e["row"]["owner"],
+            "opp_id": e["row"]["opp_id"], "account": e["row"]["account"],
+            "owner": e["row"]["owner"],
             "stage": e["row"]["stage"], "amount": e["row"]["amount"],
             "forecast": e["row"]["forecast_category"],
             "score": opp_score(e["result"], config),
@@ -442,13 +455,13 @@ with tab_owners:
         if not over and not under:
             st.caption("No overcall/undercall patterns flagged.")
         for p in over:
-            st.markdown(f"- :red[Overcall (happy ears)] {p.owner} — "
+            st.markdown(f"- :orange[Overcall pattern] {p.owner} — "
                         f"{p.overcall_share:.0%} of {p.n_ever_commit} "
                         f"ever-commit opps later pushed or lost")
         for p in under:
             om = "n/a" if p.omitted_share is None else f"{p.omitted_share:.0%}"
             far = "n/a" if p.farout_share is None else f"{p.farout_share:.0%}"
-            st.markdown(f"- :blue[Undercall (sandbagging)] {p.owner} — open "
+            st.markdown(f"- :blue[Undercall pattern] {p.owner} — open "
                         f"pipeline {om} omitted, {far} far-out "
                         f"(n={p.n_open})")
         small = sum(1 for p in patterns.values()

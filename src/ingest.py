@@ -36,6 +36,19 @@ class IngestError(Exception):
     """Fatal ingest problem: missing columns, unreadable file, mixed currency."""
 
 
+class AllRowsRejectedError(IngestError):
+    """Fatal non-empty snapshot whose rows were all rejected."""
+
+    def __init__(self, snapshot_date, report):
+        self.snapshot_date = snapshot_date
+        self.report = report
+        top = "; ".join(f"{reason} ({n})" for reason, n
+                        in list(report.reason_counts().items())[:5])
+        super().__init__(
+            f"all {report.total_rows} rows rejected - nothing stored for "
+            f"{snapshot_date.isoformat()}. Top reasons: {top}")
+
+
 class MixedCurrencyError(IngestError):
     pass
 
@@ -66,6 +79,13 @@ class ValidationReport:
                 "reason_counts": self.reason_counts(),
                 "row_reasons": [list(r) for r in self.row_reasons],
                 "warnings": list(self.warnings)}
+
+
+def rejection_detail_lines(report, limit=10):
+    for row_number, opp_id, reason in report.row_reasons[:limit]:
+        yield f"    line {row_number} {opp_id or '(no opp_id)'}: {reason}"
+    if report.rejected > limit:
+        yield f"    ... and {report.rejected - limit} more"
 
 
 def load_config(path="config.yaml"):
@@ -229,6 +249,11 @@ def main(argv=None):
         store = SnapshotStore(args.db, config)
         report = store.ingest_csv(args.csv_path, snapshot_date,
                                   stage_map_name=args.stage_map)
+    except AllRowsRejectedError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        for line in rejection_detail_lines(exc.report):
+            print(line, file=sys.stderr)
+        return 1
     except IngestError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -239,8 +264,16 @@ def main(argv=None):
     if report.rejected:
         for count_reason, n in report.reason_counts().items():
             print(f"  rejected {n}: {count_reason}")
+        # Per-row detail so an operator can fix the offending deals without
+        # opening the store; the aggregate counts alone are not actionable.
+        for line in rejection_detail_lines(report):
+            print(line)
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Run the packaged main, not this module-as-__main__: otherwise IngestError
+    # raised through src.snapshots (which imports src.ingest) is a different
+    # class object than the __main__ one, and main's except would miss it.
+    from src.ingest import main as _main
+    sys.exit(_main())
