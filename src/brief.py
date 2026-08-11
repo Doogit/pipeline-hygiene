@@ -21,6 +21,7 @@ from datetime import date
 from pathlib import Path
 
 from .ingest import load_config
+from .patterns import owner_patterns
 from .rules import RULE_LABELS, evaluate_snapshot, is_open
 from .scoring import desk_rollup, opp_score, owner_rollups
 from .snapshots import SnapshotStore
@@ -233,16 +234,19 @@ def build(store, snapshot_date, as_of, config):
         validation=store.validation_report_dict(snapshot_date),
         prev_summary=prev["summary"] if prev else None,
         outcomes=store.closed_outcomes(snapshot_date),
-        prev_opens=store.run_opens())
+        prev_opens=store.run_opens(),
+        patterns=owner_patterns(store, as_of, config))
 
 
 def build_from_rows(rows, snapshot_date, as_of, config,
                     validation=None, prev_summary=None, outcomes=None,
-                    prev_opens=None):
+                    prev_opens=None, patterns=None):
     """Compute all brief data from in-memory rows (e.g. a validated upload).
     outcomes: stored closed outcomes (store.closed_outcomes) for the
     trailing-win-rate coverage basis; None outside the store. prev_opens:
-    prior runs' rule-set maps (store.run_opens) for flag streaks."""
+    prior runs' rule-set maps (store.run_opens) for flag streaks. patterns:
+    per-owner forecast-integrity patterns (patterns.owner_patterns); None
+    outside the store."""
     results = evaluate_snapshot(rows, config, as_of)
     desk = desk_rollup(rows, results, config)
     insufficient = {"H3": 0, "H6": 0}
@@ -263,6 +267,7 @@ def build_from_rows(rows, snapshot_date, as_of, config,
         "risky_commits": risky_commits(rows, results, config),
         "trajectory": trajectory_data(rows, delta, config, as_of, outcomes),
         "streaks": flag_streaks(prev_opens or [], results),
+        "patterns": patterns,
         "summary": run_summary(snapshot_date, as_of, desk, results),
     }
 
@@ -555,6 +560,38 @@ def _forecast_integrity(lines, data):
                      f"{_money(row['amount'])}: {violation.detail}")
 
 
+def _forecast_patterns(lines, data):
+    lines.append("#### Forecast integrity patterns")
+    lines.append("")
+    lines.append("Coaching signal, not a comp input.")
+    lines.append("")
+    patterns = data["patterns"]
+    if patterns is None:
+        lines.append("Unavailable outside the snapshot store.")
+        return
+    over = [p for p in patterns.values() if p.overcall_flagged]
+    under = [p for p in patterns.values() if p.undercall_flagged]
+    if not over and not under:
+        lines.append("No overcall/undercall patterns flagged.")
+    for p in over:
+        lines.append(f"- Overcall (happy ears): {p.owner} — "
+                     f"{p.overcall_share:.0%} of {p.n_ever_commit} "
+                     f"ever-commit opps later pushed or lost")
+    def pct(value):
+        return "n/a" if value is None else f"{value:.0%}"
+
+    for p in under:
+        lines.append(f"- Undercall (sandbagging): {p.owner} — wins never "
+                     f"called commit/best_case: "
+                     f"{pct(p.undercall_won_share)} (n={p.n_won}); open "
+                     f"pipeline {pct(p.omitted_share)} omitted, "
+                     f"{pct(p.farout_share)} far-out (n={p.n_open})")
+    small = sum(1 for p in patterns.values()
+                if p.overcall_small_n and p.undercall_small_n)
+    lines.append(f"- Suppressed as small_n: {small} owners with too little "
+                 f"history to score")
+
+
 def render(data, config):
     validation = data["validation"]
     source = (f" ({Path(validation['source_file']).name})" if validation else "")
@@ -586,6 +623,8 @@ def render(data, config):
     _owner_table(lines, data)
     lines.append("")
     _forecast_integrity(lines, data)
+    lines.append("")
+    _forecast_patterns(lines, data)
     lines.append("")
     _since_last_run_detail(lines, data)
     lines.append("")

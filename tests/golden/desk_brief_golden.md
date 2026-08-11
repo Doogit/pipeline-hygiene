@@ -173,6 +173,16 @@ Drill-down detail. The forecast call runs off page 1.
 - OPP-0134 — Darby Bramwell, stage commit, $15,248: forecast commit without a valid next step
 - OPP-0160 — Avery Ristori, stage develop, $12,682: forecast commit but stage develop
 
+#### Forecast integrity patterns
+
+Coaching signal, not a comp input.
+
+- Undercall (sandbagging): Finley Underhill — wins never called commit/best_case: n/a (n=0); open pipeline 50% omitted, 25% far-out (n=6)
+- Undercall (sandbagging): Sage Eastvale — wins never called commit/best_case: n/a (n=0); open pipeline 62% omitted, 24% far-out (n=6)
+- Undercall (sandbagging): Sage Vantrease — wins never called commit/best_case: n/a (n=0); open pipeline 43% omitted, 40% far-out (n=6)
+- Undercall (sandbagging): Wren Ivesdale — wins never called commit/best_case: n/a (n=0); open pipeline 43% omitted, 43% far-out (n=5)
+- Suppressed as small_n: 4 owners with too little history to score
+
 ### Since last run (detail)
 
 No previous run recorded.

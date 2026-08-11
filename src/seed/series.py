@@ -126,7 +126,12 @@ def evolve_week(rows, exp, d_prev, d_next, d0, org, config, rng, pushed_days):
         delta["introduced"].setdefault(opp_id, []).append(rule)
         touched.add(opp_id)
 
-    # 3) close deals (late-stage preferred)
+    # 3) close deals (late-stage preferred). Persona-driven outcome skew:
+    #    a happy-ears seller's commit-forecast deal loses more often than it
+    #    wins — the behavioral pattern the Task 11 detector recovers from
+    #    history alone (plant = persona field patterns, detect = statistics;
+    #    the detector never sees the persona labels, so it stays
+    #    non-circular).
     close_pool = [o for o in sorted(rows) if _is_open(rows[o]) and o not in touched]
     late = [o for o in close_pool if rows[o]["stage"] in ("propose", "commit")]
     picked = rng.sample(late, min(CLOSES_PER_WEEK, len(late)))
@@ -135,7 +140,10 @@ def evolve_week(rows, exp, d_prev, d_next, d0, org, config, rng, pushed_days):
         picked += rng.sample(rest, min(CLOSES_PER_WEEK - len(picked), len(rest)))
     for opp_id in picked:
         row = rows[opp_id]
-        new_stage = "closed_won" if rng.random() < 0.6 else "closed_lost"
+        happy_commit = (row["forecast_category"] == "commit"
+                        and org.by_name(row["owner"]).persona == "happy_ears")
+        p_won = 0.25 if happy_commit else 0.6
+        new_stage = "closed_won" if rng.random() < p_won else "closed_lost"
         if row["close_date"] != d_next:
             row["close_date_changes"] += 1
             row["close_date"] = d_next
@@ -186,8 +194,20 @@ def evolve_week(rows, exp, d_prev, d_next, d0, org, config, rng, pushed_days):
         _record_push(opp_id, old, introduces_h11=True)
         touched.add(opp_id)
 
+    # Regular pushes preferentially hit commit-forecast deals of happy-ears
+    # sellers (same non-circular plant-vs-detect rationale as the close
+    # skew above): a uniformly random push schedule carries zero per-persona
+    # signal, which no series length could recover.
     push_pool = _push_pool(exclude_h11_budget=True)
-    for opp_id in rng.sample(push_pool, min(PUSHES_PER_WEEK, len(push_pool))):
+    priority = [o for o in push_pool
+                if rows[o]["forecast_category"] == "commit"
+                and org.by_name(rows[o]["owner"]).persona == "happy_ears"]
+    picked = rng.sample(priority, min(PUSHES_PER_WEEK, len(priority)))
+    if len(picked) < PUSHES_PER_WEEK:
+        rest = [o for o in push_pool if o not in set(picked)]
+        picked += rng.sample(rest,
+                             min(PUSHES_PER_WEEK - len(picked), len(rest)))
+    for opp_id in picked:
         row = rows[opp_id]
         old = row["close_date"]
         headroom = min(alarm - 1, 28,

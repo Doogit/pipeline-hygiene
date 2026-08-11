@@ -13,6 +13,11 @@ push_alarm_days: 21               # H11: single close-date push >= this (Gong: >
 cumulative_push_alarm_days: 45    # H11: total later-drift across pushes >= this
 disqualify_review_pushes: 3       # brief marker: recommend disqualification review at this push_count
 min_closed_for_win_rate: 10       # trailing-win-rate coverage basis needs at least this many stored closed outcomes
+patterns:                         # forecast-integrity detection — coaching signal, never a comp input
+  overcall_share_min: 0.5         # flag overcall when >= this share of ever-commit opps later pushed or lost
+  undercall_won_share_min: 0.75   # flag undercall when >= this share of observed wins never showed commit/best_case
+  undercall_omitted_share_min: 0.4   # ...or omitted dollars >= this share of open pipeline AND
+  undercall_farout_share_min: 0.1    #    far-out (beyond horizon) dollars >= this share (conjunction)
 healthy_score_threshold: 80
 min_opps_for_owner_score: 5       # below this, owner score carries a small-n flag
 next_step_quality:

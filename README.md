@@ -150,6 +150,25 @@ never by running the rules engine, so the comparison is non-circular.
   falls back to `coverage_ratio_min`. The basis used is always printed.
   Remaining quota = sum of configured quotas minus closed-won dollars whose
   close_date falls in the current fiscal quarter of as_of.
+- Forecast-integrity patterns (src/patterns.py) — a coaching signal, never a
+  comp input (the disclaimer renders wherever shown). Overcall = share of an
+  owner's ever-commit opps subsequently pushed (later close-date move in a
+  snapshot pair after the first commit snapshot) or closed_lost. Undercall =
+  share of observed wins never commit/best_case before the winning snapshot
+  (only wins seen open in an earlier snapshot count — an outcome with no
+  pre-win history is uninformative), OR the conjunction of omitted-dollar
+  share AND far-out-dollar share of open pipeline (conjunction because
+  omitted share alone is dominated by single-big-deal noise at per-owner n).
+  Metrics report their n; below `min_opps_for_owner_score` they are
+  suppressed as small_n, never flagged.
+- The persona-recovery test needed persona-DRIVEN series evolution: a
+  uniformly random push/close schedule carries zero per-persona signal, so
+  no series length could separate happy_ears from clean operators. The
+  simulator now preferentially pushes (and skews to closed_lost) the
+  commit-forecast deals of happy-ears sellers — plant is field-level
+  behavior, detection is statistics over snapshots, and the detector never
+  sees persona labels, so plant-vs-detect stays non-circular. Coupling
+  bookkeeping (H3/H11, delta manifest) is unchanged.
 - Flag streaks count consecutive RUNS (from the `runs` table), not
   snapshots: the current evaluation plus immediately preceding recorded
   runs carrying the same (opp, rule); a cleared run resets the streak.
