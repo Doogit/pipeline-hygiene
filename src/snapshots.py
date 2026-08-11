@@ -172,6 +172,23 @@ class SnapshotStore:
             prev_close = close
         return stats
 
+    def closed_outcomes(self, snapshot_date):
+        """Stored closed outcomes at-or-before snapshot_date: one record per
+        opp whose LAST observed row is closed, with the fields the trajectory
+        section needs. One query, one pass."""
+        cur = self.conn.execute(
+            "SELECT opp_id, stage, close_date, amount FROM opportunities "
+            "WHERE snapshot_date <= ? ORDER BY opp_id, snapshot_date",
+            (snapshot_date.isoformat(),))
+        last = {}
+        for opp_id, stage, close, amount in cur:
+            last[opp_id] = (stage, close, amount)
+        return [{"opp_id": o, "stage": s,
+                 "close_date": date.fromisoformat(c) if c else None,
+                 "amount": a}
+                for o, (s, c, a) in sorted(last.items())
+                if s in ("closed_won", "closed_lost")]
+
     def rows_with_history(self, snapshot_date):
         """Rows for a snapshot with optional columns filled from history when
         absent and >= 2 snapshots exist at-or-before snapshot_date. Push

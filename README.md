@@ -129,6 +129,27 @@ never by running the rules engine, so the comparison is non-circular.
   push, dollar-ranked with distinct-opp totals, and marks
   `push_count >= disqualify_review_pushes` with "recommend disqualification
   review".
+- Brief page 1 (forecast-call prep) runs: Headline (+Validation), Risky
+  commits, Trajectory, Since last run (summary counts), Slipping pipeline
+  (kept on page 1 after the four mandated sections — slippage is the
+  research's #1 ranked signal). Everything else sits under "## Appendix"
+  with headings demoted to `###` (heading text preserved verbatim so
+  existing section assertions still match); the top-10 exceptions table is
+  preserved as-is there, and the FULL exception list lives as the
+  dashboard's appendix drill-down.
+- Risky commits = open opps with forecast commit/best_case carrying any of
+  H1/H2/H4/H5/H7/H11, dollar-ranked, capped at 10 with the total always
+  stated. Each gets the fixed coaching prompt of its dominant rule
+  (deterministic: worst severity, then heaviest rule weight, then lowest
+  rule number) — questions to ask the seller, never gotchas.
+- Trajectory: created-vs-closed flow comes from the since-last-run delta
+  (added vs closed opps, won/lost split, counts + dollars). Coverage uses
+  required multiple = 1 / trailing win rate over stored closed outcomes (an
+  opp counts as an outcome when its last stored row is closed_won/lost);
+  with fewer than `min_closed_for_win_rate` outcomes (or zero wins) it
+  falls back to `coverage_ratio_min`. The basis used is always printed.
+  Remaining quota = sum of configured quotas minus closed-won dollars whose
+  close_date falls in the current fiscal quarter of as_of.
 
 ## Handoff
 

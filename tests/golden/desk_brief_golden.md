@@ -15,6 +15,30 @@ Snapshot 2026-08-10 (opps_2026-08-10.csv), evaluated as of 2026-08-10.
 
 - Source `opps_2026-08-10.csv`: accepted 400/400 rows, rejected 0
 
+## Risky commits
+
+51 commit/best_case opps carry a risk flag — $5,939,535 (distinct opps), dollar-ranked, top 10 shown. Coaching prompts, not gotchas.
+
+| # | Opp | Owner | Stage | Amount | Forecast | Flags | Ask the seller |
+|---|---|---|---|---|---|---|---|
+| 1 | OPP-0193 | Kendall Lindqvist | commit | $616,126 | commit | H2 | The close date has passed — what close date has the buyer actually committed to? |
+| 2 | OPP-0046 | Hollis Underhill | prospect | $474,715 | commit | H5 | What buyer evidence supports commit while the deal is still early-stage or has no valid next step? |
+| 3 | OPP-0137 | Logan Ivesdale | qualify | $385,849 | commit | H5 | What buyer evidence supports commit while the deal is still early-stage or has no valid next step? |
+| 4 | OPP-0317 | Logan Ivesdale | propose | $368,677 | commit | H4 H5 | What buyer evidence supports commit while the deal is still early-stage or has no valid next step? |
+| 5 | OPP-0368 | Riley Southgate | qualify | $271,731 | best_case | H7 | Who beyond the single contact has confirmed budget and sign-off? |
+| 6 | OPP-0393 | Zion Calloway | develop | $232,101 | best_case | H1 H4 | What specific step did the buyer agree to take next, and by when? |
+| 7 | OPP-0205 | Tatum Ivesdale | propose | $226,050 | best_case | H2 | The close date has passed — what close date has the buyer actually committed to? |
+| 8 | OPP-0342 | Quinn Ristori | qualify | $205,327 | commit | H5 | What buyer evidence supports commit while the deal is still early-stage or has no valid next step? |
+| 9 | OPP-0182 | Blair Hollowell | propose | $182,079 | best_case | H7 | Who beyond the single contact has confirmed budget and sign-off? |
+| 10 | OPP-0215 | Parker Thistlewood | qualify | $166,628 | best_case | H7 | Who beyond the single contact has confirmed budget and sign-off? |
+
+## Trajectory
+
+- Flow since last run: no previous run recorded.
+- Coverage (FY2027-Q1): open pipeline $43,165,232 vs required $78,988,984 -> 0.55x
+  - Remaining quota $49,368,115 (quota $50,620,000 - won this quarter $1,251,885) x 1.6
+  - Basis: trailing win rate 62% over 32 stored closed outcomes -> required multiple 1.6x
+
 ## Since last run
 
 No previous run recorded.
@@ -23,7 +47,11 @@ No previous run recorded.
 
 No close-date pushes observed in stored history.
 
-## Fiscal quarters (fiscal year starts month 7)
+## Appendix
+
+Drill-down detail. The forecast call runs off page 1.
+
+### Fiscal quarters (fiscal year starts month 7)
 
 | Quarter | At-risk $ | At-risk opps | H5 opps |
 |---|---|---|---|
@@ -32,7 +60,7 @@ No close-date pushes observed in stored history.
 | FY2027-Q2 | $3,069,157 | 23 | OPP-0017, OPP-0043, OPP-0134, OPP-0137, OPP-0159, OPP-0160, OPP-0282, OPP-0317, OPP-0318, OPP-0343, OPP-0380 |
 | FY2027-Q3 | $70,550 | 3 | OPP-0391 |
 
-## Top 10 exceptions
+### Top 10 exceptions
 
 | # | Opp | Account | Owner | Stage | Amount | Score | Rules | Detail |
 |---|---|---|---|---|---|---|---|---|
@@ -47,7 +75,7 @@ No close-date pushes observed in stored history.
 | 9 | OPP-0199 | Harborsystems LLC | Morgan Calloway | develop | $267,875 | 35 | H1 H2 H4 H6 | no activity for 24d (> 21d for develop); close date 2026-07-08 is 33d in the past; next step empty; 53d in develop (norm 45d) |
 | 10 | OPP-0057 | Harborlabs Corp | Skyler Ivesdale | propose | $244,820 | 80 | H2 | close date 2026-08-05 is 5d in the past |
 
-## Owners
+### Owners
 
 | Owner | Open | Mean | Median | Violations | Pipeline | Coverage | Flags |
 |---|---|---|---|---|---|---|---|
@@ -112,7 +140,7 @@ No close-date pushes observed in stored history.
 | Zion Ristori | 6 | 99.2 | 100.0 | 1 | $938,628 | 0.67 | low_coverage |
 | Zion Vantrease | 4 | 91.2 | 90.0 | 4 | $1,465,002 | 1.10 | small_n, low_coverage |
 
-## Forecast integrity (H5)
+### Forecast integrity (H5)
 
 - OPP-0046 — Hollis Underhill, stage prospect, $474,715: forecast commit but stage prospect
 - OPP-0137 — Logan Ivesdale, stage qualify, $385,849: forecast commit but stage qualify
@@ -144,3 +172,7 @@ No close-date pushes observed in stored history.
 - OPP-0254 — Darby Bramwell, stage propose, $19,019: forecast commit without a valid next step
 - OPP-0134 — Darby Bramwell, stage commit, $15,248: forecast commit without a valid next step
 - OPP-0160 — Avery Ristori, stage develop, $12,682: forecast commit but stage develop
+
+### Since last run (detail)
+
+No previous run recorded.

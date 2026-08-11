@@ -1,9 +1,12 @@
 """Desk brief generator: python -m src.brief --as-of YYYY-MM-DD
 
-Writes out/desk_brief_<as_of>.md from the snapshot store: desk headline,
-validation summary, fiscal-quarter segmentation, top exceptions, per-owner
-table, forecast-integrity (H5) detail, and since-last-run deltas from the
-runs table.
+Writes out/desk_brief_<as_of>.md structured as forecast-call prep (the
+weekly review's practitioner-standard agenda opens with hygiene of stalled/
+pushed/stale deals). Page 1: headline, risky commits with deterministic
+coaching prompts (questions to ask the seller — never gotchas), trajectory
+(created-vs-closed flow + coverage vs remaining quota), since-last-run
+summary, slipping pipeline. Everything else — fiscal quarters, exceptions,
+owners, H5 detail — is drill-down under the Appendix header.
 
 Every time evaluation takes the explicit as_of; date.today() appears only as
 the CLI --as-of default. Since-last-run semantics match the seed delta
@@ -22,6 +25,111 @@ from .scoring import desk_rollup, opp_score, owner_rollups
 from .snapshots import SnapshotStore
 
 _SEV_RANK = {"high": 0, "medium": 1, "low": 2}
+
+# Rules that make a commit/best_case forecast "risky" on the forecast call.
+RISKY_RULES = ("H1", "H2", "H4", "H5", "H7", "H11")
+
+# Fixed, deterministic coaching prompts per dominant rule — phrased as
+# questions to ask the seller (coaching, not interrogation; the H11 wording
+# follows the research framing on re-confirming budget timelines).
+COACHING_PROMPTS = {
+    "H1": "When did the buyer last engage, and what interaction have they "
+          "agreed to next?",
+    "H2": "The close date has passed — what close date has the buyer "
+          "actually committed to?",
+    "H4": "What specific step did the buyer agree to take next, and by when?",
+    "H5": "What buyer evidence supports commit while the deal is still "
+          "early-stage or has no valid next step?",
+    "H7": "Who beyond the single contact has confirmed budget and sign-off?",
+    "H11": "Can you re-confirm the buyer's actual budget timeline before "
+           "re-committing this deal?",
+}
+
+
+def risky_commits(rows, results, config):
+    """Open commit/best_case opps carrying any RISKY_RULES violation,
+    dollar-ranked, each with the coaching prompt of its dominant rule
+    (deterministic: worst severity, then heaviest weight, then rule number)."""
+    weights = config["rule_weights"]
+    entries = []
+    for row in rows:
+        if not is_open(row) \
+                or row["forecast_category"] not in ("commit", "best_case"):
+            continue
+        result = results[row["opp_id"]]
+        risky = [v for v in result.violations if v.rule_id in RISKY_RULES]
+        if not risky:
+            continue
+        dominant = min(risky, key=lambda v: (_SEV_RANK[v.severity],
+                                             -weights[v.rule_id],
+                                             int(v.rule_id[1:])))
+        entries.append({"row": row, "result": result,
+                        "dominant": dominant.rule_id,
+                        "prompt": COACHING_PROMPTS[dominant.rule_id],
+                        "risky_rules": [v.rule_id for v in risky]})
+    entries.sort(key=lambda e: (-(e["row"]["amount"] or 0.0),
+                                e["row"]["opp_id"]))
+    return entries
+
+
+def trajectory_data(rows, delta, config, as_of, outcomes):
+    """Created-vs-closed flow since last run plus coverage vs remaining
+    quota. Required multiple = 1 / trailing win rate from stored closed
+    outcomes; falls back to config coverage_ratio_min when closed history is
+    insufficient. The basis used is always recorded verbatim."""
+    rows_by_id = {r["opp_id"]: r for r in rows}
+
+    def dollars(opp_ids):
+        return sum(rows_by_id[o]["amount"] or 0.0
+                   for o in opp_ids if o in rows_by_id)
+
+    flow = None
+    if delta is not None:
+        won = sorted(o for o, i in delta["closed"].items()
+                     if i["stage"] == "closed_won")
+        lost = sorted(o for o, i in delta["closed"].items()
+                      if i["stage"] == "closed_lost")
+        flow = {"created_n": len(delta["added"]),
+                "created_dollars": dollars(delta["added"]),
+                "won_n": len(won), "won_dollars": dollars(won),
+                "lost_n": len(lost), "lost_dollars": dollars(lost)}
+
+    open_pipeline = sum(r["amount"] or 0.0 for r in rows if is_open(r))
+    coverage = None
+    total_quota = sum((config.get("quotas") or {}).values())
+    if total_quota > 0:
+        outcomes = outcomes or []
+        won_out = [o for o in outcomes if o["stage"] == "closed_won"]
+        n_closed = len(outcomes)
+        if n_closed >= config["min_closed_for_win_rate"] and won_out:
+            win_rate = len(won_out) / n_closed
+            multiple = 1.0 / win_rate
+            basis = (f"trailing win rate {win_rate:.0%} over {n_closed} "
+                     f"stored closed outcomes -> required multiple "
+                     f"{multiple:.1f}x")
+        else:
+            multiple = config["coverage_ratio_min"]
+            basis = (f"config coverage_ratio_min {multiple:.1f}x (stored "
+                     f"closed history insufficient: {n_closed} outcomes < "
+                     f"{config['min_closed_for_win_rate']})")
+        fy_start = config["fiscal_year_start_month"]
+        quarter = fiscal_quarter(as_of, fy_start)
+        won_this_quarter = sum(
+            o["amount"] or 0.0 for o in won_out
+            if o["close_date"] is not None
+            and fiscal_quarter(o["close_date"], fy_start) == quarter)
+        remaining_quota = max(total_quota - won_this_quarter, 0.0)
+        required = remaining_quota * multiple
+        coverage = {"quarter": quarter, "total_quota": total_quota,
+                    "won_this_quarter": won_this_quarter,
+                    "remaining_quota": remaining_quota,
+                    "required_multiple": multiple,
+                    "required_pipeline": required,
+                    "ratio": (open_pipeline / required) if required > 0
+                    else None,
+                    "basis": basis}
+    return {"flow": flow, "open_pipeline": open_pipeline,
+            "coverage": coverage}
 
 
 def fiscal_quarter(d, fy_start_month):
@@ -99,18 +207,22 @@ def build(store, snapshot_date, as_of, config):
     return build_from_rows(
         store.rows_with_history(snapshot_date), snapshot_date, as_of, config,
         validation=store.validation_report_dict(snapshot_date),
-        prev_summary=prev["summary"] if prev else None)
+        prev_summary=prev["summary"] if prev else None,
+        outcomes=store.closed_outcomes(snapshot_date))
 
 
 def build_from_rows(rows, snapshot_date, as_of, config,
-                    validation=None, prev_summary=None):
-    """Compute all brief data from in-memory rows (e.g. a validated upload)."""
+                    validation=None, prev_summary=None, outcomes=None):
+    """Compute all brief data from in-memory rows (e.g. a validated upload).
+    outcomes: stored closed outcomes (store.closed_outcomes) for the
+    trailing-win-rate coverage basis; None outside the store."""
     results = evaluate_snapshot(rows, config, as_of)
     desk = desk_rollup(rows, results, config)
     insufficient = {"H3": 0, "H6": 0}
     for result in results.values():
         for item in result.insufficient:
             insufficient[item.rule_id] += 1
+    delta = since_last_run(prev_summary, rows, results, desk)
     return {
         "snapshot_date": snapshot_date,
         "as_of": as_of,
@@ -120,7 +232,9 @@ def build_from_rows(rows, snapshot_date, as_of, config,
         "owners": owner_rollups(rows, results, config),
         "validation": validation,
         "insufficient": insufficient,
-        "since_last_run": since_last_run(prev_summary, rows, results, desk),
+        "since_last_run": delta,
+        "risky_commits": risky_commits(rows, results, config),
+        "trajectory": trajectory_data(rows, delta, config, as_of, outcomes),
         "summary": run_summary(snapshot_date, as_of, desk, results),
     }
 
@@ -173,7 +287,62 @@ def _headline(lines, data, config):
         lines.append(f"- Warning: {warning}")
 
 
-def _since_last_run(lines, data):
+def _risky_commits(lines, data, config):
+    lines.append("## Risky commits")
+    lines.append("")
+    entries = data["risky_commits"]
+    if not entries:
+        lines.append("No commit/best_case opp carries a risk flag "
+                     f"({', '.join(RISKY_RULES)}).")
+        return
+    total = sum(e["row"]["amount"] or 0.0 for e in entries)
+    lines.append(f"{len(entries)} commit/best_case opps carry a risk flag — "
+                 f"{_money(total)} (distinct opps), dollar-ranked"
+                 + (", top 10 shown" if len(entries) > 10 else "")
+                 + ". Coaching prompts, not gotchas.")
+    lines.append("")
+    lines.append("| # | Opp | Owner | Stage | Amount | Forecast | Flags "
+                 "| Ask the seller |")
+    lines.append("|---|---|---|---|---|---|---|---|")
+    for i, entry in enumerate(entries[:10], start=1):
+        row = entry["row"]
+        lines.append(f"| {i} | {row['opp_id']} | {row['owner']} "
+                     f"| {row['stage']} | {_money(row['amount'])} "
+                     f"| {row['forecast_category']} "
+                     f"| {' '.join(entry['risky_rules'])} "
+                     f"| {entry['prompt']} |")
+
+
+def _trajectory(lines, data):
+    lines.append("## Trajectory")
+    lines.append("")
+    trajectory = data["trajectory"]
+    flow = trajectory["flow"]
+    if flow is None:
+        lines.append("- Flow since last run: no previous run recorded.")
+    else:
+        lines.append(f"- Flow since last run: {flow['created_n']} created "
+                     f"({_money(flow['created_dollars'])}) vs "
+                     f"{flow['won_n'] + flow['lost_n']} closed "
+                     f"({flow['won_n']} won {_money(flow['won_dollars'])}, "
+                     f"{flow['lost_n']} lost {_money(flow['lost_dollars'])})")
+    coverage = trajectory["coverage"]
+    if coverage is None:
+        lines.append("- Coverage: no quotas configured.")
+        return
+    ratio = ("n/a" if coverage["ratio"] is None
+             else f"{coverage['ratio']:.2f}x")
+    lines.append(f"- Coverage ({coverage['quarter']}): open pipeline "
+                 f"{_money(trajectory['open_pipeline'])} vs required "
+                 f"{_money(coverage['required_pipeline'])} -> {ratio}")
+    lines.append(f"  - Remaining quota {_money(coverage['remaining_quota'])} "
+                 f"(quota {_money(coverage['total_quota'])} - won this "
+                 f"quarter {_money(coverage['won_this_quarter'])}) x "
+                 f"{coverage['required_multiple']:.1f}")
+    lines.append(f"  - Basis: {coverage['basis']}")
+
+
+def _since_last_run_summary(lines, data):
     lines.append("## Since last run")
     lines.append("")
     delta = data["since_last_run"]
@@ -181,13 +350,31 @@ def _since_last_run(lines, data):
         lines.append("No previous run recorded.")
         return
     lines.append(f"Previous run: snapshot {delta['prev_snapshot_date']}, "
-                 f"as of {delta['prev_as_of']}.")
+                 f"as of {delta['prev_as_of']}. Per-opp detail in the "
+                 f"appendix.")
     lines.append("")
     change = delta["score_change"]
     if change["prev"] is not None and change["current"] is not None:
         lines.append(f"- Desk score (weighted mean): {change['prev']:.1f} -> "
                      f"{change['current']:.1f} "
                      f"({change['current'] - change['prev']:+.1f})")
+    new = delta["new_violations"]
+    cleared = delta["cleared_violations"]
+    lines.append(f"- New violations: {sum(len(v) for v in new.values())} on "
+                 f"{len(new)} opps; cleared: "
+                 f"{sum(len(v) for v in cleared.values())} on "
+                 f"{len(cleared)} opps")
+    lines.append(f"- Closed: {len(delta['closed'])} opps; added: "
+                 f"{len(delta['added'])}; removed: {len(delta['removed'])}")
+
+
+def _since_last_run_detail(lines, data):
+    lines.append("### Since last run (detail)")
+    lines.append("")
+    delta = data["since_last_run"]
+    if delta is None:
+        lines.append("No previous run recorded.")
+        return
     for label, key in (("New violations", "new_violations"),
                        ("Cleared violations", "cleared_violations")):
         opps = delta[key]
@@ -246,7 +433,7 @@ def _slipping(lines, data, config):
 
 def _fiscal_quarters(lines, data, config):
     fy_start = config["fiscal_year_start_month"]
-    lines.append(f"## Fiscal quarters (fiscal year starts month {fy_start})")
+    lines.append(f"### Fiscal quarters (fiscal year starts month {fy_start})")
     lines.append("")
     buckets = {}
     for row in data["rows"]:
@@ -276,7 +463,7 @@ def _fiscal_quarters(lines, data, config):
 
 
 def _top_exceptions(lines, data, config):
-    lines.append("## Top 10 exceptions")
+    lines.append("### Top 10 exceptions")
     lines.append("")
     rows_by_id = {r["opp_id"]: r for r in data["rows"]}
     flagged = [r for r in data["results"].values() if r.violations]
@@ -300,7 +487,7 @@ def _top_exceptions(lines, data, config):
 
 
 def _owner_table(lines, data):
-    lines.append("## Owners")
+    lines.append("### Owners")
     lines.append("")
     owners = data["owners"]
     if not owners:
@@ -320,7 +507,7 @@ def _owner_table(lines, data):
 
 
 def _forecast_integrity(lines, data):
-    lines.append("## Forecast integrity (H5)")
+    lines.append("### Forecast integrity (H5)")
     lines.append("")
     rows_by_id = {r["opp_id"]: r for r in data["rows"]}
     entries = []
@@ -349,9 +536,17 @@ def render(data, config):
     ]
     _headline(lines, data, config)
     lines.append("")
-    _since_last_run(lines, data)
+    _risky_commits(lines, data, config)
+    lines.append("")
+    _trajectory(lines, data)
+    lines.append("")
+    _since_last_run_summary(lines, data)
     lines.append("")
     _slipping(lines, data, config)
+    lines.append("")
+    lines.append("## Appendix")
+    lines.append("")
+    lines.append("Drill-down detail. The forecast call runs off page 1.")
     lines.append("")
     _fiscal_quarters(lines, data, config)
     lines.append("")
@@ -360,6 +555,8 @@ def render(data, config):
     _owner_table(lines, data)
     lines.append("")
     _forecast_integrity(lines, data)
+    lines.append("")
+    _since_last_run_detail(lines, data)
     lines.append("")
     return "\n".join(lines)
 

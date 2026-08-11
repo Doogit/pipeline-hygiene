@@ -10,6 +10,7 @@ rule_weights: {H1: 15, H2: 20, H3: 10, H4: 20, H5: 25, H6: 10, H7: 10, H8: 5, H9
 push_alarm_days: 21               # H11: single close-date push >= this (Gong: >=3-week pushes signal lost control)
 cumulative_push_alarm_days: 45    # H11: total later-drift across pushes >= this
 disqualify_review_pushes: 3       # brief marker: recommend disqualification review at this push_count
+min_closed_for_win_rate: 10       # trailing-win-rate coverage basis needs at least this many stored closed outcomes
 healthy_score_threshold: 80
 min_opps_for_owner_score: 5       # below this, owner score carries a small-n flag
 next_step_quality:
