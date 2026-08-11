@@ -1,0 +1,1 @@
+"""pipeline-hygiene core package."""
