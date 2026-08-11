@@ -96,9 +96,12 @@ def required_coverage_multiple(outcomes, config):
     if n_closed >= config["min_closed_for_win_rate"] and won:
         win_rate = len(won) / n_closed
         multiple = 1.0 / win_rate
-        basis = (f"trailing win rate {win_rate:.0%} over {n_closed} "
-                 f"stored closed outcomes -> required multiple "
-                 f"{multiple:.1f}x")
+        # The fraction lets a reader reproduce the required-pipeline number
+        # exactly (remaining quota x n_closed/n_won); a rounded multiple
+        # alone breaks the napkin check by thousands of dollars.
+        basis = (f"trailing win rate {len(won)}/{n_closed} closed won "
+                 f"({win_rate:.1%}) -> required multiple "
+                 f"{n_closed}/{len(won)} = {multiple:.2f}x")
     else:
         multiple = config["coverage_ratio_min"]
         basis = (f"config coverage_ratio_min {multiple:.1f}x (stored "

@@ -365,10 +365,11 @@ def _headline(lines, data, config):
     desk = data["desk"]
     lines.append("## Headline")
     lines.append("")
+    score_label = "Selection score" if data.get("filter_label") else "Desk score"
     if desk.n_open == 0:
         lines.append("- No open opportunities in this snapshot.")
     else:
-        lines.append(f"- Desk score: {desk.weighted_mean_score:.1f} amount-weighted "
+        lines.append(f"- {score_label}: {desk.weighted_mean_score:.1f} amount-weighted "
                      f"mean / {desk.median_score:.1f} median")
         lines.append(f"- Healthy opps (score >= "
                      f"{config['healthy_score_threshold']}): {desk.pct_healthy:.1f}% "
@@ -459,7 +460,7 @@ def _trajectory(lines, data):
     lines.append(f"  - Remaining quota {_money(coverage['remaining_quota'])} "
                  f"(quota {_money(coverage['total_quota'])} - won this "
                  f"quarter {_money(coverage['won_this_quarter'])}) x "
-                 f"{coverage['required_multiple']:.1f}")
+                 f"{coverage['required_multiple']:.2f}")
     lines.append(f"  - Basis: {coverage['basis']}")
 
 
@@ -738,19 +739,37 @@ def _forecast_patterns(lines, data):
                  f"history to score")
 
 
+def ledger_rate(group, min_n):
+    """Won/resolved cell: always the fraction, the percentage only once
+    enough commits have resolved. A bare 100% on n=1 is exactly the number
+    that gets screenshot into a leaderboard (both persona sims hit it)."""
+    resolved = group["won"] + group["lost"]
+    if not resolved:
+        return "n/a"
+    cell = f"{group['won']}/{resolved}"
+    if resolved >= min_n:
+        cell += f" ({group['won'] / resolved:.0%})"
+    return cell
+
+
 def _commit_ledger(lines, data, config):
-    """Forecast-accuracy ledger tables: by owner, by team (when owner_meta
-    exists), by committed-for quarter. Counts and one derived rate; keys
-    sorted alphabetically/chronologically — deliberately NOT worst-first
-    (an accuracy leaderboard is one sort away from a comp weapon)."""
+    """Forecast-accuracy ledger tables: by owner, by team/region (when
+    owner_meta exists), by committed-for quarter. Counts and one derived
+    rate; keys sorted alphabetically/chronologically — deliberately NOT
+    worst-first (an accuracy leaderboard is one sort away from a comp
+    weapon)."""
+    min_n = config["min_opps_for_owner_score"]
     lines.append("### Commit accuracy (forecast ledger)")
+    lines.append("")
+    lines.append("Coaching signal, not a comp input.")
     lines.append("")
     lines.append("Of opps ever forecast commit in stored history: outcome to "
                  "date. Pushed = still open with a close-date move after the "
                  "first commit snapshot; committed-for quarter = fiscal "
                  "quarter of the close date when first called commit (immune "
-                 "to later pushes). Won/resolved counts closed opps only. "
-                 "Coaching signal, not a comp input.")
+                 "to later pushes). Won/resolved counts closed opps only, "
+                 f"shown as won/closed; the percentage appears once {min_n}+ "
+                 "have resolved (small-n rates mislead).")
     lines.append("")
     entries = data["ledger"]
     if entries is None:
@@ -767,18 +786,18 @@ def _commit_ledger(lines, data, config):
         lines.append("|---|---|---|---|---|---|---|")
         for key in sorted(rollups, key=lambda k: (k is None, k or "")):
             g = rollups[key]
-            resolved = g["won"] + g["lost"]
-            rate = f"{g['won'] / resolved:.0%}" if resolved else "n/a"
             lines.append(f"| {'unknown' if key is None else key} | {g['n']} "
                          f"| {g['won']} | {g['lost']} | {g['pushed']} "
-                         f"| {g['open']} | {rate} |")
+                         f"| {g['open']} | {ledger_rate(g, min_n)} |")
 
     table("Owner", ledger_rollups(entries, lambda e: e.owner))
     owner_meta = config.get("owner_meta") or {}
-    if owner_meta:
-        lines.append("")
-        table("Team", ledger_rollups(
-            entries, lambda e: (owner_meta.get(e.owner) or {}).get("team")))
+    for dimension in ("team", "region"):
+        if any((m or {}).get(dimension) for m in owner_meta.values()):
+            lines.append("")
+            table(dimension.capitalize(), ledger_rollups(
+                entries,
+                lambda e: (owner_meta.get(e.owner) or {}).get(dimension)))
     lines.append("")
     table("Committed-for quarter",
           ledger_rollups(entries, lambda e: e.committed_quarter))
@@ -929,6 +948,22 @@ def digest_markdown(data, owner, config):
                      f"flagged {streak} runs")
 
     lines.append("")
+    lines.append("## Your commit accuracy")
+    lines.append("")
+    owned_ledger = [e for e in (data["ledger"] or []) if e.owner == owner]
+    if data["ledger"] is None:
+        lines.append("Unavailable outside the snapshot store.")
+    elif not owned_ledger:
+        lines.append("None of your deals has been forecast commit in stored "
+                     "history.")
+    else:
+        g = ledger_rollups(owned_ledger, lambda e: e.owner)[owner]
+        lines.append(f"Of your {g['n']} ever-commit deal(s): {g['won']} won, "
+                     f"{g['lost']} lost, {g['pushed']} pushed, {g['open']} "
+                     f"still open. The same numbers, and nothing more, "
+                     f"appear in the desk brief's ledger.")
+
+    lines.append("")
     lines.append("## Suggested coaching focus")
     lines.append("")
     exposure, deals = {}, {}
@@ -964,7 +999,7 @@ def write_digests(data, config, out_dir):
 
 
 def run(store, snapshot_date, as_of, config, out_dir, owner_filter=None,
-        filter_label=None):
+        filter_label=None, filter_slug=None):
     """Build, render, record the run, write the brief. Returns (path, data).
 
     A filtered brief NEVER records a run (its partial open-opp map would
@@ -977,7 +1012,8 @@ def run(store, snapshot_date, as_of, config, out_dir, owner_filter=None,
     if owner_filter is None:
         store.record_run(as_of, snapshot_date, data["summary"])
     else:
-        name = f"desk_brief_{as_of.isoformat()}_{owner_slug(filter_label)}.md"
+        slug = filter_slug or owner_slug(filter_label)
+        name = f"desk_brief_{as_of.isoformat()}_{slug}.md"
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / name
@@ -986,34 +1022,54 @@ def run(store, snapshot_date, as_of, config, out_dir, owner_filter=None,
     return path, data
 
 
-def resolve_owner_filter(config, snapshot_owners, owners, teams):
-    """Resolve --owner/--team values into (owner set, label). Unknown names
-    are errors, never guesses: raises ValueError naming the known values.
-    Owners are checked against the snapshot plus quotas/owner_meta (an owner
-    with a quota but no open opps is still filterable)."""
+def resolve_owner_filter(config, snapshot_owners, owners, teams,
+                         regions=None):
+    """Resolve --owner/--team/--region values into (owner set, label, slug).
+    Matching is case-insensitive, and a team may be named without its
+    "Team " prefix ("na-east-1" finds "Team NA-East-1"); anything else
+    unknown is an error naming the known values, never a guess. Owners are
+    checked against the snapshot plus quotas/owner_meta (an owner with a
+    quota but no open opps is still filterable)."""
     owner_meta = config.get("owner_meta") or {}
     known_owners = (set(snapshot_owners) | set(config.get("quotas") or {})
                     | set(owner_meta))
-    known_teams = {m.get("team") for m in owner_meta.values()} - {None}
-    selected = set()
-    for team in teams or []:
-        if not owner_meta:
+
+    def canonical(value, known, kind):
+        if not owner_meta and kind != "owner":
             raise ValueError(
-                "--team needs team metadata; pass --quotas pointing at a "
-                "JSON with an 'owners' block (e.g. data/seed_manifest.json)")
-        if team not in known_teams:
-            raise ValueError(f"unknown team {team!r}; known teams: "
-                             + ", ".join(sorted(known_teams)))
-        selected |= {o for o, m in owner_meta.items()
-                     if m.get("team") == team}
-    for owner in owners or []:
-        if owner not in known_owners:
-            raise ValueError(f"unknown owner {owner!r}; check the snapshot's "
-                             "owner names (and the --quotas file)")
-        selected.add(owner)
-    label = "; ".join([f"team {t}" for t in teams or []]
-                      + [f"owner {o}" for o in owners or []])
-    return selected, label
+                f"--{kind} needs {kind} metadata; pass --quotas pointing at "
+                "a JSON with an 'owners' block (e.g. "
+                "data/seed_manifest.json)")
+        by_fold = {k.casefold(): k for k in known}
+        folded = value.casefold()
+        match = by_fold.get(folded)
+        if match is None and kind == "team":
+            match = by_fold.get(f"team {folded}")
+        if match is None:
+            hint = (", ".join(sorted(known)) if kind != "owner"
+                    else "check the snapshot's owner names (and the "
+                         "--quotas file)")
+            raise ValueError(f"unknown {kind} {value!r}; "
+                             + (f"known {kind}s: {hint}" if kind != "owner"
+                                else hint))
+        return match
+
+    selected, parts = set(), []
+    for kind, values in (("team", teams), ("region", regions),
+                         ("owner", owners)):
+        for value in values or []:
+            if kind == "owner":
+                name = canonical(value, known_owners, kind)
+                selected.add(name)
+            else:
+                known = {m.get(kind) for m in owner_meta.values()} - {None}
+                name = canonical(value, known, kind)
+                selected |= {o for o, m in owner_meta.items()
+                             if m.get(kind) == name}
+            parts.append((kind, name))
+    label = "; ".join(f"{kind} {name}" for kind, name in parts)
+    slug = owner_slug(" ".join(name for _, name in parts))
+    return selected, label, slug
 
 
 def main(argv=None):
@@ -1039,7 +1095,12 @@ def main(argv=None):
     p.add_argument("--team", action="append", metavar="NAME",
                    help="repeatable; restrict to every owner of these teams "
                         "(team membership from the --quotas 'owners' block); "
-                        "combines with --owner")
+                        "combines with --owner/--region; case-insensitive, "
+                        "'Team ' prefix optional")
+    p.add_argument("--region", action="append", metavar="NAME",
+                   help="repeatable; restrict to every owner of these "
+                        "regions (from the --quotas 'owners' block); "
+                        "combines with --owner/--team")
     args = p.parse_args(argv)
 
     # CLI entry point: the only place date.today() is allowed (spec).
@@ -1063,21 +1124,26 @@ def main(argv=None):
         print(f"error: no snapshot {snapshot_date} in {args.db}", file=sys.stderr)
         return 2
 
-    owner_filter, filter_label = None, None
-    if args.owner or args.team:
+    owner_filter, filter_label, filter_slug = None, None, None
+    if args.owner or args.team or args.region:
         try:
-            owner_filter, filter_label = resolve_owner_filter(
-                config, store.owners(snapshot_date), args.owner, args.team)
+            owner_filter, filter_label, filter_slug = resolve_owner_filter(
+                config, store.owners(snapshot_date), args.owner, args.team,
+                args.region)
         except ValueError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
 
     path, data = run(store, snapshot_date, as_of, config, args.out_dir,
-                     owner_filter=owner_filter, filter_label=filter_label)
+                     owner_filter=owner_filter, filter_label=filter_label,
+                     filter_slug=filter_slug)
     desk = data["desk"]
     filtered = f", filtered to {filter_label}" if filter_label else ""
     print(f"wrote {path} (snapshot {snapshot_date}, {desk.n_open} open opps, "
           f"at-risk {_money(desk.at_risk_dollars)}{filtered})")
+    if owner_filter is not None and not args.digests:
+        print("tip: add --digests to write coaching digests for just this "
+              "selection")
     if args.digests:
         paths = write_digests(data, config, args.out_dir)
         print(f"wrote {len(paths)} coaching digests to "

@@ -137,6 +137,37 @@ def test_ledger_rollups_counts_and_none_key():
     assert by_quarter["FY2027-Q1"]["n"] == 2
 
 
+def test_ledger_rate_small_n_guard():
+    # fraction always; percentage only at min_n resolved (a bare 100% on
+    # n=1 is a leaderboard cell, not a coaching signal)
+    assert brief.ledger_rate({"won": 0, "lost": 0}, 5) == "n/a"
+    assert brief.ledger_rate({"won": 1, "lost": 1}, 5) == "1/2"
+    assert brief.ledger_rate({"won": 1, "lost": 1}, 2) == "1/2 (50%)"
+    assert brief.ledger_rate({"won": 3, "lost": 1}, 4) == "3/4 (75%)"
+
+
+def test_digest_carries_own_ledger_row(tmp_path, config):
+    d1, d2 = AS_OF - timedelta(days=7), AS_OF
+    store = SnapshotStore(":memory:", config)
+    _ingest(store, tmp_path, d1, [
+        _row("OPP-W", "Avery Farrow", d1, forecast_category="commit"),
+        _row("OPP-O", "Avery Farrow", d1, forecast_category="commit"),
+        _row("OPP-N", "Blair Farrow", d1)])
+    _ingest(store, tmp_path, d2, [
+        _row("OPP-W", "Avery Farrow", d2, stage="closed_won",
+             forecast_category="commit"),
+        _row("OPP-O", "Avery Farrow", d2, forecast_category="commit"),
+        _row("OPP-N", "Blair Farrow", d2)])
+    data = brief.build(store, AS_OF, AS_OF, config)
+    avery = brief.digest_markdown(data, "Avery Farrow", config)
+    assert "## Your commit accuracy" in avery
+    assert ("Of your 2 ever-commit deal(s): 1 won, 0 lost, 0 pushed, "
+            "1 still open." in avery)
+    blair = brief.digest_markdown(data, "Blair Farrow", config)
+    assert ("None of your deals has been forecast commit in stored "
+            "history." in blair)
+
+
 def test_brief_renders_ledger_with_disclaimer(tmp_path, config):
     rng = random.Random(42)
     org = build_org(rng)
@@ -151,7 +182,8 @@ def test_brief_renders_ledger_with_disclaimer(tmp_path, config):
     markdown = brief.render(brief.build(store, AS_OF, AS_OF, cfg), cfg)
     section = markdown.split("### Commit accuracy (forecast ledger)")[1]
     assert "Coaching signal, not a comp input." in section
-    for label in ("| Owner |", "| Team |", "| Committed-for quarter |"):
+    for label in ("| Owner |", "| Team |", "| Region |",
+                  "| Committed-for quarter |"):
         assert label in section
     # sits in the appendix between the patterns and the since-last-run detail
     assert markdown.index("#### Forecast integrity patterns") \

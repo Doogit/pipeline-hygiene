@@ -118,15 +118,30 @@ def test_filter_keeps_desk_wide_coverage_multiple(tmp_path, config):
 def test_resolve_owner_filter_names_and_errors(tmp_path, config):
     store, cfg = _seeded_store(tmp_path, config)
     owners = store.owners(AS_OF)
-    selected, label = brief.resolve_owner_filter(cfg, owners, None,
-                                                 ["Team East"])
+    selected, label, slug = brief.resolve_owner_filter(cfg, owners, None,
+                                                       ["Team East"])
     assert selected == {"Alex Rivera", "Blake Osei"}
     assert label == "team Team East"
-    selected, label = brief.resolve_owner_filter(
+    assert slug == "team-east"
+    selected, label, _ = brief.resolve_owner_filter(
         cfg, owners, ["Casey Nguyen"], ["Team East"])
     assert selected == {"Alex Rivera", "Blake Osei", "Casey Nguyen"}
+    # case-insensitive; the "Team " prefix is optional; canonical names in
+    # the label either way
+    for spelling in ("team east", "EAST", "East"):
+        selected, label, slug = brief.resolve_owner_filter(cfg, owners, None,
+                                                           [spelling])
+        assert selected == {"Alex Rivera", "Blake Osei"}
+        assert label == "team Team East" and slug == "team-east"
+    selected, label, _ = brief.resolve_owner_filter(
+        cfg, owners, None, None, regions=["east"])
+    assert selected == {"Alex Rivera", "Blake Osei"}
+    assert label == "region East"
     with pytest.raises(ValueError, match="unknown team"):
         brief.resolve_owner_filter(cfg, owners, None, ["Team Nowhere"])
+    with pytest.raises(ValueError, match="unknown region"):
+        brief.resolve_owner_filter(cfg, owners, None, None,
+                                   regions=["Nowhere"])
     with pytest.raises(ValueError, match="unknown owner"):
         brief.resolve_owner_filter(cfg, owners, ["Nobody"], None)
     with pytest.raises(ValueError, match="team metadata"):
@@ -142,8 +157,9 @@ def test_filtered_run_not_recorded_and_file_suffixed(tmp_path, config):
 
     path, _ = brief.run(store, AS_OF, AS_OF, cfg, out,
                         owner_filter={"Alex Rivera", "Blake Osei"},
-                        filter_label="team Team East")
-    assert path.name == f"desk_brief_{AS_OF.isoformat()}_team-team-east.md"
+                        filter_label="team Team East",
+                        filter_slug="team-east")
+    assert path.name == f"desk_brief_{AS_OF.isoformat()}_team-east.md"
     assert store.conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 1
     assert full_path.read_text(encoding="utf-8") == full_before
 
@@ -178,9 +194,9 @@ def test_cli_filter(tmp_path, config):
 
     assert brief.main(base + ["--owner", "Nobody"]) == 2
     assert brief.main(base + ["--team", "Team Nowhere"]) == 2
-    assert brief.main(base + ["--team", "Team East"]) == 0
-    out = tmp_path / "out" / \
-        f"desk_brief_{AS_OF.isoformat()}_team-team-east.md"
+    assert brief.main(base + ["--team", "east"]) == 0
+    out = tmp_path / "out" / f"desk_brief_{AS_OF.isoformat()}_team-east.md"
     generated = out.read_text(encoding="utf-8")
     assert "FILTERED BRIEF — team Team East" in generated
+    assert "Selection score" in generated and "Desk score" not in generated
     assert "Alex Rivera" in generated and "Blake Osei" in generated

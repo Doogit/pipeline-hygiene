@@ -36,8 +36,8 @@ Snapshot 2026-08-10 (opps_2026-08-10.csv), evaluated as of 2026-08-10.
 
 - Flow since last run: no previous run recorded.
 - Coverage (FY2027-Q1): open pipeline $43,165,232 vs required $78,988,984 -> 0.55x
-  - Remaining quota $49,368,115 (quota $50,620,000 - won this quarter $1,251,885) x 1.6
-  - Basis: trailing win rate 62% over 32 stored closed outcomes -> required multiple 1.6x
+  - Remaining quota $49,368,115 (quota $50,620,000 - won this quarter $1,251,885) x 1.60
+  - Basis: trailing win rate 20/32 closed won (62.5%) -> required multiple 32/20 = 1.60x
 
 ## Since last run
 
@@ -77,7 +77,7 @@ Drill-down detail. The forecast call runs off page 1.
 
 ### Owners
 
-Coverage = open pipeline vs required pipeline (remaining quota net of wins this quarter x the required multiple); low_coverage means under 1.00x. Basis: trailing win rate 62% over 32 stored closed outcomes -> required multiple 1.6x.
+Coverage = open pipeline vs required pipeline (remaining quota net of wins this quarter x the required multiple); low_coverage means under 1.00x. Basis: trailing win rate 20/32 closed won (62.5%) -> required multiple 32/20 = 1.60x.
 
 | Owner | Open | Mean | Median | Violations | Pipeline | Coverage | Flags |
 |---|---|---|---|---|---|---|---|
@@ -144,7 +144,7 @@ Coverage = open pipeline vs required pipeline (remaining quota net of wins this 
 
 ### Teams and regions
 
-Coverage = open pipeline vs required pipeline (remaining quota net of wins this quarter x the required multiple); low_coverage means under 1.00x. Basis: trailing win rate 62% over 32 stored closed outcomes -> required multiple 1.6x.
+Coverage = open pipeline vs required pipeline (remaining quota net of wins this quarter x the required multiple); low_coverage means under 1.00x. Basis: trailing win rate 20/32 closed won (62.5%) -> required multiple 32/20 = 1.60x.
 
 ### Teams
 
@@ -214,7 +214,9 @@ Coaching signal, not a comp input.
 
 ### Commit accuracy (forecast ledger)
 
-Of opps ever forecast commit in stored history: outcome to date. Pushed = still open with a close-date move after the first commit snapshot; committed-for quarter = fiscal quarter of the close date when first called commit (immune to later pushes). Won/resolved counts closed opps only. Coaching signal, not a comp input.
+Coaching signal, not a comp input.
+
+Of opps ever forecast commit in stored history: outcome to date. Pushed = still open with a close-date move after the first commit snapshot; committed-for quarter = fiscal quarter of the close date when first called commit (immune to later pushes). Won/resolved counts closed opps only, shown as won/closed; the percentage appears once 5+ have resolved (small-n rates mislead).
 
 | Owner | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
 |---|---|---|---|---|---|---|
@@ -249,6 +251,13 @@ Of opps ever forecast commit in stored history: outcome to date. Pushed = still 
 | Team NA-West-1 | 1 | 0 | 0 | 0 | 1 | n/a |
 | Team NA-West-2 | 5 | 0 | 0 | 0 | 5 | n/a |
 | Team NA-West-3 | 5 | 0 | 0 | 0 | 5 | n/a |
+
+| Region | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
+|---|---|---|---|---|---|---|
+| APAC | 17 | 0 | 0 | 0 | 17 | n/a |
+| EMEA | 5 | 0 | 0 | 0 | 5 | n/a |
+| NA-East | 8 | 0 | 0 | 0 | 8 | n/a |
+| NA-West | 11 | 0 | 0 | 0 | 11 | n/a |
 
 | Committed-for quarter | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
 |---|---|---|---|---|---|---|
