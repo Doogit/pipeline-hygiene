@@ -147,8 +147,13 @@ def trajectory_data(rows, delta, config, as_of, outcomes, multiple=None,
             "coverage": coverage}
 
 
-def _money(amount):
-    return "n/a" if amount is None else f"${amount:,.0f}"
+def currency_symbol(config):
+    return (config or {}).get("display_currency_symbol") or "$"
+
+
+def _money(amount, config=None):
+    return ("n/a" if amount is None
+            else f"{currency_symbol(config)}{amount:,.0f}")
 
 
 def merge_quota_payload(config, payload):
@@ -375,9 +380,9 @@ def _headline(lines, data, config):
                      f"{config['healthy_score_threshold']}): {desk.pct_healthy:.1f}% "
                      f"of {desk.n_open} open")
         open_pipeline = sum(r["amount"] or 0.0 for r in data["rows"] if is_open(r))
-        lines.append(f"- Open pipeline: {_money(open_pipeline)}")
+        lines.append(f"- Open pipeline: {_money(open_pipeline, config)}")
         lines.append(f"- At-risk dollars (distinct opps with a high-severity "
-                     f"violation): {_money(desk.at_risk_dollars)}")
+                     f"violation): {_money(desk.at_risk_dollars, config)}")
     counts = desk.violation_counts_by_severity
     lines.append(f"- Violations: {counts['high']} high, {counts['medium']} medium, "
                  f"{counts['low']} low")
@@ -418,7 +423,7 @@ def _risky_commits(lines, data, config):
         return
     total = sum(e["row"]["amount"] or 0.0 for e in entries)
     lines.append(f"{len(entries)} commit/best_case opps carry a risk flag — "
-                 f"{_money(total)} (distinct opps), dollar-ranked"
+                 f"{_money(total, config)} (distinct opps), dollar-ranked"
                  + (", top 10 shown" if len(entries) > 10 else "")
                  + ". Coaching prompts, not gotchas.")
     lines.append("")
@@ -429,13 +434,13 @@ def _risky_commits(lines, data, config):
         row = entry["row"]
         lines.append(f"| {i} | {row['opp_id']} | {row['account']} "
                      f"| {row['owner']} "
-                     f"| {row['stage']} | {_money(row['amount'])} "
+                     f"| {row['stage']} | {_money(row['amount'], config)} "
                      f"| {row['forecast_category']} "
                      f"| {' '.join(entry['risky_rules'])} "
                      f"| {entry['prompt']} |")
 
 
-def _trajectory(lines, data):
+def _trajectory(lines, data, config):
     lines.append("## Trajectory")
     lines.append("")
     trajectory = data["trajectory"]
@@ -444,10 +449,10 @@ def _trajectory(lines, data):
         lines.append("- Flow since last run: no previous run recorded.")
     else:
         lines.append(f"- Flow since last run: {flow['created_n']} created "
-                     f"({_money(flow['created_dollars'])}) vs "
+                     f"({_money(flow['created_dollars'], config)}) vs "
                      f"{flow['won_n'] + flow['lost_n']} closed "
-                     f"({flow['won_n']} won {_money(flow['won_dollars'])}, "
-                     f"{flow['lost_n']} lost {_money(flow['lost_dollars'])})")
+                     f"({flow['won_n']} won {_money(flow['won_dollars'], config)}, "
+                     f"{flow['lost_n']} lost {_money(flow['lost_dollars'], config)})")
     coverage = trajectory["coverage"]
     if coverage is None:
         lines.append("- Coverage: no quotas configured.")
@@ -455,11 +460,11 @@ def _trajectory(lines, data):
     ratio = ("n/a" if coverage["ratio"] is None
              else f"{coverage['ratio']:.2f}x")
     lines.append(f"- Coverage ({coverage['quarter']}): open pipeline "
-                 f"{_money(trajectory['open_pipeline'])} vs required "
-                 f"{_money(coverage['required_pipeline'])} -> {ratio}")
-    lines.append(f"  - Remaining quota {_money(coverage['remaining_quota'])} "
-                 f"(quota {_money(coverage['total_quota'])} - won this "
-                 f"quarter {_money(coverage['won_this_quarter'])}) x "
+                 f"{_money(trajectory['open_pipeline'], config)} vs required "
+                 f"{_money(coverage['required_pipeline'], config)} -> {ratio}")
+    lines.append(f"  - Remaining quota {_money(coverage['remaining_quota'], config)} "
+                 f"(quota {_money(coverage['total_quota'], config)} - won this "
+                 f"quarter {_money(coverage['won_this_quarter'], config)}) x "
                  f"{coverage['required_multiple']:.2f}")
     lines.append(f"  - Basis: {coverage['basis']}")
 
@@ -490,7 +495,7 @@ def _since_last_run_summary(lines, data):
                  f"{len(delta['added'])}; removed: {len(delta['removed'])}")
 
 
-def _since_last_run_detail(lines, data):
+def _since_last_run_detail(lines, data, config):
     lines.append("### Since last run (detail)")
     lines.append("")
     delta = data["since_last_run"]
@@ -517,7 +522,7 @@ def _since_last_run_detail(lines, data):
         cleared = (f" (violations cleared: {', '.join(info['violations_cleared'])})"
                    if info["violations_cleared"] else "")
         lines.append(f"  - {opp_id}: {info['stage']}, "
-                     f"{_money(rows_by_id[opp_id]['amount'])}{cleared}")
+                     f"{_money(rows_by_id[opp_id]['amount'], config)}{cleared}")
     lines.append(f"- Opps added: {', '.join(delta['added']) or 'none'}")
     lines.append(f"- Opps removed: {', '.join(delta['removed']) or 'none'}")
 
@@ -542,7 +547,7 @@ def _slipping(lines, data, config):
     slipping.sort(key=lambda r: (-(r["amount"] or 0.0), r["opp_id"]))
     total = sum(r["amount"] or 0.0 for r in slipping)
     lines.append(f"Slipping dollars (distinct opps with >= 1 observed push): "
-                 f"{_money(total)} across {len(slipping)} opps.")
+                 f"{_money(total, config)} across {len(slipping)} opps.")
     lines.append("")
     lines.append("| Opp | Owner | Stage | Amount | Pushes | Cum. days later "
                  "| Max push | Rules | Review |")
@@ -554,7 +559,7 @@ def _slipping(lines, data, config):
                   if row["push_count"] >= config["disqualify_review_pushes"]
                   else "-")
         lines.append(f"| {row['opp_id']} | {row['owner']} | {row['stage']} "
-                     f"| {_money(row['amount'])} | {row['push_count']} "
+                     f"| {_money(row['amount'], config)} | {row['push_count']} "
                      f"| {row['cumulative_extension_days']} "
                      f"| {row['max_push_days']} | {badges} | {review} |")
 
@@ -586,7 +591,7 @@ def _fiscal_quarters(lines, data, config):
     for quarter in sorted(buckets):
         bucket = buckets[quarter]
         h5_cell = ", ".join(sorted(bucket["h5"])) or "none"
-        lines.append(f"| {quarter} | {_money(bucket['at_risk'])} "
+        lines.append(f"| {quarter} | {_money(bucket['at_risk'], config)} "
                      f"| {bucket['n_at_risk']} | {h5_cell} |")
 
 
@@ -612,7 +617,7 @@ def _top_exceptions(lines, data, config):
         streak = opp_streak(data["streaks"], result)
         streak_cell = f"flagged {streak} runs" if streak >= 2 else "-"
         lines.append(f"| {i} | {result.opp_id} | {row['account']} | {row['owner']} "
-                     f"| {row['stage']} | {_money(row['amount'])} "
+                     f"| {row['stage']} | {_money(row['amount'], config)} "
                      f"| {opp_score(result, config)} | {badges} "
                      f"| {streak_cell} | {detail} |")
 
@@ -627,7 +632,7 @@ def _coverage_note(lines, data):
                  f"{data['coverage_basis']}.")
 
 
-def _owner_table(lines, data):
+def _owner_table(lines, data, config):
     lines.append("### Owners")
     lines.append("")
     owners = data["owners"]
@@ -646,10 +651,10 @@ def _owner_table(lines, data):
                           if on) or "-"
         lines.append(f"| {stats.owner} | {stats.n_open} | {stats.mean_score:.1f} "
                      f"| {stats.median_score:.1f} | {stats.violation_count} "
-                     f"| {_money(stats.open_pipeline)} | {coverage} | {flags} |")
+                     f"| {_money(stats.open_pipeline, config)} | {coverage} | {flags} |")
 
 
-def _group_table(lines, groups, label):
+def _group_table(lines, groups, label, config):
     """Render one team/region roll-up table, worst coverage first so ordering
     itself carries the signal (empty groups produce a note)."""
     lines.append(f"### {label}s")
@@ -670,22 +675,22 @@ def _group_table(lines, groups, label):
         mean_cell = "n/a" if g.mean_score is None else f"{g.mean_score:.1f}"
         flags = "low_coverage" if g.coverage_flagged else "-"
         lines.append(f"| {g.key} | {g.n_owners} | {g.n_open} | {mean_cell} "
-                     f"| {_money(g.open_pipeline)} | {_money(g.quota)} "
+                     f"| {_money(g.open_pipeline, config)} | {_money(g.quota, config)} "
                      f"| {coverage} | {g.violation_count} "
-                     f"| {_money(g.at_risk_dollars)} | {flags} |")
+                     f"| {_money(g.at_risk_dollars, config)} | {flags} |")
 
 
-def _team_region_tables(lines, data):
+def _team_region_tables(lines, data, config):
     lines.append("### Teams and regions")
     lines.append("")
     _coverage_note(lines, data)
     lines.append("")
-    _group_table(lines, data["teams"], "Team")
+    _group_table(lines, data["teams"], "Team", config)
     lines.append("")
-    _group_table(lines, data["regions"], "Region")
+    _group_table(lines, data["regions"], "Region", config)
 
 
-def _forecast_integrity(lines, data):
+def _forecast_integrity(lines, data, config):
     lines.append("### Forecast integrity (H5)")
     lines.append("")
     rows_by_id = {r["opp_id"]: r for r in data["rows"]}
@@ -700,7 +705,7 @@ def _forecast_integrity(lines, data):
     entries.sort(key=lambda e: (-(e[0]["amount"] or 0.0), e[0]["opp_id"]))
     for row, violation in entries:
         lines.append(f"- {row['opp_id']} — {row['owner']}, stage {row['stage']}, "
-                     f"{_money(row['amount'])}: {violation.detail}")
+                     f"{_money(row['amount'], config)}: {violation.detail}")
 
 
 def _forecast_patterns(lines, data):
@@ -835,7 +840,7 @@ def render(data, config):
     lines.append("")
     _risky_commits(lines, data, config)
     lines.append("")
-    _trajectory(lines, data)
+    _trajectory(lines, data, config)
     lines.append("")
     _since_last_run_summary(lines, data)
     lines.append("")
@@ -849,17 +854,17 @@ def render(data, config):
     lines.append("")
     _top_exceptions(lines, data, config)
     lines.append("")
-    _owner_table(lines, data)
+    _owner_table(lines, data, config)
     lines.append("")
-    _team_region_tables(lines, data)
+    _team_region_tables(lines, data, config)
     lines.append("")
-    _forecast_integrity(lines, data)
+    _forecast_integrity(lines, data, config)
     lines.append("")
     _forecast_patterns(lines, data)
     lines.append("")
     _commit_ledger(lines, data, config)
     lines.append("")
-    _since_last_run_detail(lines, data)
+    _since_last_run_detail(lines, data, config)
     lines.append("")
     _rule_legend(lines, config)
     lines.append("")
@@ -907,7 +912,7 @@ def digest_markdown(data, owner, config):
         evidence = "; ".join(f"{v.rule_id} ({RULE_LABELS[v.rule_id]}: "
                              f"{v.detail})" for v in result.violations)
         lines.append(f"- {row['opp_id']} {row['account']} ({row['stage']}, "
-                     f"{_money(row['amount'])}): {evidence}{note}")
+                     f"{_money(row['amount'], config)}): {evidence}{note}")
 
     lines.append("")
     lines.append("## Week over week")
@@ -976,7 +981,7 @@ def digest_markdown(data, owner, config):
     else:
         focus = min(exposure, key=lambda r: (-exposure[r], int(r[1:])))
         lines.append(f"{focus} — {RULE_LABELS[focus]}: "
-                     f"{_money(exposure[focus])} at risk across "
+                     f"{_money(exposure[focus], config)} at risk across "
                      f"{deals[focus]} deal(s).")
         if focus in COACHING_ASKS:
             lines.append(f"Ask: {COACHING_ASKS[focus]}")
@@ -1140,7 +1145,7 @@ def main(argv=None):
     desk = data["desk"]
     filtered = f", filtered to {filter_label}" if filter_label else ""
     print(f"wrote {path} (snapshot {snapshot_date}, {desk.n_open} open opps, "
-          f"at-risk {_money(desk.at_risk_dollars)}{filtered})")
+          f"at-risk {_money(desk.at_risk_dollars, config)}{filtered})")
     if owner_filter is not None and not args.digests:
         print("tip: add --digests to write coaching digests for just this "
               "selection")

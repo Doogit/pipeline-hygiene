@@ -111,8 +111,10 @@ def h7_single_threaded_big_deal(row, config, as_of):
     amount = row["amount"]
     if amount is not None and amount >= config["big_deal_threshold"] \
             and row["contact_count"] < 2:
+        symbol = config.get("display_currency_symbol") or "$"
         return Violation("H7", MEDIUM,
-                         f"${amount:,.0f} deal with {row['contact_count']} contact(s)")
+                         f"{symbol}{amount:,.0f} deal with "
+                         f"{row['contact_count']} contact(s)")
     return None
 
 

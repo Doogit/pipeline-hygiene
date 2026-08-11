@@ -52,6 +52,7 @@ if Path(QUOTAS_PATH).exists():
         payload = json.load(f)
     config = brief.merge_quota_payload(config, payload)
     st.sidebar.caption(f"Quotas and team/region merged from `{QUOTAS_PATH}`.")
+CURRENCY = brief.currency_symbol(config)
 
 # --- data source ---
 
@@ -152,11 +153,11 @@ cols[1].metric(
 cols[2].metric(f"Healthy (score >= {config['healthy_score_threshold']})",
                "n/a" if desk.pct_healthy is None else f"{desk.pct_healthy:.1f}%")
 cols[3].metric(
-    "Open pipeline", f"${open_pipeline:,.0f}",
+    "Open pipeline", f"{CURRENCY}{open_pipeline:,.0f}",
     delta=(None if prev_open_pipeline is None
            else f"{open_pipeline - prev_open_pipeline:+,.0f}"))
 cols[4].metric(
-    "At-risk dollars", f"${desk.at_risk_dollars:,.0f}",
+    "At-risk dollars", f"{CURRENCY}{desk.at_risk_dollars:,.0f}",
     delta=(None if prev_desk is None
            else f"{desk.at_risk_dollars - prev_desk['at_risk_dollars']:+,.0f}"),
     delta_color="inverse",
@@ -224,7 +225,7 @@ def _matches(row, result):
     return True
 
 
-_MONEY_COL = st.column_config.NumberColumn(format="$%d")
+_MONEY_COL = st.column_config.NumberColumn(format=f"{CURRENCY}%d")
 _SCORE_COL = st.column_config.ProgressColumn(format="%d", min_value=0,
                                              max_value=100)
 
@@ -280,7 +281,7 @@ with tab_call:
         filtered_note = (" matching the filters"
                          if f_owner_set or f_stages or f_sev else "")
         st.markdown(f"**{len(entries)}** commit/best_case opps carry a risk "
-                    f"flag{filtered_note} — **${total:,.0f}** (distinct "
+                    f"flag{filtered_note} — **{CURRENCY}{total:,.0f}** (distinct "
                     f"opps), dollar-ranked. Coaching prompts, not gotchas.")
         risky_df = pd.DataFrame([{
             "opp_id": e["row"]["opp_id"], "account": e["row"]["account"],
@@ -332,7 +333,7 @@ with tab_slip:
         else:
             slipping.sort(key=lambda r: (-(r["amount"] or 0.0), r["opp_id"]))
             total = sum(r["amount"] or 0.0 for r in slipping)
-            st.markdown(f"**${total:,.0f}** slipping across "
+            st.markdown(f"**{CURRENCY}{total:,.0f}** slipping across "
                         f"**{len(slipping)}** distinct opps.")
             slip_records = []
             for r in slipping:
@@ -391,12 +392,12 @@ with tab_traj:
         st.altair_chart(
             alt.Chart(cov_df.dropna()).mark_line(point=True).encode(
                 x=alt.X("snapshot:N", title=None),
-                y=alt.Y("dollars:Q", title="$"),
+                y=alt.Y("dollars:Q", title=CURRENCY),
                 color=alt.Color("series:N",
                                 scale=alt.Scale(range=["#0072B2", "#D55E00"]),
                                 legend=alt.Legend(title=None)),
                 tooltip=["snapshot", "series",
-                         alt.Tooltip("dollars:Q", format="$,.0f")])
+                         alt.Tooltip("dollars:Q", format=",.0f")])
             .properties(height=220, width=950,
                         title="Coverage: open vs required pipeline "
                               "(1 / trailing win rate)"))
@@ -428,14 +429,14 @@ with tab_traj:
         st.altair_chart(
             alt.Chart(pd.DataFrame(flow_records)).mark_bar().encode(
                 x=alt.X("week:N", title=None),
-                y=alt.Y("dollars:Q", title="$"),
+                y=alt.Y("dollars:Q", title=CURRENCY),
                 color=alt.Color("flow:N",
                                 scale=alt.Scale(domain=list(FLOW_COLORS),
                                                 range=list(FLOW_COLORS.values())),
                                 legend=alt.Legend(title=None)),
                 xOffset="flow:N",
                 tooltip=["week", "flow", "count",
-                         alt.Tooltip("dollars:Q", format="$,.0f")])
+                         alt.Tooltip("dollars:Q", format=",.0f")])
             .properties(height=220, width=950,
                         title="Created vs closed per snapshot week"))
 

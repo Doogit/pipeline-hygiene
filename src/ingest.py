@@ -10,6 +10,7 @@ import csv
 import math
 import re
 import sys
+import warnings
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -34,6 +35,12 @@ REQUIRED_DATE_FIELDS = ("created_date", "close_date", "last_activity_date")
 
 class IngestError(Exception):
     """Fatal ingest problem: missing columns, unreadable file, mixed currency."""
+
+
+class ConfigError(Exception):
+    """Fatal config problem: missing or wrong-typed key. Failing at load time
+    names the exact key path; failing at point of use would surface as a
+    KeyError deep inside a rule."""
 
 
 class AllRowsRejectedError(IngestError):
@@ -88,9 +95,89 @@ def rejection_detail_lines(report, limit=10):
         yield f"    ... and {report.rejected - limit} more"
 
 
+# Declared config schema: key -> type, or a nested {subkey -> type} mapping
+# whose subkeys are all required. A number means int or float. Keys in
+# _OPTIONAL_CONFIG are type-checked only when present (every key added after
+# the frozen test config must live there — a new required key would kill the
+# frozen suite).
+_NUMBER = (int, float)
+_OPEN_STAGES = ("prospect", "qualify", "develop", "propose", "commit")
+
+_REQUIRED_CONFIG = {
+    "staleness_days": {stage: _NUMBER for stage in _OPEN_STAGES},
+    "aging_norm_days": {stage: _NUMBER for stage in _OPEN_STAGES},
+    "big_deal_threshold": _NUMBER,
+    "close_date_horizon_days": int,
+    "fiscal_year_start_month": int,
+    "coverage_ratio_min": _NUMBER,
+    "rule_weights": {f"H{n}": _NUMBER for n in range(1, 12)},
+    "push_alarm_days": _NUMBER,
+    "cumulative_push_alarm_days": _NUMBER,
+    "disqualify_review_pushes": int,
+    "min_closed_for_win_rate": int,
+    "patterns": {"overcall_share_min": _NUMBER,
+                 "undercall_won_share_min": _NUMBER,
+                 "undercall_omitted_share_min": _NUMBER,
+                 "undercall_farout_share_min": _NUMBER},
+    "healthy_score_threshold": _NUMBER,
+    "min_opps_for_owner_score": int,
+    "next_step_quality": {"min_chars": int, "filler_phrases": list,
+                          "action_verbs": list},
+    "stage_map": dict,
+}
+_OPTIONAL_CONFIG = {
+    "expected_currency": str,
+    "quotas": dict,
+    "owner_meta": dict,
+    "display_currency_symbol": str,
+}
+
+
+def _check_type(path, value, expected):
+    if isinstance(expected, dict):
+        if not isinstance(value, dict):
+            raise ConfigError(f"config key {path!r} must be a mapping, "
+                              f"got {type(value).__name__}")
+        for subkey, subexpected in expected.items():
+            if subkey not in value:
+                raise ConfigError(f"missing config key {path}.{subkey}")
+            _check_type(f"{path}.{subkey}", value[subkey], subexpected)
+        return
+    if isinstance(value, bool) and expected in (_NUMBER, int):
+        raise ConfigError(f"config key {path!r} must be a number, got bool")
+    if not isinstance(value, expected):
+        expected_name = ("number" if expected is _NUMBER
+                         else expected.__name__)
+        raise ConfigError(f"config key {path!r} must be {expected_name}, "
+                          f"got {type(value).__name__}")
+
+
+def validate_config(config):
+    """Fail fast on a missing or wrong-typed config key (ConfigError naming
+    the exact key path); warn once on unknown top-level keys (a typo'd
+    threshold silently reverting to a default is the failure mode this
+    exists for). Returns the config unchanged."""
+    if not isinstance(config, dict):
+        raise ConfigError("config must be a YAML mapping, got "
+                          f"{type(config).__name__}")
+    for key, expected in _REQUIRED_CONFIG.items():
+        if key not in config:
+            raise ConfigError(f"missing config key {key}")
+        _check_type(key, config[key], expected)
+    for key, expected in _OPTIONAL_CONFIG.items():
+        if key in config and config[key] is not None:
+            _check_type(key, config[key], expected)
+    unknown = sorted(set(config) - set(_REQUIRED_CONFIG)
+                     - set(_OPTIONAL_CONFIG))
+    if unknown:
+        warnings.warn(f"unknown config keys ignored: {', '.join(unknown)}",
+                      stacklevel=2)
+    return config
+
+
 def load_config(path="config.yaml"):
     with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        return validate_config(yaml.safe_load(f))
 
 
 def _parse_date(value, allow_empty):

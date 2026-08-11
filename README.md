@@ -2,7 +2,7 @@
 
 A read-only sales pipeline inspection agent. This branch ingests opportunity
 CSV snapshots into a SQLite snapshot store, runs deterministic hygiene rules
-(H1-H10), and scores every opportunity, owner, and desk.
+(H1-H11), and scores every opportunity, owner, and desk.
 
 Operating principle: **agents inspect, people sell.** The agent never writes to
 source data and never contacts sellers.
