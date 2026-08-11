@@ -46,6 +46,8 @@ def _seeded_store(tmp_path, config):
     write_csv(csv_path, rows)
     cfg = dict(config)
     cfg["quotas"] = {s.name: s.quota for s in org.sellers}
+    cfg["owner_meta"] = {s.name: {"team": s.team, "region": s.region}
+                         for s in org.sellers}
     store = SnapshotStore(":memory:", cfg)
     report = store.ingest_csv(csv_path, AS_OF)
     assert report.rejected == 0
@@ -59,6 +61,7 @@ def test_golden_brief(tmp_path, config):
     for section in ("# Desk Brief", "## Headline", "### Validation",
                     "## Since last run", "## Fiscal quarters",
                     "## Top 10 exceptions", "## Owners",
+                    "### Teams and regions", "### Teams", "### Regions",
                     "## Forecast integrity (H5)"):
         assert section in generated
     if not GOLDEN.exists():

@@ -82,7 +82,7 @@ Drill-down detail. The forecast call runs off page 1.
 | Avery Calloway | 7 | 96.4 | 100.0 | 3 | $974,716 | 1.02 | low_coverage |
 | Avery Ristori | 7 | 79.3 | 80.0 | 7 | $304,706 | 0.87 | low_coverage |
 | Blair Denholm | 7 | 96.4 | 100.0 | 3 | $1,001,323 | 0.94 | low_coverage |
-| Blair Hollowell | 7 | 93.6 | 90.0 | 5 | $652,409 | 2.04 | low_coverage |
+| Blair Hollowell | 7 | 93.6 | 90.0 | 5 | $652,409 | 2.04 | - |
 | Blair Oakhurst | 6 | 79.2 | 85.0 | 8 | $928,671 | 0.79 | low_coverage |
 | Casey Grantley | 7 | 82.1 | 80.0 | 7 | $1,003,680 | 0.67 | low_coverage |
 | Corin Farrow | 7 | 76.4 | 75.0 | 7 | $525,426 | 1.55 | low_coverage |
@@ -109,11 +109,11 @@ Drill-down detail. The forecast call runs off page 1.
 | Marlow Bramwell | 6 | 76.7 | 75.0 | 6 | $277,378 | 0.60 | low_coverage |
 | Morgan Calloway | 7 | 72.1 | 65.0 | 12 | $1,640,432 | 1.40 | low_coverage |
 | Noor Underhill | 6 | 98.3 | 100.0 | 1 | $1,160,545 | 0.94 | low_coverage |
-| Parker Thistlewood | 7 | 95.7 | 95.0 | 4 | $639,290 | 1.68 | low_coverage |
+| Parker Thistlewood | 7 | 95.7 | 95.0 | 4 | $639,290 | 1.68 | - |
 | Quinn Lindqvist | 6 | 95.0 | 97.5 | 3 | $271,970 | 0.39 | low_coverage |
 | Quinn Oakhurst | 5 | 79.0 | 80.0 | 6 | $1,619,303 | 1.09 | low_coverage |
 | Quinn Ristori | 6 | 81.7 | 77.5 | 6 | $483,595 | 1.03 | low_coverage |
-| Reese Denholm | 5 | 99.0 | 100.0 | 1 | $1,934,450 | 1.30 | low_coverage |
+| Reese Denholm | 5 | 99.0 | 100.0 | 1 | $1,934,450 | 1.30 | - |
 | Reese Northcote | 6 | 95.0 | 97.5 | 3 | $1,134,784 | 1.07 | low_coverage |
 | Riley Grantley | 4 | 92.5 | 92.5 | 4 | $447,632 | 0.79 | small_n, low_coverage |
 | Riley Hollowell | 6 | 100.0 | 100.0 | 0 | $579,993 | 0.62 | low_coverage |
@@ -139,6 +139,33 @@ Drill-down detail. The forecast call runs off page 1.
 | Zion Northcote | 7 | 95.7 | 100.0 | 2 | $262,964 | 0.54 | low_coverage |
 | Zion Ristori | 6 | 99.2 | 100.0 | 1 | $938,628 | 0.67 | low_coverage |
 | Zion Vantrease | 4 | 91.2 | 90.0 | 4 | $1,465,002 | 1.10 | small_n, low_coverage |
+
+### Teams and regions
+
+Coverage basis: trailing win rate 62% over 32 stored closed outcomes -> required multiple 1.6x. low_coverage means open pipeline is under remaining quota (net of wins this quarter) x the required multiple.
+
+### Teams
+
+| Team | Owners | Open | Mean | Pipeline | Quota | Coverage | Violations | At-risk $ | Flags |
+|---|---|---|---|---|---|---|---|---|---|
+| Team APAC-1 | 6 | 40 | 89.1 | $1,941,528 | $2,810,000 | 0.69 | 27 | $577,104 | low_coverage |
+| Team APAC-2 | 6 | 39 | 83.3 | $2,303,964 | $3,020,000 | 0.76 | 38 | $798,718 | low_coverage |
+| Team EMEA-1 | 7 | 40 | 84.8 | $8,910,566 | $9,310,000 | 0.96 | 38 | $4,269,631 | low_coverage |
+| Team EMEA-2 | 7 | 43 | 91.5 | $7,872,833 | $7,930,000 | 0.99 | 34 | $610,186 | low_coverage |
+| Team NA-East-1 | 7 | 46 | 87.3 | $8,124,669 | $8,460,000 | 0.96 | 38 | $2,241,169 | low_coverage |
+| Team NA-East-2 | 7 | 41 | 88.3 | $7,332,434 | $8,930,000 | 0.82 | 37 | $1,699,809 | low_coverage |
+| Team NA-West-1 | 7 | 43 | 87.8 | $1,960,229 | $3,850,000 | 0.51 | 39 | $474,661 | low_coverage |
+| Team NA-West-2 | 7 | 41 | 89.0 | $2,765,578 | $3,210,000 | 0.86 | 31 | $798,201 | low_coverage |
+| Team NA-West-3 | 6 | 35 | 91.9 | $1,953,430 | $3,100,000 | 0.63 | 22 | $611,592 | low_coverage |
+
+### Regions
+
+| Region | Owners | Open | Mean | Pipeline | Quota | Coverage | Violations | At-risk $ | Flags |
+|---|---|---|---|---|---|---|---|---|---|
+| APAC | 12 | 79 | 86.3 | $4,245,492 | $5,830,000 | 0.73 | 65 | $1,375,822 | low_coverage |
+| EMEA | 14 | 83 | 88.3 | $16,783,399 | $17,240,000 | 0.97 | 72 | $4,879,817 | low_coverage |
+| NA-East | 14 | 87 | 87.8 | $15,457,103 | $17,390,000 | 0.89 | 75 | $3,940,978 | low_coverage |
+| NA-West | 20 | 119 | 89.4 | $6,679,237 | $10,160,000 | 0.66 | 92 | $1,884,455 | low_coverage |
 
 ### Forecast integrity (H5)
 

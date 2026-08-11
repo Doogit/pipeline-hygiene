@@ -2,7 +2,8 @@
 from datetime import date, timedelta
 
 from src.rules import evaluate_snapshot
-from src.scoring import at_risk_dollars, desk_rollup, opp_score, owner_rollups
+from src.scoring import (at_risk_dollars, desk_rollup, group_rollups,
+                         opp_score, owner_rollups, required_coverage_multiple)
 
 from tests.test_rules import AS_OF, clean_row
 
@@ -76,6 +77,65 @@ def test_owner_without_quota_has_no_coverage(config):
     results = evaluate_snapshot(rows, config, AS_OF)
     stats = owner_rollups(rows, results, config)["Avery Ashford"]
     assert stats.coverage_ratio is None and not stats.coverage_flagged
+
+
+def test_owner_coverage_flag_uses_remaining_quota_and_multiple(config):
+    cfg = dict(config)
+    cfg["quotas"] = {"Avery Ashford": 1_000_000.0}
+    rows = [clean_row(opp_id=f"OPP-{i:04d}", amount=200_000.0, contact_count=3)
+            for i in range(1, 9)]           # 8 open -> 1.6M pipeline, 1.6x raw
+    results = evaluate_snapshot(rows, cfg, AS_OF)
+    # Derived multiple 1.5x, nothing booked: required 1.5M < 1.6M -> not flagged.
+    stats = owner_rollups(rows, results, cfg, multiple=1.5)["Avery Ashford"]
+    assert abs(stats.coverage_ratio - 1.6) < 1e-9
+    assert not stats.coverage_flagged
+    # The raw column is unchanged; the OLD static 3.0x floor still flags it,
+    # which is exactly the over-firing the remaining-quota basis fixes.
+    assert owner_rollups(rows, results, cfg)["Avery Ashford"].coverage_flagged
+    # Booking 700k this quarter shrinks remaining to 300k -> required 450k: ok.
+    won = {"Avery Ashford": 700_000.0}
+    assert not owner_rollups(rows, results, cfg, 1.5, won)[
+        "Avery Ashford"].coverage_flagged
+
+
+def test_required_coverage_multiple_win_rate_and_fallback(config):
+    cfg = dict(config)
+    outcomes = ([{"stage": "closed_won"}] * 4 + [{"stage": "closed_lost"}] * 6)
+    # too few for min_closed_for_win_rate -> config floor
+    multiple, basis = required_coverage_multiple(outcomes[:5], cfg)
+    assert multiple == cfg["coverage_ratio_min"] and "insufficient" in basis
+    # >= threshold with a 40% win rate -> 1 / 0.4 = 2.5x
+    cfg2 = dict(cfg, min_closed_for_win_rate=10)
+    multiple, basis = required_coverage_multiple(outcomes, cfg2)
+    assert abs(multiple - 2.5) < 1e-9 and basis.startswith("trailing win rate")
+
+
+def test_group_rollups_team_and_region(config):
+    cfg = dict(config)
+    cfg["quotas"] = {"A": 1_000_000.0, "B": 1_000_000.0, "C": 1_000_000.0}
+    owner_meta = {"A": {"team": "T1", "region": "R1"},
+                  "B": {"team": "T1", "region": "R1"},
+                  "C": {"team": "T2", "region": "R2"}}
+    rows = ([clean_row(opp_id=f"A-{i}", owner="A", amount=100_000.0,
+                       contact_count=3) for i in range(3)]
+            + [clean_row(opp_id=f"B-{i}", owner="B", amount=100_000.0,
+                         contact_count=3) for i in range(2)]
+            + [clean_row(opp_id="C-0", owner="C", amount=500_000.0,
+                         contact_count=3)])
+    results = evaluate_snapshot(rows, cfg, AS_OF)
+    teams = group_rollups(rows, results, cfg, owner_meta, "team", multiple=1.5)
+    assert set(teams) == {"T1", "T2"}
+    t1 = teams["T1"]
+    assert t1.n_owners == 2 and t1.n_open == 5
+    assert t1.open_pipeline == 500_000.0 and t1.quota == 2_000_000.0
+    assert abs(t1.coverage_ratio - 0.25) < 1e-9  # 500k / 2M roster quota
+    assert t1.coverage_flagged                   # 500k < 2M x 1.5
+    regions = group_rollups(rows, results, cfg, owner_meta, "region",
+                            multiple=1.5)
+    assert set(regions) == {"R1", "R2"}
+    assert regions["R1"].open_pipeline == 500_000.0
+    # No owner metadata -> no rollup at all.
+    assert group_rollups(rows, results, cfg, {}, "team") == {}
 
 
 def test_desk_rollup_three_measures(config):

@@ -30,7 +30,10 @@ def _env(tmp_path, monkeypatch, config, org):
     config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
     quotas_path = tmp_path / "seed_manifest.json"
     quotas_path.write_text(
-        json.dumps({"quotas": {s.name: s.quota for s in org.sellers}}),
+        json.dumps({"quotas": {s.name: s.quota for s in org.sellers},
+                    "owners": {s.name: {"team": s.team, "region": s.region,
+                                        "quota": s.quota}
+                               for s in org.sellers}}),
         encoding="utf-8")
     db_path = tmp_path / "pipeline.db"
     monkeypatch.setenv("PIPELINE_HYGIENE_CONFIG", str(config_path))
@@ -70,13 +73,18 @@ def test_dashboard_series_tabs_charts_and_filters(tmp_path, config,
     # headline metrics, with since-last-run deltas wired
     assert len(app.metric) == 5
     assert any(m.delta is not None for m in app.metric)
-    # all five tabs render
+    # all six tabs render
     assert [t.label for t in app.tabs] == \
-        ["Forecast call", "Slippage", "Trajectory", "Owners", "Appendix"]
+        ["Forecast call", "Slippage", "Trajectory", "Owners", "Teams",
+         "Appendix"]
     # charts: severity mix + coverage line + flow bars + score trend
     assert len(app.get("vega_lite_chart")) >= 4
-    # tables: risky commits, slippage, owners, full exceptions
+    # tables: risky commits, slippage, owners, teams, regions, full exceptions
     assert len(app.dataframe) >= 4
+    # team/region rollups render when the manifest carries owner metadata
+    group_dfs = [df for df in app.dataframe
+                 if {"quota", "coverage", "owners"} <= set(df.value.columns)]
+    assert len(group_dfs) == 2 and all(len(df.value) > 0 for df in group_dfs)
     # read-only: no write affordances anywhere
     assert not app.button and not app.text_input and not app.number_input \
         and not app.text_area and not app.checkbox

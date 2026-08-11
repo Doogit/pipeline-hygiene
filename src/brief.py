@@ -23,7 +23,8 @@ from pathlib import Path
 from .ingest import load_config
 from .patterns import owner_patterns
 from .rules import RULE_LABELS, evaluate_snapshot, is_open
-from .scoring import desk_rollup, opp_score, owner_rollups
+from .scoring import (desk_rollup, group_rollups, opp_score, owner_rollups,
+                      required_coverage_multiple)
 from .snapshots import SnapshotStore
 
 _SEV_RANK = {"high": 0, "medium": 1, "low": 2}
@@ -119,18 +120,7 @@ def trajectory_data(rows, delta, config, as_of, outcomes):
     if total_quota > 0:
         outcomes = outcomes or []
         won_out = [o for o in outcomes if o["stage"] == "closed_won"]
-        n_closed = len(outcomes)
-        if n_closed >= config["min_closed_for_win_rate"] and won_out:
-            win_rate = len(won_out) / n_closed
-            multiple = 1.0 / win_rate
-            basis = (f"trailing win rate {win_rate:.0%} over {n_closed} "
-                     f"stored closed outcomes -> required multiple "
-                     f"{multiple:.1f}x")
-        else:
-            multiple = config["coverage_ratio_min"]
-            basis = (f"config coverage_ratio_min {multiple:.1f}x (stored "
-                     f"closed history insufficient: {n_closed} outcomes < "
-                     f"{config['min_closed_for_win_rate']})")
+        multiple, basis = required_coverage_multiple(outcomes, config)
         fy_start = config["fiscal_year_start_month"]
         quarter = fiscal_quarter(as_of, fy_start)
         won_this_quarter = sum(
@@ -271,13 +261,33 @@ def build_from_rows(rows, snapshot_date, as_of, config,
         for item in result.insufficient:
             insufficient[item.rule_id] += 1
     delta = since_last_run(prev_summary, rows, results, desk)
+
+    # Shared coverage basis: the win-rate-derived multiple plus each owner's
+    # won-this-quarter dollars, so owner and team low_coverage flags use the
+    # same remaining-quota math as the desk headline (not the static floor).
+    multiple, basis = required_coverage_multiple(outcomes, config)
+    fy_start = config["fiscal_year_start_month"]
+    quarter = fiscal_quarter(as_of, fy_start)
+    won_by_owner = {}
+    for o in (outcomes or []):
+        if o["stage"] == "closed_won" and o["close_date"] is not None \
+                and fiscal_quarter(o["close_date"], fy_start) == quarter:
+            won_by_owner[o["owner"]] = (won_by_owner.get(o["owner"], 0.0)
+                                        + (o["amount"] or 0.0))
+    owner_meta = config.get("owner_meta") or {}
     return {
         "snapshot_date": snapshot_date,
         "as_of": as_of,
         "rows": rows,
         "results": results,
         "desk": desk,
-        "owners": owner_rollups(rows, results, config),
+        "owners": owner_rollups(rows, results, config, multiple, won_by_owner),
+        "teams": group_rollups(rows, results, config, owner_meta, "team",
+                               multiple, won_by_owner),
+        "regions": group_rollups(rows, results, config, owner_meta, "region",
+                                 multiple, won_by_owner),
+        "coverage_multiple": multiple,
+        "coverage_basis": basis,
         "validation": validation,
         "insufficient": insufficient,
         "since_last_run": delta,
@@ -566,6 +576,40 @@ def _owner_table(lines, data):
                      f"| {_money(stats.open_pipeline)} | {coverage} | {flags} |")
 
 
+def _group_table(lines, groups, label):
+    """Render one team/region roll-up table (empty groups produce a note)."""
+    lines.append(f"### {label}s")
+    lines.append("")
+    if not groups:
+        lines.append("No team/region metadata configured "
+                     "(pass --quotas data/seed_manifest.json).")
+        return
+    lines.append(f"| {label} | Owners | Open | Mean | Pipeline | Quota "
+                 "| Coverage | Violations | At-risk $ | Flags |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|")
+    for g in groups.values():
+        coverage = ("n/a" if g.coverage_ratio is None
+                    else f"{g.coverage_ratio:.2f}")
+        mean_cell = "n/a" if g.mean_score is None else f"{g.mean_score:.1f}"
+        flags = "low_coverage" if g.coverage_flagged else "-"
+        lines.append(f"| {g.key} | {g.n_owners} | {g.n_open} | {mean_cell} "
+                     f"| {_money(g.open_pipeline)} | {_money(g.quota)} "
+                     f"| {coverage} | {g.violation_count} "
+                     f"| {_money(g.at_risk_dollars)} | {flags} |")
+
+
+def _team_region_tables(lines, data):
+    lines.append("### Teams and regions")
+    lines.append("")
+    lines.append(f"Coverage basis: {data['coverage_basis']}. low_coverage "
+                 f"means open pipeline is under remaining quota (net of wins "
+                 f"this quarter) x the required multiple.")
+    lines.append("")
+    _group_table(lines, data["teams"], "Team")
+    lines.append("")
+    _group_table(lines, data["regions"], "Region")
+
+
 def _forecast_integrity(lines, data):
     lines.append("### Forecast integrity (H5)")
     lines.append("")
@@ -659,6 +703,8 @@ def render(data, config):
     _top_exceptions(lines, data, config)
     lines.append("")
     _owner_table(lines, data)
+    lines.append("")
+    _team_region_tables(lines, data)
     lines.append("")
     _forecast_integrity(lines, data)
     lines.append("")
@@ -811,7 +857,8 @@ def main(argv=None):
                    help="defaults to the latest stored snapshot at or before --as-of")
     p.add_argument("--quotas", default=None,
                    help="JSON file whose 'quotas' mapping (e.g. data/seed_manifest.json) "
-                        "is merged into config at run time")
+                        "is merged into config at run time; its 'owners' block, when "
+                        "present, also supplies per-owner team/region for the rollups")
     p.add_argument("--digests", action="store_true",
                    help="also write private per-owner coaching digests to "
                         "<out-dir>/digests/<as-of>/<owner_slug>.md")
@@ -825,6 +872,11 @@ def main(argv=None):
             payload = json.load(f)
         config["quotas"] = {**(config.get("quotas") or {}),
                             **payload.get("quotas", payload)}
+        owners_block = payload.get("owners") or {}
+        config["owner_meta"] = {
+            **(config.get("owner_meta") or {}),
+            **{name: {"team": m.get("team"), "region": m.get("region")}
+               for name, m in owners_block.items()}}
 
     store = SnapshotStore(args.db, config)
     snapshot_date = args.snapshot_date

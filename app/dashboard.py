@@ -49,9 +49,14 @@ st.caption("Read-only: agents inspect, people sell. Nothing on this page "
 config = load_config(CONFIG_PATH)
 if Path(QUOTAS_PATH).exists():
     with open(QUOTAS_PATH, encoding="utf-8") as f:
-        config["quotas"] = {**(config.get("quotas") or {}),
-                            **json.load(f).get("quotas", {})}
-    st.sidebar.caption(f"Quotas merged from `{QUOTAS_PATH}`.")
+        payload = json.load(f)
+    config["quotas"] = {**(config.get("quotas") or {}),
+                        **payload.get("quotas", {})}
+    config["owner_meta"] = {
+        **(config.get("owner_meta") or {}),
+        **{name: {"team": m.get("team"), "region": m.get("region")}
+           for name, m in (payload.get("owners") or {}).items()}}
+    st.sidebar.caption(f"Quotas and team/region merged from `{QUOTAS_PATH}`.")
 
 # --- data source ---
 
@@ -215,8 +220,8 @@ _MONEY_COL = st.column_config.NumberColumn(format="$%d")
 _SCORE_COL = st.column_config.ProgressColumn(format="%d", min_value=0,
                                              max_value=100)
 
-tab_call, tab_slip, tab_traj, tab_owners, tab_appendix = st.tabs(
-    ["Forecast call", "Slippage", "Trajectory", "Owners", "Appendix"])
+tab_call, tab_slip, tab_traj, tab_owners, tab_teams, tab_appendix = st.tabs(
+    ["Forecast call", "Slippage", "Trajectory", "Owners", "Teams", "Appendix"])
 
 # --- Forecast call (landing view; stands alone for a Monday meeting) ---
 
@@ -442,8 +447,10 @@ with tab_owners:
                 "coverage": st.column_config.NumberColumn(format="%.2fx"),
             })
     st.caption(f"small_n = fewer than {config['min_opps_for_owner_score']} "
-               f"open opps, treat the score as anecdotal; low_coverage = "
-               f"open pipeline under {config['coverage_ratio_min']}x quota.")
+               f"open opps, treat the score as anecdotal; low_coverage = open "
+               f"pipeline under remaining quota (net of wins this quarter) x "
+               f"the required multiple. Coverage basis: "
+               f"{data['coverage_basis']}.")
 
     st.subheader("Forecast integrity patterns")
     st.caption("Coaching signal, not a comp input.")
@@ -468,6 +475,42 @@ with tab_owners:
                     if p.overcall_small_n and p.undercall_small_n)
         st.caption(f"Suppressed as small_n: {small} owners with too little "
                    f"history to score.")
+
+# --- Teams (team/region rollups) ---
+
+with tab_teams:
+    st.subheader("Teams and regions")
+    if not (config.get("owner_meta") or {}):
+        st.caption("No team/region metadata configured. Point "
+                   "PIPELINE_HYGIENE_QUOTAS at a manifest with an `owners` "
+                   "block (e.g. data/seed_manifest.json).")
+    else:
+        st.caption(f"Coverage basis: {data['coverage_basis']}. low_coverage = "
+                   f"open pipeline under remaining quota (net of wins this "
+                   f"quarter) x the required multiple.")
+
+        def _group_df(groups):
+            return pd.DataFrame([{
+                "name": g.key, "owners": g.n_owners, "open": g.n_open,
+                "mean": g.mean_score, "pipeline": g.open_pipeline,
+                "quota": g.quota,
+                "coverage": None if g.coverage_ratio is None
+                else round(g.coverage_ratio, 2),
+                "violations": g.violation_count,
+                "at-risk": g.at_risk_dollars,
+                "flags": "low_coverage" if g.coverage_flagged else "",
+            } for g in groups.values()])
+
+        _GROUP_COLS = {
+            "mean": _SCORE_COL, "pipeline": _MONEY_COL, "quota": _MONEY_COL,
+            "at-risk": _MONEY_COL,
+            "coverage": st.column_config.NumberColumn(format="%.2fx"),
+        }
+        for label, groups in (("Teams", data["teams"]),
+                              ("Regions", data["regions"])):
+            st.markdown(f"**{label}**")
+            st.dataframe(_group_df(groups), width="stretch", hide_index=True,
+                         column_config=_GROUP_COLS)
 
 # --- Appendix: full exception list + validation (drill-down only) ---
 
