@@ -2,7 +2,7 @@
 
 ## Constraints
 - New repo `pipeline-hygiene`. Create branch `feat/mvp-rules-engine` before any code.
-- Vendor-neutral core: no Microsoft, MSX, Dataverse, Salesforce, or HubSpot dependencies. Ingestion is CSV against the schema below; CRM connectors are future sessions. A config-driven `stage_map` (not code) handles vocabulary differences between CRMs.
+- Vendor-neutral core: no MSX, Dataverse, Salesforce, or HubSpot dependencies. Ingestion is CSV against the schema below; CRM connectors are future sessions. A config-driven `stage_map` (not code) handles vocabulary differences between CRMs.
 - The agent is **read-only** over pipeline data. It inspects and reports. It never writes to source data and never contacts sellers directly. Operating principle: **agents inspect, people sell.**
 - Deterministic rules engine first. **No LLM calls in Tasks 1–5.** Task 6 is feature-flagged (`LLM_ENABLED=1`) and skippable.
 - **Clock determinism:** every function that evaluates time takes an explicit `as_of: date` parameter. `date.today()` may appear only in CLI entry points as the default for `--as-of`. No exceptions — rules, scoring, seed, brief, dashboard all thread `as_of` through.
@@ -65,7 +65,7 @@ staleness_days: {commit: 7, propose: 14, develop: 21, qualify: 30, prospect: 45}
 aging_norm_days: {prospect: 30, qualify: 30, develop: 45, propose: 30, commit: 21}
 big_deal_threshold: 100000
 close_date_horizon_days: 270
-fiscal_year_start_month: 7        # July — matches Microsoft FY; configurable per org
+fiscal_year_start_month: 7        # July fiscal-year start; configurable per org
 expected_currency: USD
 coverage_ratio_min: 3.0
 quotas: {}                        # owner -> quarterly quota; seed fills this

@@ -136,7 +136,7 @@ def trajectory_data(rows, delta, config, as_of, outcomes):
 
 def fiscal_quarter(d, fy_start_month):
     """FY<year>-Q<n>; fiscal years are named for the calendar year they end in
-    (fy_start_month 7 puts 2026-08 in FY2027-Q1, Microsoft-style)."""
+    (fy_start_month 7 puts 2026-08 in FY2027-Q1)."""
     quarter = (d.month - fy_start_month) % 12 // 3 + 1
     fy_year = d.year + (1 if fy_start_month > 1 and d.month >= fy_start_month else 0)
     return f"FY{fy_year}-Q{quarter}"
