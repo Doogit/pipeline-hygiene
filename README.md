@@ -98,7 +98,10 @@ never by running the rules engine, so the comparison is non-circular.
   `date.today()` outside CLI defaults); an uploaded CSV runs the same ingest
   validation but is evaluated in memory and never written to the store; the
   download-brief button renders from the displayed data and does not record a
-  run; quotas auto-merge from `data/seed_manifest.json` when present.
+  run; quotas auto-merge from `data/seed_manifest.json` when present. Runtime
+  paths can be overridden with `PIPELINE_HYGIENE_CONFIG`,
+  `PIPELINE_HYGIENE_DB`, and `PIPELINE_HYGIENE_QUOTAS` for isolated tests or
+  alternate deployments.
 - In series evolution, fields of unscripted rows are shifted week-over-week
   (activity/next-step dates +7) so their expected violation sets are invariant
   by construction; only scripted deltas change expectations, including

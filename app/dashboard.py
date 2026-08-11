@@ -7,6 +7,7 @@ does not record a run. as_of defaults to the snapshot date (date.today() is
 banned outside CLI --as-of defaults).
 """
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -23,8 +24,9 @@ from src.rules import is_open
 from src.scoring import opp_score
 from src.snapshots import SnapshotStore
 
-DB_PATH = "data/pipeline.db"
-QUOTAS_PATH = "data/seed_manifest.json"
+CONFIG_PATH = os.environ.get("PIPELINE_HYGIENE_CONFIG", "config.yaml")
+DB_PATH = os.environ.get("PIPELINE_HYGIENE_DB", "data/pipeline.db")
+QUOTAS_PATH = os.environ.get("PIPELINE_HYGIENE_QUOTAS", "data/seed_manifest.json")
 _SEV_RANK = {"high": 0, "medium": 1, "low": 2}
 
 st.set_page_config(page_title="pipeline-hygiene", layout="wide")
@@ -32,7 +34,7 @@ st.title("pipeline-hygiene — desk inspection")
 st.caption("Read-only: agents inspect, people sell. Nothing on this page "
            "writes to the store or to source data.")
 
-config = load_config("config.yaml")
+config = load_config(CONFIG_PATH)
 if Path(QUOTAS_PATH).exists():
     with open(QUOTAS_PATH, encoding="utf-8") as f:
         config["quotas"] = {**(config.get("quotas") or {}),
