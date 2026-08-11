@@ -141,10 +141,63 @@ class SnapshotStore:
             (opp_id, up_to.isoformat()))
         return cur.fetchall()
 
+    def push_stats(self, snapshot_date):
+        """Per-opp close-date push derivations over history <= snapshot_date:
+        {opp_id: {push_count, cumulative_extension_days, max_push_days}}.
+
+        A push is a consecutive-pair transition where close_date moved LATER;
+        earlier moves (pull-ins) are excluded entirely. With fewer than 2
+        snapshots there are zero observed transitions, so all stats are 0 —
+        genuinely zero, not unknown (these are history-only derivations; no
+        source column ever exists for them). One query, one pass: O(rows),
+        never per-opp queries."""
+        cur = self.conn.execute(
+            "SELECT opp_id, close_date FROM opportunities "
+            "WHERE snapshot_date <= ? ORDER BY opp_id, snapshot_date",
+            (snapshot_date.isoformat(),))
+        stats, prev_opp, prev_close = {}, None, None
+        for opp_id, close in cur:
+            if opp_id != prev_opp:
+                stats[opp_id] = {"push_count": 0, "cumulative_extension_days": 0,
+                                 "max_push_days": 0}
+                prev_opp, prev_close = opp_id, close
+                continue
+            if close is not None and prev_close is not None and close > prev_close:
+                pushed = ((date.fromisoformat(close)
+                           - date.fromisoformat(prev_close)).days)
+                s = stats[opp_id]
+                s["push_count"] += 1
+                s["cumulative_extension_days"] += pushed
+                s["max_push_days"] = max(s["max_push_days"], pushed)
+            prev_close = close
+        return stats
+
+    def closed_outcomes(self, snapshot_date):
+        """Stored closed outcomes at-or-before snapshot_date: one record per
+        opp whose LAST observed row is closed, with the fields the trajectory
+        section needs. One query, one pass."""
+        cur = self.conn.execute(
+            "SELECT opp_id, stage, close_date, amount FROM opportunities "
+            "WHERE snapshot_date <= ? ORDER BY opp_id, snapshot_date",
+            (snapshot_date.isoformat(),))
+        last = {}
+        for opp_id, stage, close, amount in cur:
+            last[opp_id] = (stage, close, amount)
+        return [{"opp_id": o, "stage": s,
+                 "close_date": date.fromisoformat(c) if c else None,
+                 "amount": a}
+                for o, (s, c, a) in sorted(last.items())
+                if s in ("closed_won", "closed_lost")]
+
     def rows_with_history(self, snapshot_date):
         """Rows for a snapshot with optional columns filled from history when
-        absent and >= 2 snapshots exist at-or-before snapshot_date."""
+        absent and >= 2 snapshots exist at-or-before snapshot_date. Push
+        derivations (push_stats) are always attached."""
         rows = self.load_rows(snapshot_date)
+        pushes = self.push_stats(snapshot_date)
+        zero = {"push_count": 0, "cumulative_extension_days": 0, "max_push_days": 0}
+        for row in rows:
+            row.update(pushes.get(row["opp_id"], zero))
         n_snapshots = len([d for d in self.snapshot_dates() if d <= snapshot_date])
         if n_snapshots < 2:
             return rows
@@ -176,6 +229,14 @@ class SnapshotStore:
                  json.dumps(validation_report.to_dict(), sort_keys=True)
                  if validation_report else None))
         return cur.lastrowid
+
+    def run_opens(self):
+        """The per-run open-opp rule-set maps ({opp_id: [rules]}), ascending
+        by run_id — the memory that flag streaks are computed from."""
+        cur = self.conn.execute(
+            "SELECT summary_json FROM runs ORDER BY run_id")
+        return [json.loads(row[0]).get("open", {})
+                for row in cur.fetchall() if row[0]]
 
     def last_run(self, before_run_id=None):
         query = "SELECT run_id, as_of, snapshot_date, summary_json FROM runs"

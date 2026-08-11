@@ -32,9 +32,67 @@ python -m src.seed --series 4 --as-of 2026-08-10        # weekly snapshots T0..T
 python -m src.ingest data/opps_2026-08-10.csv           # validate + load into data/pipeline.db
 python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json
                                                         # write out/desk_brief_2026-08-10.md
+python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json --digests
+                                                        # ...plus out/digests/<as_of>/<owner>.md
 streamlit run app/dashboard.py                          # read-only dashboard
 pytest -q                                               # full test suite
 ```
+
+## Dashboard (Streamlit)
+
+```
+streamlit run app/dashboard.py
+```
+
+![Forecast call tab](docs/screenshots/tab-forecast-call.png)
+
+The dashboard is a read-only Streamlit app whose tabs mirror the brief
+structure — it never writes to the store or to source data, and viewing or
+downloading a brief from it does not record a run.
+
+- **Forecast call** (landing tab): headline `st.metric` row with
+  week-over-week delta arrows wired to since-last-run (desk score, open
+  pipeline, at-risk dollars — at-risk uses `delta_color="inverse"` so rising
+  risk reads red), the severity mix as a compact stacked bar, and the risky
+  commits table with per-deal coaching prompts. Built to stand alone for a
+  Monday meeting.
+- **Slippage**: the Task 8 push analytics, including a per-opp close-date
+  drift sparkline (`st.column_config.LineChartColumn`).
+- **Trajectory**: Altair charts — coverage (open vs required pipeline at
+  1 / trailing win rate) across stored snapshots, created-vs-closed weekly
+  flow bars, and the desk score trend from recorded brief runs. Needs at
+  least 2 stored snapshots; with fewer it degrades to a clear caption
+  instead of a one-point trend.
+- **Owners**: owner scoreboard plus the forecast-integrity patterns
+  (coaching signal, not a comp input).
+- **Appendix**: the full exception list (the only place it appears —
+  drill-down, never the headline), validation report, and the
+  download-brief button.
+
+Implementation notes:
+
+- Data source: the latest stored snapshot from `data/pipeline.db` by
+  default (snapshot selectable in the sidebar); an uploaded CSV runs the
+  same ingest validation and is evaluated entirely in memory. Sidebar
+  owner/stage/severity filters apply to the Slippage, Owners, and Appendix
+  tables.
+- Tables use `st.column_config` throughout: `ProgressColumn` for 0-100
+  scores, `NumberColumn` `$%d`-style formatting for amounts,
+  `LineChartColumn` sparklines for close-date drift and score history,
+  plain text badges for rules (Okabe-Ito colorblind-safe severity palette;
+  colored text, no emoji).
+- Charts are Streamlit built-ins + the Altair that ships with Streamlit —
+  no extra dependencies.
+- Runtime paths can be overridden with `PIPELINE_HYGIENE_CONFIG`,
+  `PIPELINE_HYGIENE_DB`, and `PIPELINE_HYGIENE_QUOTAS` (used by the
+  `streamlit.testing.v1.AppTest` suite in `tests/test_dashboard.py` to run
+  the app against isolated fixtures).
+- Per-tab screenshots live in `docs/screenshots/`:
+  [Forecast call](docs/screenshots/tab-forecast-call.png),
+  [Slippage](docs/screenshots/tab-slippage.png),
+  [Trajectory](docs/screenshots/tab-trajectory.png),
+  [Owners](docs/screenshots/tab-owners.png),
+  [Appendix](docs/screenshots/tab-appendix.png).
 
 ## Clock determinism
 
@@ -107,8 +165,118 @@ never by running the rules engine, so the comparison is non-circular.
   by construction; only scripted deltas change expectations, including
   bookkept couplings (a close-date push increments `close_date_changes` and
   may introduce H3 — recorded in the delta manifest).
+- H11 ("lost deal control") fires on `max_push_days >= push_alarm_days` OR
+  `cumulative_extension_days >= cumulative_push_alarm_days`, always high
+  severity (weight 20). Push derivations (`push_count`,
+  `cumulative_extension_days`, `max_push_days`) are history-only — computed
+  from consecutive stored-snapshot pairs where close_date moved LATER
+  (pull-ins excluded), never from a CSV column. Evidence framing: Gong
+  (n=13,439) shows won deals update close dates MORE than lost, so frequent
+  small updates must not trip anything; only serial/large later-drift does.
+- H11 has no `insufficient_history` state: with fewer than 2 snapshots there
+  are zero observed transitions, so push stats are genuinely 0 (unlike
+  H3/H6, no source column can ever supply them) and the rule is simply
+  silent. Rows evaluated outside the store (property tests, in-memory
+  uploads) carry no push keys and are also silent. A single-seed manifest
+  therefore provably contains no H11 (asserted in tests).
+- Series mode scripts one BIG push per week (>= `push_alarm_days`, the only
+  H11 source, recorded under `introduced`); regular pushes are sized below
+  the single-push alarm and budgeted per-opp below the cumulative alarm so
+  they can never introduce H11 uncontrolled.
+- The brief's "Slipping pipeline" section lists open opps with >= 1 observed
+  push, dollar-ranked with distinct-opp totals, and marks
+  `push_count >= disqualify_review_pushes` with "recommend disqualification
+  review".
+- Brief page 1 (forecast-call prep) runs: Headline (+Validation), Risky
+  commits, Trajectory, Since last run (summary counts), Slipping pipeline
+  (kept on page 1 after the four mandated sections — slippage is the
+  research's #1 ranked signal). Everything else sits under "## Appendix"
+  with headings demoted to `###` (heading text preserved verbatim so
+  existing section assertions still match); the top-10 exceptions table is
+  preserved as-is there, and the FULL exception list lives as the
+  dashboard's appendix drill-down.
+- Risky commits = open opps with forecast commit/best_case carrying any of
+  H1/H2/H4/H5/H7/H11, dollar-ranked, capped at 10 with the total always
+  stated. Each gets the fixed coaching prompt of its dominant rule
+  (deterministic: worst severity, then heaviest rule weight, then lowest
+  rule number) — questions to ask the seller, never gotchas.
+- Trajectory: created-vs-closed flow comes from the since-last-run delta
+  (added vs closed opps, won/lost split, counts + dollars). Coverage uses
+  required multiple = 1 / trailing win rate over stored closed outcomes (an
+  opp counts as an outcome when its last stored row is closed_won/lost);
+  with fewer than `min_closed_for_win_rate` outcomes (or zero wins) it
+  falls back to `coverage_ratio_min`. The basis used is always printed.
+  Remaining quota = sum of configured quotas minus closed-won dollars whose
+  close_date falls in the current fiscal quarter of as_of.
+- Forecast-integrity patterns (src/patterns.py) — a coaching signal, never a
+  comp input (the disclaimer renders wherever shown). Overcall = share of an
+  owner's ever-commit opps subsequently pushed (later close-date move in a
+  snapshot pair after the first commit snapshot) or closed_lost. Undercall =
+  share of observed wins never commit/best_case before the winning snapshot
+  (only wins seen open in an earlier snapshot count — an outcome with no
+  pre-win history is uninformative), OR the conjunction of omitted-dollar
+  share AND far-out-dollar share of open pipeline (conjunction because
+  omitted share alone is dominated by single-big-deal noise at per-owner n).
+  Metrics report their n; below `min_opps_for_owner_score` they are
+  suppressed as small_n, never flagged.
+- The persona-recovery test needed persona-DRIVEN series evolution: a
+  uniformly random push/close schedule carries zero per-persona signal, so
+  no series length could separate happy_ears from clean operators. The
+  simulator now preferentially pushes (and skews to closed_lost) the
+  commit-forecast deals of happy-ears sellers — plant is field-level
+  behavior, detection is statistics over snapshots, and the detector never
+  sees persona labels, so plant-vs-detect stays non-circular. Coupling
+  bookkeeping (H3/H11, delta manifest) is unchanged.
+- Flag streaks count consecutive RUNS (from the `runs` table), not
+  snapshots: the current evaluation plus immediately preceding recorded
+  runs carrying the same (opp, rule); a cleared run resets the streak.
+  Re-running the brief on the same snapshot therefore extends streaks —
+  runs are the accountability cadence. Annotated as "flagged N runs" (from
+  N >= 2) in the brief exceptions table and the dashboard.
+- `python -m src.brief --digests` writes one PRIVATE coaching digest per
+  owner with open opps to `out/digests/<as_of>/<owner_slug>.md`: top 3-5
+  dollar-weighted risks, that owner's week-over-week new/cleared/closed,
+  longest-unresolved flags (streaks), and exactly ONE suggested coaching
+  focus (deterministic: rule with most dollars at risk, ties to the lowest
+  rule number). No other owner's data, no rankings, small_n carried over —
+  coaching evidence favors private weekly digests; published rankings
+  raise attrition.
+
+- Dashboard tabs mirror the brief structure (Forecast call landing,
+  Slippage, Trajectory, Owners, Appendix) rather than inventing a second
+  information architecture; each tab is designed to fit one screen. Charts
+  are Streamlit built-ins + bundled Altair only, with explicit pixel sizes
+  and right-side legends: container-sized charts collapse when rendered
+  inside an initially hidden tab, and `alt.Legend(orient="bottom")`
+  collapses the plot area under Streamlit's Vega theme (both verified
+  empirically). Severity palette is Okabe-Ito (colorblind-safe) everywhere;
+  colored text chips (:red[] etc.) instead of emoji.
+- Task 12 disclosure: `tests/test_dashboard.py` (added during PR #2 review;
+  not one of the original 50) asserted the pre-redesign layout literally
+  (exactly 5 metrics, exactly 2 dataframes), which cannot coexist with the
+  mandated tabbed redesign. It was rewritten to assert the same semantics
+  (store loads, owner filter narrows the exceptions table, zero
+  exceptions) plus per-tab element presence and graceful single-snapshot
+  degradation. No other pre-existing test was modified beyond goldens and
+  additive config keys.
+- Dashboard screenshots in `docs/screenshots/` were captured with the
+  locally installed Playwright driving the headless app on 127.0.0.1 —
+  a verification tool only, not a project dependency.
 
 ## Handoff
 
-Next session: start by reading `README.md`, `data/seed_manifest.json`, and
-`data/delta_manifest.json`.
+Next session candidates (recorded, deliberately NOT built this session):
+
+- Aging thresholds derived from the org's own per-stage medians (1.5-2x
+  median), replacing static `aging_norm_days`.
+- Org-specific backtesting: a flagged-vs-outcome table from the org's own
+  stored history — turns vendor benchmark stats into auditable org
+  evidence.
+- Dashboard explainability panel: rule + threshold + triggering snapshot
+  values per flag (the anti-black-box wedge).
+- Slack/email push delivery of the brief and digests (top 3-5 cap, weekly,
+  digest not firehose — alert fatigue kills adoption).
+- Cross-CRM connector via `stage_map` (original spec handoff option).
+
+Start the next session by reading `README.md`, `data/seed_manifest.json`,
+and `data/delta_manifest.json`.

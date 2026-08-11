@@ -4,4 +4,5 @@ __pycache__/
 .hypothesis/
 data/pipeline.db
 out/*.md
+out/digests/
 .venv/

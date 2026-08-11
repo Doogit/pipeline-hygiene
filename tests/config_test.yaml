@@ -8,7 +8,16 @@ fiscal_year_start_month: 7        # July — matches Microsoft FY; configurable 
 expected_currency: USD
 coverage_ratio_min: 3.0
 quotas: {}                        # owner -> quarterly quota; seed fills this
-rule_weights: {H1: 15, H2: 20, H3: 10, H4: 20, H5: 25, H6: 10, H7: 10, H8: 5, H9: 5, H10: 10}
+rule_weights: {H1: 15, H2: 20, H3: 10, H4: 20, H5: 25, H6: 10, H7: 10, H8: 5, H9: 5, H10: 10, H11: 20}
+push_alarm_days: 21               # H11: single close-date push >= this (Gong: >=3-week pushes signal lost control)
+cumulative_push_alarm_days: 45    # H11: total later-drift across pushes >= this
+disqualify_review_pushes: 3       # brief marker: recommend disqualification review at this push_count
+min_closed_for_win_rate: 10       # trailing-win-rate coverage basis needs at least this many stored closed outcomes
+patterns:                         # forecast-integrity detection — coaching signal, never a comp input
+  overcall_share_min: 0.5         # flag overcall when >= this share of ever-commit opps later pushed or lost
+  undercall_won_share_min: 0.75   # flag undercall when >= this share of observed wins never showed commit/best_case
+  undercall_omitted_share_min: 0.4   # ...or omitted dollars >= this share of open pipeline AND
+  undercall_farout_share_min: 0.1    #    far-out (beyond horizon) dollars >= this share (conjunction)
 healthy_score_threshold: 80
 min_opps_for_owner_score: 5       # below this, owner score carries a small-n flag
 next_step_quality:

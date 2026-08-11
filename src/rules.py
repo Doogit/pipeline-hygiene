@@ -1,4 +1,4 @@
-"""Deterministic hygiene rules H1-H10.
+"""Deterministic hygiene rules H1-H11.
 
 Each rule is a pure function (row, config, as_of) -> Violation | None |
 InsufficientHistory. Rule IDs are stable — tests reference them. Rules never
@@ -149,6 +149,27 @@ def h10_parked_close_date(row, config, as_of):
     return None
 
 
+def h11_lost_deal_control(row, config, as_of):
+    """Serial/LARGE pushes signal lost deal control (Gong n=13,439: movement
+    per se is NOT risk — won deals update dates more than lost — so frequent
+    small updates and pull-ins never trip this). Push stats are history-only
+    derivations attached by the snapshot store; rows without them (single
+    snapshot, in-memory uploads) have zero observed pushes and stay silent."""
+    max_push = row.get("max_push_days")
+    cumulative = row.get("cumulative_extension_days")
+    if max_push is None or cumulative is None:
+        return None
+    big = max_push >= config["push_alarm_days"]
+    if big or cumulative >= config["cumulative_push_alarm_days"]:
+        why = (f"single push of {max_push}d "
+               f"(alarm {config['push_alarm_days']}d)" if big
+               else f"close date drifted {cumulative}d later across "
+                    f"{row.get('push_count')} pushes "
+                    f"(alarm {config['cumulative_push_alarm_days']}d)")
+        return Violation("H11", HIGH, why)
+    return None
+
+
 RULES = {
     "H1": h1_stale_by_stage,
     "H2": h2_close_date_in_past,
@@ -160,6 +181,21 @@ RULES = {
     "H8": h8_amount_hygiene,
     "H9": h9_vague_next_step,
     "H10": h10_parked_close_date,
+    "H11": h11_lost_deal_control,
+}
+
+RULE_LABELS = {
+    "H1": "stale by stage",
+    "H2": "close date in past",
+    "H3": "serial slippage",
+    "H4": "missing/expired next step",
+    "H5": "forecast mismatch",
+    "H6": "aging in stage",
+    "H7": "single-threaded big deal",
+    "H8": "amount hygiene",
+    "H9": "vague next step",
+    "H10": "parked close date",
+    "H11": "lost deal control",
 }
 
 
