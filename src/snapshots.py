@@ -33,9 +33,10 @@ _OPP_COLS = [
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS snapshots (
-    snapshot_date TEXT PRIMARY KEY,
-    source_file   TEXT NOT NULL,
-    row_count     INTEGER NOT NULL
+    snapshot_date   TEXT PRIMARY KEY,
+    source_file     TEXT NOT NULL,
+    row_count       INTEGER NOT NULL,
+    validation_json TEXT
 );
 CREATE TABLE IF NOT EXISTS opportunities (
     snapshot_date TEXT NOT NULL,
@@ -78,6 +79,10 @@ class SnapshotStore:
             Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.db_path)
         self.conn.executescript(_SCHEMA)
+        # dbs created before Task 5 lack validation_json on snapshots
+        cols = [r[1] for r in self.conn.execute("PRAGMA table_info(snapshots)")]
+        if "validation_json" not in cols:
+            self.conn.execute("ALTER TABLE snapshots ADD COLUMN validation_json TEXT")
         self.conn.commit()
 
     def close(self):
@@ -92,8 +97,9 @@ class SnapshotStore:
         with self.conn:
             self.conn.execute("DELETE FROM opportunities WHERE snapshot_date = ?", (sd,))
             self.conn.execute(
-                "INSERT OR REPLACE INTO snapshots VALUES (?, ?, ?)",
-                (sd, str(csv_path), len(rows)))
+                "INSERT OR REPLACE INTO snapshots VALUES (?, ?, ?, ?)",
+                (sd, str(csv_path), len(rows),
+                 json.dumps(report.to_dict(), sort_keys=True)))
             self.conn.executemany(
                 f"INSERT INTO opportunities (snapshot_date, {', '.join(_OPP_COLS)}) "
                 f"VALUES ({', '.join(['?'] * (len(_OPP_COLS) + 1))})",
@@ -109,6 +115,13 @@ class SnapshotStore:
     def latest_snapshot_date(self):
         dates = self.snapshot_dates()
         return dates[-1] if dates else None
+
+    def validation_report_dict(self, snapshot_date):
+        """Stored ValidationReport.to_dict() for a snapshot, or None."""
+        row = self.conn.execute(
+            "SELECT validation_json FROM snapshots WHERE snapshot_date = ?",
+            (snapshot_date.isoformat(),)).fetchone()
+        return json.loads(row[0]) if row and row[0] else None
 
     def load_rows(self, snapshot_date):
         cur = self.conn.execute(
