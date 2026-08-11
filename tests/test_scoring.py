@@ -67,7 +67,8 @@ def test_owner_rollups_flags(config):
     assert stats.n_open == 3 and stats.small_n
     assert stats.violation_count == 1
     assert stats.open_pipeline == 300_000.0
-    assert stats.coverage_ratio == 0.3 and stats.coverage_flagged  # < 3.0
+    # coverage vs required: 300k / (1M quota x 3.0 config floor) = 0.1, < 1.0
+    assert abs(stats.coverage_ratio - 0.1) < 1e-9 and stats.coverage_flagged
     assert stats.mean_score == (100 + 100 + 80) / 3
     assert stats.median_score == 100
 
@@ -83,19 +84,23 @@ def test_owner_coverage_flag_uses_remaining_quota_and_multiple(config):
     cfg = dict(config)
     cfg["quotas"] = {"Avery Ashford": 1_000_000.0}
     rows = [clean_row(opp_id=f"OPP-{i:04d}", amount=200_000.0, contact_count=3)
-            for i in range(1, 9)]           # 8 open -> 1.6M pipeline, 1.6x raw
+            for i in range(1, 9)]               # 8 open -> 1.6M pipeline
     results = evaluate_snapshot(rows, cfg, AS_OF)
-    # Derived multiple 1.5x, nothing booked: required 1.5M < 1.6M -> not flagged.
+    # Derived multiple 1.5x, nothing booked: required 1.5M -> 1.07x, unflagged.
+    # The shown ratio and the flag share one basis: flagged iff ratio < 1.0.
     stats = owner_rollups(rows, results, cfg, multiple=1.5)["Avery Ashford"]
-    assert abs(stats.coverage_ratio - 1.6) < 1e-9
+    assert abs(stats.coverage_ratio - 1.6 / 1.5) < 1e-9
     assert not stats.coverage_flagged
-    # The raw column is unchanged; the OLD static 3.0x floor still flags it,
-    # which is exactly the over-firing the remaining-quota basis fixes.
-    assert owner_rollups(rows, results, cfg)["Avery Ashford"].coverage_flagged
-    # Booking 700k this quarter shrinks remaining to 300k -> required 450k: ok.
+    # No multiple supplied -> static 3.0x floor: 1.6M / 3M = 0.53x, flagged
+    # (the over-firing the win-rate-derived basis fixes).
+    fallback = owner_rollups(rows, results, cfg)["Avery Ashford"]
+    assert abs(fallback.coverage_ratio - 1.6 / 3.0) < 1e-9
+    assert fallback.coverage_flagged
+    # Booking 700k this quarter shrinks remaining to 300k -> required 450k.
     won = {"Avery Ashford": 700_000.0}
-    assert not owner_rollups(rows, results, cfg, 1.5, won)[
-        "Avery Ashford"].coverage_flagged
+    booked = owner_rollups(rows, results, cfg, 1.5, won)["Avery Ashford"]
+    assert abs(booked.coverage_ratio - 1.6 / 0.45) < 1e-9
+    assert not booked.coverage_flagged
 
 
 def test_required_coverage_multiple_win_rate_and_fallback(config):
@@ -128,8 +133,9 @@ def test_group_rollups_team_and_region(config):
     t1 = teams["T1"]
     assert t1.n_owners == 2 and t1.n_open == 5
     assert t1.open_pipeline == 500_000.0 and t1.quota == 2_000_000.0
-    assert abs(t1.coverage_ratio - 0.25) < 1e-9  # 500k / 2M roster quota
-    assert t1.coverage_flagged                   # 500k < 2M x 1.5
+    # coverage vs required: 500k / (2M roster quota x 1.5) = 0.167, flagged
+    assert abs(t1.coverage_ratio - 500 / 3000) < 1e-9
+    assert t1.coverage_flagged
     regions = group_rollups(rows, results, cfg, owner_meta, "region",
                             multiple=1.5)
     assert set(regions) == {"R1", "R2"}

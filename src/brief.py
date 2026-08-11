@@ -556,6 +556,16 @@ def _top_exceptions(lines, data, config):
                      f"| {streak_cell} | {detail} |")
 
 
+def _coverage_note(lines, data):
+    """The coverage definition and basis, printed adjacent to every table that
+    carries a Coverage column (the persona pass found the note 67 lines from
+    the Owners table it explained)."""
+    lines.append("Coverage = open pipeline vs required pipeline (remaining "
+                 "quota net of wins this quarter x the required multiple); "
+                 "low_coverage means under 1.00x. Basis: "
+                 f"{data['coverage_basis']}.")
+
+
 def _owner_table(lines, data):
     lines.append("### Owners")
     lines.append("")
@@ -563,6 +573,8 @@ def _owner_table(lines, data):
     if not owners:
         lines.append("No open opportunities.")
         return
+    _coverage_note(lines, data)
+    lines.append("")
     lines.append("| Owner | Open | Mean | Median | Violations | Pipeline | Coverage | Flags |")
     lines.append("|---|---|---|---|---|---|---|---|")
     for stats in owners.values():
@@ -577,7 +589,8 @@ def _owner_table(lines, data):
 
 
 def _group_table(lines, groups, label):
-    """Render one team/region roll-up table (empty groups produce a note)."""
+    """Render one team/region roll-up table, worst coverage first so ordering
+    itself carries the signal (empty groups produce a note)."""
     lines.append(f"### {label}s")
     lines.append("")
     if not groups:
@@ -587,7 +600,10 @@ def _group_table(lines, groups, label):
     lines.append(f"| {label} | Owners | Open | Mean | Pipeline | Quota "
                  "| Coverage | Violations | At-risk $ | Flags |")
     lines.append("|---|---|---|---|---|---|---|---|---|---|")
-    for g in groups.values():
+    ranked = sorted(groups.values(),
+                    key=lambda g: (g.coverage_ratio is None,
+                                   g.coverage_ratio or 0.0, g.key))
+    for g in ranked:
         coverage = ("n/a" if g.coverage_ratio is None
                     else f"{g.coverage_ratio:.2f}")
         mean_cell = "n/a" if g.mean_score is None else f"{g.mean_score:.1f}"
@@ -601,9 +617,7 @@ def _group_table(lines, groups, label):
 def _team_region_tables(lines, data):
     lines.append("### Teams and regions")
     lines.append("")
-    lines.append(f"Coverage basis: {data['coverage_basis']}. low_coverage "
-                 f"means open pipeline is under remaining quota (net of wins "
-                 f"this quarter) x the required multiple.")
+    _coverage_note(lines, data)
     lines.append("")
     _group_table(lines, data["teams"], "Team")
     lines.append("")

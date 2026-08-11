@@ -447,10 +447,10 @@ with tab_owners:
                 "coverage": st.column_config.NumberColumn(format="%.2fx"),
             })
     st.caption(f"small_n = fewer than {config['min_opps_for_owner_score']} "
-               f"open opps, treat the score as anecdotal; low_coverage = open "
-               f"pipeline under remaining quota (net of wins this quarter) x "
-               f"the required multiple. Coverage basis: "
-               f"{data['coverage_basis']}.")
+               f"open opps, treat the score as anecdotal. Coverage = open "
+               f"pipeline vs required pipeline (remaining quota net of wins "
+               f"this quarter x the required multiple); low_coverage means "
+               f"under 1.00x. Basis: {data['coverage_basis']}.")
 
     st.subheader("Forecast integrity patterns")
     st.caption("Coaching signal, not a comp input.")
@@ -485,11 +485,15 @@ with tab_teams:
                    "PIPELINE_HYGIENE_QUOTAS at a manifest with an `owners` "
                    "block (e.g. data/seed_manifest.json).")
     else:
-        st.caption(f"Coverage basis: {data['coverage_basis']}. low_coverage = "
-                   f"open pipeline under remaining quota (net of wins this "
-                   f"quarter) x the required multiple.")
+        st.caption(f"Coverage = open pipeline vs required pipeline (remaining "
+                   f"quota net of wins this quarter x the required multiple); "
+                   f"low_coverage means under 1.00x. Worst coverage first. "
+                   f"Basis: {data['coverage_basis']}.")
 
         def _group_df(groups):
+            ranked = sorted(groups.values(),
+                            key=lambda g: (g.coverage_ratio is None,
+                                           g.coverage_ratio or 0.0, g.key))
             return pd.DataFrame([{
                 "name": g.key, "owners": g.n_owners, "open": g.n_open,
                 "mean": g.mean_score, "pipeline": g.open_pipeline,
@@ -499,7 +503,7 @@ with tab_teams:
                 "violations": g.violation_count,
                 "at-risk": g.at_risk_dollars,
                 "flags": "low_coverage" if g.coverage_flagged else "",
-            } for g in groups.values()])
+            } for g in ranked])
 
         _GROUP_COLS = {
             "mean": _SCORE_COL, "pipeline": _MONEY_COL, "quota": _MONEY_COL,
