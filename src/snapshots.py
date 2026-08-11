@@ -19,7 +19,7 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
-from .ingest import IngestError, validate_csv
+from .ingest import AllRowsRejectedError, validate_csv
 
 _DATE_COLS = ("created_date", "close_date", "last_activity_date",
               "next_step_date", "stage_entered_date")
@@ -99,11 +99,7 @@ class SnapshotStore:
         """
         rows, report = validate_csv(csv_path, self.config, stage_map_name)
         if report.total_rows > 0 and not rows:
-            top = "; ".join(f"{reason} ({n})" for reason, n
-                            in list(report.reason_counts().items())[:5])
-            raise IngestError(
-                f"all {report.total_rows} rows rejected - nothing stored for "
-                f"{snapshot_date.isoformat()}. Top reasons: {top}")
+            raise AllRowsRejectedError(snapshot_date, report)
         sd = snapshot_date.isoformat()
         with self.conn:
             self.conn.execute("DELETE FROM opportunities WHERE snapshot_date = ?", (sd,))
@@ -248,11 +244,16 @@ class SnapshotStore:
                  if validation_report else None))
         return cur.lastrowid
 
-    def run_opens(self):
+    def run_opens(self, before_snapshot_date=None):
         """The per-run open-opp rule-set maps ({opp_id: [rules]}), ascending
-        by run_id — the memory that flag streaks are computed from."""
-        cur = self.conn.execute(
-            "SELECT summary_json FROM runs ORDER BY run_id")
+        by snapshot/run — the memory that flag streaks are computed from."""
+        query = "SELECT summary_json FROM runs"
+        params = ()
+        if before_snapshot_date is not None:
+            query += " WHERE snapshot_date < ?"
+            params = (before_snapshot_date.isoformat(),)
+        query += " ORDER BY snapshot_date, run_id"
+        cur = self.conn.execute(query, params)
         return [json.loads(row[0]).get("open", {})
                 for row in cur.fetchall() if row[0]]
 

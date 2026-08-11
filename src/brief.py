@@ -251,7 +251,7 @@ def build(store, snapshot_date, as_of, config):
         validation=store.validation_report_dict(snapshot_date),
         prev_summary=prev["summary"] if prev else None,
         outcomes=store.closed_outcomes(snapshot_date),
-        prev_opens=store.run_opens(),
+        prev_opens=store.run_opens(before_snapshot_date=snapshot_date),
         patterns=owner_patterns(store, as_of, config, snapshot_date))
 
 
