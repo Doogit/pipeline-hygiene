@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src import brief
 from src.ingest import AllRowsRejectedError, IngestError, load_config, \
     snapshot_date_from_filename, validate_csv
-from src.patterns import owner_patterns
+from src.patterns import commit_ledger, ledger_rollups, owner_patterns
 from src.rules import RULE_LABELS, is_open
 from src.scoring import opp_score
 from src.snapshots import SnapshotStore
@@ -119,10 +119,12 @@ else:
 as_of = st.sidebar.date_input("Evaluate as of", value=snapshot_date)
 patterns = (owner_patterns(store, as_of, config, snapshot_date)
             if store else None)
+ledger = (commit_ledger(store, as_of, config, snapshot_date)
+          if store else None)
 data = brief.build_from_rows(rows, snapshot_date, as_of, config,
                              validation=validation, prev_summary=prev_summary,
                              outcomes=outcomes, prev_opens=prev_opens,
-                             patterns=patterns)
+                             patterns=patterns, ledger=ledger)
 results, desk = data["results"], data["desk"]
 rows_by_id = {r["opp_id"]: r for r in rows}
 delta = data["since_last_run"]
@@ -214,6 +216,41 @@ def _matches(row, result):
 _MONEY_COL = st.column_config.NumberColumn(format="$%d")
 _SCORE_COL = st.column_config.ProgressColumn(format="%d", min_value=0,
                                              max_value=100)
+
+LEDGER_CAPTION = ("Of opps ever forecast commit in stored history: outcome "
+                  "to date. Pushed = still open with a close-date move after "
+                  "the first commit snapshot. Won/resolved counts closed "
+                  "opps only. Coaching signal, not a comp input.")
+_LEDGER_COLS = {"won/resolved": st.column_config.NumberColumn(format="%d%%")}
+
+
+def _ledger_df(entries, key_fn, label):
+    rollups = ledger_rollups(entries, key_fn)
+    records = []
+    for key in sorted(rollups, key=lambda k: (k is None, k or "")):
+        g = rollups[key]
+        resolved = g["won"] + g["lost"]
+        records.append({
+            label: "unknown" if key is None else key,
+            "ever commit": g["n"], "won": g["won"], "lost": g["lost"],
+            "pushed": g["pushed"], "still open": g["open"],
+            "won/resolved": (round(100 * g["won"] / resolved)
+                             if resolved else None),
+        })
+    return pd.DataFrame(records)
+
+
+def _ledger_section(entries, key_fn, label):
+    """One commit-accuracy table with the standing disclaimer; degrades to a
+    clear caption outside the store or with no ever-commit history."""
+    st.caption(LEDGER_CAPTION)
+    if entries is None:
+        st.caption("Unavailable outside the snapshot store.")
+    elif not entries:
+        st.caption("No opp in stored history has ever been forecast commit.")
+    else:
+        st.dataframe(_ledger_df(entries, key_fn, label), width="stretch",
+                     hide_index=True, column_config=_LEDGER_COLS)
 
 tab_call, tab_slip, tab_traj, tab_owners, tab_teams, tab_appendix = st.tabs(
     ["Forecast call", "Slippage", "Trajectory", "Owners", "Teams", "Appendix"])
@@ -413,6 +450,13 @@ with tab_traj:
         st.caption("Desk score trend appears after 2+ recorded brief runs "
                    "(python -m src.brief).")
 
+    st.subheader("Commit accuracy by committed-for quarter")
+    st.caption("Committed-for quarter = fiscal quarter of the close date "
+               "when the deal was first called commit — immune to later "
+               "pushes, so a slipped commit stays counted against the "
+               "quarter it was promised for.")
+    _ledger_section(ledger, lambda e: e.committed_quarter, "quarter")
+
 # --- Owners ---
 
 with tab_owners:
@@ -471,6 +515,12 @@ with tab_owners:
         st.caption(f"Suppressed as small_n: {small} owners with too little "
                    f"history to score.")
 
+    st.subheader("Commit accuracy")
+    owner_entries = (None if ledger is None else
+                     [e for e in ledger
+                      if not f_owners or e.owner in f_owners])
+    _ledger_section(owner_entries, lambda e: e.owner, "owner")
+
 # --- Teams (team/region rollups) ---
 
 with tab_teams:
@@ -510,6 +560,12 @@ with tab_teams:
             st.markdown(f"**{label}**")
             st.dataframe(_group_df(groups), width="stretch", hide_index=True,
                          column_config=_GROUP_COLS)
+
+        st.subheader("Commit accuracy by team")
+        owner_meta = config.get("owner_meta") or {}
+        _ledger_section(
+            ledger,
+            lambda e: (owner_meta.get(e.owner) or {}).get("team"), "team")
 
 # --- Appendix: full exception list + validation (drill-down only) ---
 

@@ -212,6 +212,51 @@ Coaching signal, not a comp input.
 - Undercall pattern: Wren Ivesdale — open pipeline 43% omitted, 43% far-out (n=5)
 - Suppressed as small_n: 4 owners with too little history to score
 
+### Commit accuracy (forecast ledger)
+
+Of opps ever forecast commit in stored history: outcome to date. Pushed = still open with a close-date move after the first commit snapshot; committed-for quarter = fiscal quarter of the close date when first called commit (immune to later pushes). Won/resolved counts closed opps only. Coaching signal, not a comp input.
+
+| Owner | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
+|---|---|---|---|---|---|---|
+| Avery Calloway | 1 | 0 | 0 | 0 | 1 | n/a |
+| Avery Ristori | 4 | 0 | 0 | 0 | 4 | n/a |
+| Casey Grantley | 2 | 0 | 0 | 0 | 2 | n/a |
+| Corin Farrow | 5 | 0 | 0 | 0 | 5 | n/a |
+| Darby Bramwell | 2 | 0 | 0 | 0 | 2 | n/a |
+| Frankie Denholm | 2 | 0 | 0 | 0 | 2 | n/a |
+| Harper Bramwell | 2 | 0 | 0 | 0 | 2 | n/a |
+| Harper Ivesdale | 1 | 0 | 0 | 0 | 1 | n/a |
+| Hollis Underhill | 3 | 0 | 0 | 0 | 3 | n/a |
+| Kendall Lindqvist | 1 | 0 | 0 | 0 | 1 | n/a |
+| Logan Ivesdale | 3 | 0 | 0 | 0 | 3 | n/a |
+| Marlow Bramwell | 4 | 0 | 0 | 0 | 4 | n/a |
+| Quinn Lindqvist | 1 | 0 | 0 | 0 | 1 | n/a |
+| Quinn Ristori | 3 | 0 | 0 | 0 | 3 | n/a |
+| Reese Northcote | 1 | 0 | 0 | 0 | 1 | n/a |
+| Sage Bramwell | 1 | 0 | 0 | 0 | 1 | n/a |
+| Sage Oakhurst | 3 | 0 | 0 | 0 | 3 | n/a |
+| Vesper Calloway | 1 | 0 | 0 | 0 | 1 | n/a |
+| Vesper Westerley | 1 | 0 | 0 | 0 | 1 | n/a |
+
+| Team | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
+|---|---|---|---|---|---|---|
+| Team APAC-1 | 9 | 0 | 0 | 0 | 9 | n/a |
+| Team APAC-2 | 8 | 0 | 0 | 0 | 8 | n/a |
+| Team EMEA-1 | 3 | 0 | 0 | 0 | 3 | n/a |
+| Team EMEA-2 | 2 | 0 | 0 | 0 | 2 | n/a |
+| Team NA-East-1 | 6 | 0 | 0 | 0 | 6 | n/a |
+| Team NA-East-2 | 2 | 0 | 0 | 0 | 2 | n/a |
+| Team NA-West-1 | 1 | 0 | 0 | 0 | 1 | n/a |
+| Team NA-West-2 | 5 | 0 | 0 | 0 | 5 | n/a |
+| Team NA-West-3 | 5 | 0 | 0 | 0 | 5 | n/a |
+
+| Committed-for quarter | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
+|---|---|---|---|---|---|---|
+| FY2027-Q1 | 25 | 0 | 0 | 0 | 25 | n/a |
+| FY2027-Q2 | 13 | 0 | 0 | 0 | 13 | n/a |
+| FY2027-Q3 | 2 | 0 | 0 | 0 | 2 | n/a |
+| FY2028-Q1 | 1 | 0 | 0 | 0 | 1 | n/a |
+
 ### Since last run (detail)
 
 No previous run recorded.
