@@ -134,6 +134,7 @@ _OPTIONAL_CONFIG = {
     "trend_snapshots": int,
     "delta_detail_max_per_rule": int,
     "low_coverage_desk_note_share": _NUMBER,
+    "staleness_escalation": {"escalate_days": int, "review_days": int},
 }
 
 
@@ -171,6 +172,10 @@ def validate_config(config):
     for key, expected in _OPTIONAL_CONFIG.items():
         if key in config and config[key] is not None:
             _check_type(key, config[key], expected)
+    esc = config.get("staleness_escalation")
+    if esc and esc["escalate_days"] >= esc["review_days"]:
+        raise ConfigError("config key 'staleness_escalation' requires "
+                          "escalate_days < review_days")
     unknown = sorted(set(config) - set(_REQUIRED_CONFIG)
                      - set(_OPTIONAL_CONFIG))
     if unknown:

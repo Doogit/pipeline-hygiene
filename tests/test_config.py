@@ -73,6 +73,20 @@ def test_non_mapping_config_is_fatal(config):
         validate_config(["not", "a", "mapping"])
 
 
+def test_staleness_escalation_validation(config):
+    validate_config(dict(config, staleness_escalation={"escalate_days": 7,
+                                                       "review_days": 21}))
+    with pytest.raises(ConfigError,
+                       match=r"missing config key "
+                             r"staleness_escalation\.review_days"):
+        validate_config(dict(config, staleness_escalation={"escalate_days": 7}))
+    with pytest.raises(ConfigError,
+                       match="requires escalate_days < review_days"):
+        validate_config(dict(config,
+                             staleness_escalation={"escalate_days": 21,
+                                                   "review_days": 21}))
+
+
 # --- display currency ---
 
 def _row(**overrides):

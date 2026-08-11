@@ -139,6 +139,31 @@ def test_brief_reports_insufficient_history(tmp_path, config):
             f"(reported, not counted as violations)") in markdown
 
 
+def test_staleness_escalation_section(tmp_path, config):
+    from src.rules import is_open, staleness_tier
+    store, cfg, _ = _seeded_store(tmp_path, config)
+    # absent config block: no section (golden test proves byte-identity)
+    base = brief.render(brief.build(store, AS_OF, AS_OF, cfg), cfg)
+    assert "Staleness escalation" not in base
+    assert "; tier " not in base
+
+    esc = dict(cfg, staleness_escalation={"escalate_days": 7,
+                                          "review_days": 21})
+    data = brief.build(store, AS_OF, AS_OF, esc)
+    markdown = brief.render(data, esc)
+    assert "### Staleness escalation" in markdown
+    # section groups match the rule engine's tiers over open rows
+    expected = {"review": 0, "escalate": 0, "flag": 0}
+    for row in data["rows"]:
+        if is_open(row):
+            tier = staleness_tier(row, esc, AS_OF)
+            if tier is not None:
+                expected[tier] += 1
+    assert sum(expected.values()) > 0
+    for tier, n in expected.items():
+        assert f"- {tier}: {n} opp(s)" in markdown
+
+
 def test_quota_owner_mismatch_warning(tmp_path, config):
     store, cfg, _ = _seeded_store(tmp_path, config)
     # matched sets: no warning

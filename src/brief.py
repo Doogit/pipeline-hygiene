@@ -22,7 +22,8 @@ from pathlib import Path
 
 from .ingest import load_config
 from .patterns import commit_ledger, ledger_rollups, owner_patterns
-from .rules import RULE_LABELS, evaluate_snapshot, is_open
+from .rules import (RULE_LABELS, evaluate_snapshot, is_open,
+                    staleness_tier)
 from .scoring import (desk_rollup, fiscal_quarter, fiscal_quarter_end,
                       group_rollups, opp_score, owner_rollups,
                       required_coverage_multiple)
@@ -799,6 +800,46 @@ def _top_exceptions(lines, data, config):
                      f"| {streak_cell} | {detail} |")
 
 
+def _staleness_tiers(lines, data, config):
+    """Escalation ladder over H1-stale opps, rendered only when the OPTIONAL
+    staleness_escalation config block is present (absent -> the brief is
+    byte-identical). Groups are most-urgent first; opps dollar-ranked like
+    every other deal list."""
+    esc = config.get("staleness_escalation")
+    if not esc:
+        return
+    lines.append("### Staleness escalation")
+    lines.append("")
+    lines.append(f"Tiers beyond the per-stage staleness threshold: flag "
+                 f"(over threshold), escalate (> threshold + "
+                 f"{esc['escalate_days']}d), review (> threshold + "
+                 f"{esc['review_days']}d).")
+    lines.append("")
+    tiers = {"review": [], "escalate": [], "flag": []}
+    for row in data["rows"]:
+        if is_open(row):
+            tier = staleness_tier(row, config, data["as_of"])
+            if tier is not None:
+                tiers[tier].append(row)
+    if not any(tiers.values()):
+        lines.append("No stale opps.")
+        lines.append("")
+        return
+    for tier, rows in tiers.items():
+        total = sum(r["amount"] or 0.0 for r in rows)
+        lines.append(f"- {tier}: {len(rows)} opp(s) "
+                     f"({_money(total, config)})")
+        rows.sort(key=lambda r: (-(r["amount"] or 0.0), r["opp_id"]))
+        for row in rows:
+            days_idle = (data["as_of"] - row["last_activity_date"]).days
+            threshold = config["staleness_days"][row["stage"]]
+            lines.append(f"  - {row['opp_id']} {row['account']} — "
+                         f"{row['owner']} ({row['stage']}, "
+                         f"{_money(row['amount'], config)}): idle "
+                         f"{days_idle}d (threshold {threshold}d)")
+    lines.append("")
+
+
 def _coverage_note(lines, data):
     """The coverage definition and basis, printed adjacent to every table that
     carries a Coverage column (the persona pass found the note 67 lines from
@@ -1065,6 +1106,7 @@ def render(data, config):
     lines.append("")
     _top_exceptions(lines, data, config)
     lines.append("")
+    _staleness_tiers(lines, data, config)
     _owner_table(lines, data, config)
     lines.append("")
     _team_region_tables(lines, data, config)
