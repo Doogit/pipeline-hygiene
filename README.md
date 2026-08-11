@@ -17,7 +17,7 @@ CRM-vendor deal-risk AI.
 ```
 src/            ingest.py, snapshots.py, rules.py, scoring.py, brief.py
 src/seed/       org simulator: __main__.py, org.py, pathologies.py, series.py
-app/            dashboard.py (Task 6 placeholder)
+app/            dashboard.py (read-only Streamlit dashboard)
 data/           generated CSVs, seed_manifest.json, delta_manifest.json, pipeline.db
 tests/          pytest + hypothesis; loads tests/config_test.yaml ONLY
 out/            generated desk briefs (Task 5)
@@ -32,11 +32,9 @@ python -m src.seed --series 4 --as-of 2026-08-10        # weekly snapshots T0..T
 python -m src.ingest data/opps_2026-08-10.csv           # validate + load into data/pipeline.db
 python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json
                                                         # write out/desk_brief_2026-08-10.md
+streamlit run app/dashboard.py                          # read-only dashboard
 pytest -q                                               # full test suite
 ```
-
-The read-only Streamlit dashboard is scaffolded for Task 6, but is not
-implemented in this branch.
 
 ## Clock determinism
 
@@ -96,6 +94,11 @@ never by running the rules engine, so the comparison is non-circular.
 - The golden brief (`tests/golden/desk_brief_golden.md`) is compared exactly;
   `.gitattributes` disables CRLF conversion for it. To regenerate: delete it
   and run the test once (it recreates the file and fails asking for review).
+- Dashboard: `as_of` defaults to the selected snapshot's date (no
+  `date.today()` outside CLI defaults); an uploaded CSV runs the same ingest
+  validation but is evaluated in memory and never written to the store; the
+  download-brief button renders from the displayed data and does not record a
+  run; quotas auto-merge from `data/seed_manifest.json` when present.
 - In series evolution, fields of unscripted rows are shifted week-over-week
   (activity/next-step dates +7) so their expected violation sets are invariant
   by construction; only scripted deltas change expectations, including

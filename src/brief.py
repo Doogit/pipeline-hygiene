@@ -94,15 +94,23 @@ def since_last_run(prev_summary, rows, results, desk):
 
 
 def build(store, snapshot_date, as_of, config):
-    """Compute all brief data for one snapshot. No side effects."""
-    rows = store.rows_with_history(snapshot_date)
+    """Compute all brief data for one stored snapshot. No side effects."""
+    prev = store.last_run()
+    return build_from_rows(
+        store.rows_with_history(snapshot_date), snapshot_date, as_of, config,
+        validation=store.validation_report_dict(snapshot_date),
+        prev_summary=prev["summary"] if prev else None)
+
+
+def build_from_rows(rows, snapshot_date, as_of, config,
+                    validation=None, prev_summary=None):
+    """Compute all brief data from in-memory rows (e.g. a validated upload)."""
     results = evaluate_snapshot(rows, config, as_of)
     desk = desk_rollup(rows, results, config)
     insufficient = {"H3": 0, "H6": 0}
     for result in results.values():
         for item in result.insufficient:
             insufficient[item.rule_id] += 1
-    prev = store.last_run()
     return {
         "snapshot_date": snapshot_date,
         "as_of": as_of,
@@ -110,10 +118,9 @@ def build(store, snapshot_date, as_of, config):
         "results": results,
         "desk": desk,
         "owners": owner_rollups(rows, results, config),
-        "validation": store.validation_report_dict(snapshot_date),
+        "validation": validation,
         "insufficient": insufficient,
-        "since_last_run": since_last_run(
-            prev["summary"] if prev else None, rows, results, desk),
+        "since_last_run": since_last_run(prev_summary, rows, results, desk),
         "summary": run_summary(snapshot_date, as_of, desk, results),
     }
 
