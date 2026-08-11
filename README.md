@@ -184,7 +184,41 @@ never by running the rules engine, so the comparison is non-circular.
   coaching evidence favors private weekly digests; published rankings
   raise attrition.
 
+- Dashboard tabs mirror the brief structure (Forecast call landing,
+  Slippage, Trajectory, Owners, Appendix) rather than inventing a second
+  information architecture; each tab is designed to fit one screen. Charts
+  are Streamlit built-ins + bundled Altair only, with explicit pixel sizes
+  and right-side legends: container-sized charts collapse when rendered
+  inside an initially hidden tab, and `alt.Legend(orient="bottom")`
+  collapses the plot area under Streamlit's Vega theme (both verified
+  empirically). Severity palette is Okabe-Ito (colorblind-safe) everywhere;
+  colored text chips (:red[] etc.) instead of emoji.
+- Task 12 disclosure: `tests/test_dashboard.py` (added during PR #2 review;
+  not one of the original 50) asserted the pre-redesign layout literally
+  (exactly 5 metrics, exactly 2 dataframes), which cannot coexist with the
+  mandated tabbed redesign. It was rewritten to assert the same semantics
+  (store loads, owner filter narrows the exceptions table, zero
+  exceptions) plus per-tab element presence and graceful single-snapshot
+  degradation. No other pre-existing test was modified beyond goldens and
+  additive config keys.
+- Dashboard screenshots in `docs/screenshots/` were captured with the
+  locally installed Playwright driving the headless app on 127.0.0.1 —
+  a verification tool only, not a project dependency.
+
 ## Handoff
 
-Next session: start by reading `README.md`, `data/seed_manifest.json`, and
-`data/delta_manifest.json`.
+Next session candidates (recorded, deliberately NOT built this session):
+
+- Aging thresholds derived from the org's own per-stage medians (1.5-2x
+  median), replacing static `aging_norm_days`.
+- Org-specific backtesting: a flagged-vs-outcome table from the org's own
+  stored history — turns vendor benchmark stats into auditable org
+  evidence.
+- Dashboard explainability panel: rule + threshold + triggering snapshot
+  values per flag (the anti-black-box wedge).
+- Slack/email push delivery of the brief and digests (top 3-5 cap, weekly,
+  digest not firehose — alert fatigue kills adoption).
+- Cross-CRM connector via `stage_map` (original spec handoff option).
+
+Start the next session by reading `README.md`, `data/seed_manifest.json`,
+and `data/delta_manifest.json`.
