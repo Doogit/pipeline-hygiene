@@ -136,6 +136,25 @@ def test_brief_reports_insufficient_history(tmp_path, config):
             f"(reported, not counted as violations)") in markdown
 
 
+def test_quota_owner_mismatch_warning(tmp_path, config):
+    store, cfg, _ = _seeded_store(tmp_path, config)
+    # matched sets: no warning
+    data = brief.build(store, AS_OF, AS_OF, cfg)
+    assert data["owner_mismatch"] is None
+    assert "Quota/owner mismatch" not in brief.render(data, cfg)
+    # a typo'd quota owner and a snapshot owner with no quota both surface
+    bad = dict(cfg)
+    quotas = dict(cfg["quotas"])
+    dropped = sorted(quotas)[0]
+    del quotas[dropped]
+    quotas["Nonexistent Seller"] = 500000
+    bad["quotas"] = quotas
+    markdown = brief.render(brief.build(store, AS_OF, AS_OF, bad), bad)
+    assert ("- Warning: Quota/owner mismatch — 1 quota owner(s) not in this "
+            "snapshot: Nonexistent Seller; 1 snapshot owner(s) without a "
+            "quota: " + dropped) in markdown
+
+
 def test_brief_surfaces_validation_rejects(tmp_path, config):
     good = {
         "opp_id": "OPP-A", "account": "Acme Synthetic", "opp_name": "Deal A",

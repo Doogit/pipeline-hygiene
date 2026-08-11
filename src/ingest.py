@@ -314,6 +314,66 @@ def snapshot_date_from_filename(csv_path):
     return date.fromisoformat(m.group(1)) if m else None
 
 
+def init_doctor(csv_path, out=None):
+    """python -m src.ingest --init your.csv: pre-ingest column/stage report.
+
+    Reports required columns present/missing, extra columns (ignored), the
+    distinct stage labels with row counts, and a ready-to-paste stage_map
+    YAML block (case-insensitive exact matches to canonical stages
+    pre-filled, everything else FIXME). Deliberately nothing else — a real
+    ingest already reports currency/date problems with row-level detail.
+    Returns nonzero only when required columns are missing."""
+    out = out if out is not None else sys.stdout
+    csv_path = Path(csv_path)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        header = reader.fieldnames or []
+        stage_counts = {}
+        for raw in reader:
+            label = (raw.get("stage") or "").strip()
+            stage_counts[label] = stage_counts.get(label, 0) + 1
+
+    missing = [c for c in REQUIRED_COLUMNS if c not in header]
+    present = [c for c in REQUIRED_COLUMNS if c in header]
+    optional = [c for c in OPTIONAL_COLUMNS if c in header]
+    extra = [c for c in header
+             if c not in REQUIRED_COLUMNS and c not in OPTIONAL_COLUMNS]
+
+    print(f"init doctor: {csv_path.name}", file=out)
+    print(f"- Required columns: {len(present)}/{len(REQUIRED_COLUMNS)} "
+          f"present", file=out)
+    if missing:
+        print(f"- MISSING required columns: {', '.join(missing)}", file=out)
+    if optional:
+        print(f"- Optional history columns present: {', '.join(optional)}",
+              file=out)
+    if extra:
+        print(f"- Extra columns (ignored at ingest): {', '.join(extra)}",
+              file=out)
+
+    if "stage" in header:
+        print(f"- Stage labels ({sum(stage_counts.values())} rows):",
+              file=out)
+        ranked = sorted(stage_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        for label, n in ranked:
+            print(f"    {label or '(empty)'}: {n}", file=out)
+        by_fold = {s.casefold(): s for s in sorted(CANONICAL_STAGES)}
+        print("- Ready-to-paste stage_map (add under stage_map: in "
+              "config.yaml, edit the FIXME lines, then run: "
+              "python -m src.ingest your.csv --stage-map your_map):",
+              file=out)
+        print("    your_map:", file=out)
+        options = ", ".join(sorted(CANONICAL_STAGES))
+        for label in sorted(stage_counts):
+            match = by_fold.get(label.casefold())
+            if match is not None:
+                print(f'      "{label}": {match}', file=out)
+            else:
+                print(f'      "{label}": FIXME   # one of: {options}',
+                      file=out)
+    return 1 if missing else 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m src.ingest",
                                 description="Validate and load a snapshot CSV")
@@ -323,7 +383,15 @@ def main(argv=None):
     p.add_argument("--stage-map", default="default")
     p.add_argument("--snapshot-date", type=date.fromisoformat, default=None,
                    help="defaults to the YYYY-MM-DD in the filename")
+    p.add_argument("--init", action="store_true",
+                   help="doctor mode: report columns and stage labels and "
+                        "emit a ready-to-paste stage_map block; ingests "
+                        "nothing (nonzero exit only on missing required "
+                        "columns)")
     args = p.parse_args(argv)
+
+    if args.init:
+        return init_doctor(args.csv_path)
 
     snapshot_date = args.snapshot_date or snapshot_date_from_filename(args.csv_path)
     if snapshot_date is None:

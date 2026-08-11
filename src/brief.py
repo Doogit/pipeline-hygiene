@@ -156,6 +156,37 @@ def _money(amount, config=None):
             else f"{currency_symbol(config)}{amount:,.0f}")
 
 
+def quota_owner_mismatch(quota_owners, snapshot_owners):
+    """Symmetric difference between configured quota owners and the owners
+    present in the evaluated snapshot. Returns None when no quotas are
+    configured or the sets match — the warning only fires on a real
+    mismatch (typo'd names, departed sellers, stale quota files)."""
+    quota_owners, snapshot_owners = set(quota_owners), set(snapshot_owners)
+    if not quota_owners:
+        return None
+    quota_only = sorted(quota_owners - snapshot_owners)
+    snapshot_only = sorted(snapshot_owners - quota_owners)
+    if not quota_only and not snapshot_only:
+        return None
+    return {"quota_only": quota_only, "snapshot_only": snapshot_only}
+
+
+def mismatch_summary(mismatch):
+    """One warning sentence shared by the brief Validation section and the
+    dashboard."""
+    parts = []
+    if mismatch["quota_only"]:
+        parts.append(f"{len(mismatch['quota_only'])} quota owner(s) not in "
+                     f"this snapshot: {', '.join(mismatch['quota_only'])}")
+    if mismatch["snapshot_only"]:
+        parts.append(f"{len(mismatch['snapshot_only'])} snapshot owner(s) "
+                     f"without a quota: {', '.join(mismatch['snapshot_only'])}")
+    return ("Quota/owner mismatch — " + "; ".join(parts) + ". Check for "
+            "renamed or typo'd owners: an absent quota owner still adds "
+            "quota to required pipeline; an unmatched snapshot owner shows "
+            "no coverage.")
+
+
 def merge_quota_payload(config, payload):
     """Return config with quotas and optional owner metadata merged in.
 
@@ -259,6 +290,12 @@ def build(store, snapshot_date, as_of, config, owner_filter=None,
           filter_label=None):
     """Compute all brief data for one stored snapshot. No side effects."""
     prev = store.last_run_before_snapshot(snapshot_date)
+    # Quota/owner mismatch is a desk-wide data-quality fact; a filtered brief
+    # would list every unselected quota owner as "missing", so it skips it.
+    mismatch = None
+    if owner_filter is None:
+        mismatch = quota_owner_mismatch(config.get("quotas") or {},
+                                        store.owners(snapshot_date))
     return build_from_rows(
         store.rows_with_history(snapshot_date), snapshot_date, as_of, config,
         validation=store.validation_report_dict(snapshot_date),
@@ -267,13 +304,15 @@ def build(store, snapshot_date, as_of, config, owner_filter=None,
         prev_opens=store.run_opens(before_snapshot_date=snapshot_date),
         patterns=owner_patterns(store, as_of, config, snapshot_date),
         ledger=commit_ledger(store, as_of, config, snapshot_date),
+        owner_mismatch=mismatch,
         owner_filter=owner_filter, filter_label=filter_label)
 
 
 def build_from_rows(rows, snapshot_date, as_of, config,
                     validation=None, prev_summary=None, outcomes=None,
                     prev_opens=None, patterns=None, ledger=None,
-                    owner_filter=None, filter_label=None):
+                    owner_mismatch=None, owner_filter=None,
+                    filter_label=None):
     """Compute all brief data from in-memory rows (e.g. a validated upload).
     outcomes: stored closed outcomes (store.closed_outcomes) for the
     trailing-win-rate coverage basis; None outside the store. prev_opens:
@@ -351,6 +390,7 @@ def build_from_rows(rows, snapshot_date, as_of, config,
         "coverage_multiple": multiple,
         "coverage_basis": basis,
         "validation": validation,
+        "owner_mismatch": owner_mismatch,
         "insufficient": insufficient,
         "since_last_run": delta,
         "risky_commits": risky_commits(rows, results, config),
@@ -401,16 +441,20 @@ def _headline(lines, data, config):
     validation = data["validation"]
     if validation is None:
         lines.append("- No validation report stored for this snapshot.")
-        return
-    source = Path(validation["source_file"]).name
-    lines.append(f"- Source `{source}`: accepted {validation['accepted']}/"
-                 f"{validation['total_rows']} rows, rejected {validation['rejected']}")
-    reasons = list(validation["reason_counts"].items())[:5]
-    if reasons:
-        lines.append("- Top rejection reasons: "
-                     + ", ".join(f"{reason} ({n})" for reason, n in reasons))
-    for warning in validation["warnings"]:
-        lines.append(f"- Warning: {warning}")
+    else:
+        source = Path(validation["source_file"]).name
+        lines.append(f"- Source `{source}`: accepted {validation['accepted']}/"
+                     f"{validation['total_rows']} rows, "
+                     f"rejected {validation['rejected']}")
+        reasons = list(validation["reason_counts"].items())[:5]
+        if reasons:
+            lines.append("- Top rejection reasons: "
+                         + ", ".join(f"{reason} ({n})"
+                                     for reason, n in reasons))
+        for warning in validation["warnings"]:
+            lines.append(f"- Warning: {warning}")
+    if data.get("owner_mismatch"):
+        lines.append(f"- Warning: {mismatch_summary(data['owner_mismatch'])}")
 
 
 def _risky_commits(lines, data, config):

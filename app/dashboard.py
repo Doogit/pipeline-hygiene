@@ -636,6 +636,11 @@ with tab_appendix:
             })
 
     with st.expander("Validation report"):
+        if store is not None:
+            mismatch = brief.quota_owner_mismatch(
+                config.get("quotas") or {}, store.owners(snapshot_date))
+            if mismatch:
+                st.warning(brief.mismatch_summary(mismatch))
         if validation is None:
             st.write("No validation report stored for this snapshot.")
         else:
