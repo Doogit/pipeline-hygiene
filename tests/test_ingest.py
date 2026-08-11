@@ -49,10 +49,13 @@ def test_rejects_with_reasons(tmp_path, config):
         _row(opp_id="OPP-0004", forecast_category="Pipeline"),    # bad enum case
         _row(opp_id="OPP-0005", amount="fifty grand"),            # bad amount
         _row(opp_id="OPP-0006", last_activity_date=""),           # empty required date
+        _row(opp_id="OPP-0007", amount="NaN"),                    # non-finite amount
+        _row(opp_id="OPP-0008", contact_count="-1"),              # impossible count
+        _row(opp_id="OPP-0009", close_date_changes="-1"),         # impossible history
     ])
     rows, report = validate_csv(p, config)
     assert [r["opp_id"] for r in rows] == ["OPP-0001"]
-    assert report.total_rows == 7 and report.accepted == 1 and report.rejected == 6
+    assert report.total_rows == 10 and report.accepted == 1 and report.rejected == 9
     reasons = {opp: reason for _, opp, reason in report.row_reasons}
     assert "unknown stage" in reasons["OPP-0002"]
     assert "bad date in close_date" in reasons["OPP-0003"]
@@ -60,6 +63,9 @@ def test_rejects_with_reasons(tmp_path, config):
     assert "invalid forecast_category" in reasons["OPP-0004"]
     assert "non-numeric amount" in reasons["OPP-0005"]
     assert "bad date in last_activity_date" in reasons["OPP-0006"]
+    assert "non-finite amount" in reasons["OPP-0007"]
+    assert "negative contact_count" in reasons["OPP-0008"]
+    assert "negative close_date_changes" in reasons["OPP-0009"]
 
 
 def test_missing_required_column_is_fatal(tmp_path, config):

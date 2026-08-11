@@ -7,6 +7,7 @@ silently mis-parses produces false violations and dies of distrust.
 """
 import argparse
 import csv
+import math
 import re
 import sys
 from dataclasses import dataclass, field
@@ -107,6 +108,8 @@ def _parse_row(raw, stage_map):
             row["amount"] = float(amount_raw)
         except ValueError:
             raise ValueError(f"non-numeric amount: {amount_raw!r}") from None
+        if not math.isfinite(row["amount"]):
+            raise ValueError(f"non-finite amount: {amount_raw!r}")
 
     row["currency"] = (raw.get("currency") or "").strip()
     if not row["currency"]:
@@ -128,6 +131,8 @@ def _parse_row(raw, stage_map):
         row["contact_count"] = int(contact_raw)
     except ValueError:
         raise ValueError(f"non-integer contact_count: {contact_raw!r}") from None
+    if row["contact_count"] < 0:
+        raise ValueError(f"negative contact_count: {contact_raw!r}")
 
     try:
         row["stage_entered_date"] = _parse_date(raw.get("stage_entered_date"), allow_empty=True)
@@ -141,6 +146,8 @@ def _parse_row(raw, stage_map):
             row["close_date_changes"] = int(changes_raw)
         except ValueError:
             raise ValueError(f"non-integer close_date_changes: {changes_raw!r}") from None
+        if row["close_date_changes"] < 0:
+            raise ValueError(f"negative close_date_changes: {changes_raw!r}")
     return row
 
 

@@ -1,9 +1,8 @@
 # pipeline-hygiene
 
-A read-only sales pipeline inspection agent. Ingests opportunity CSV snapshots
-into a SQLite snapshot store, runs deterministic hygiene rules (H1–H10), scores
-every opportunity and owner, and produces an exceptions report, a dated desk
-brief, and a read-only Streamlit dashboard.
+A read-only sales pipeline inspection agent. This branch ingests opportunity
+CSV snapshots into a SQLite snapshot store, runs deterministic hygiene rules
+(H1-H10), and scores every opportunity, owner, and desk.
 
 Operating principle: **agents inspect, people sell.** The agent never writes to
 source data and never contacts sellers.
@@ -18,14 +17,14 @@ CRM-vendor deal-risk AI.
 ```
 src/            ingest.py, snapshots.py, rules.py, scoring.py, brief.py
 src/seed/       org simulator: __main__.py, org.py, pathologies.py, series.py
-app/            dashboard.py (Streamlit, read-only)
+app/            dashboard.py (Task 6 placeholder)
 data/           generated CSVs, seed_manifest.json, delta_manifest.json, pipeline.db
 tests/          pytest + hypothesis; loads tests/config_test.yaml ONLY
-out/            generated desk briefs
+out/            generated desk briefs (Task 5)
 config.yaml     runtime thresholds, stage_map, rule weights
 ```
 
-## Usage
+## Current Usage
 
 ```
 python -m src.seed --rows 400 --as-of 2026-08-10        # single snapshot + ground-truth manifest
@@ -33,6 +32,9 @@ python -m src.seed --series 4 --as-of 2026-08-10        # weekly snapshots T0..T
 python -m src.ingest data/opps_2026-08-10.csv           # validate + load into data/pipeline.db
 pytest -q                                               # full test suite
 ```
+
+Desk brief generation and the read-only Streamlit dashboard are scaffolded for
+Tasks 5-6, but are not implemented in this branch.
 
 ## Clock determinism
 
