@@ -1,0 +1,1425 @@
+{
+  "expected": {
+    "OPP-0001": [
+      "H2"
+    ],
+    "OPP-0002": [
+      "H7"
+    ],
+    "OPP-0003": [
+      "H10",
+      "H9"
+    ],
+    "OPP-0004": [
+      "H7"
+    ],
+    "OPP-0005": [],
+    "OPP-0006": [
+      "H4"
+    ],
+    "OPP-0007": [],
+    "OPP-0008": [
+      "H6"
+    ],
+    "OPP-0009": [],
+    "OPP-0010": [],
+    "OPP-0011": [
+      "H1",
+      "H2",
+      "H4",
+      "H6"
+    ],
+    "OPP-0012": [
+      "H10",
+      "H9"
+    ],
+    "OPP-0013": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0014": [],
+    "OPP-0015": [],
+    "OPP-0016": [],
+    "OPP-0017": [
+      "H5"
+    ],
+    "OPP-0018": [
+      "H3"
+    ],
+    "OPP-0019": [
+      "H1",
+      "H4",
+      "H6"
+    ],
+    "OPP-0020": [
+      "H5"
+    ],
+    "OPP-0021": [],
+    "OPP-0022": [
+      "H6"
+    ],
+    "OPP-0023": [],
+    "OPP-0024": [],
+    "OPP-0025": [],
+    "OPP-0026": [
+      "H4",
+      "H5"
+    ],
+    "OPP-0027": [],
+    "OPP-0028": [
+      "H9"
+    ],
+    "OPP-0029": [],
+    "OPP-0030": [],
+    "OPP-0031": [
+      "H9"
+    ],
+    "OPP-0032": [],
+    "OPP-0033": [
+      "H1",
+      "H2",
+      "H4",
+      "H6"
+    ],
+    "OPP-0034": [],
+    "OPP-0035": [],
+    "OPP-0036": [],
+    "OPP-0037": [],
+    "OPP-0038": [],
+    "OPP-0039": [
+      "H3"
+    ],
+    "OPP-0040": [],
+    "OPP-0041": [],
+    "OPP-0042": [
+      "H3"
+    ],
+    "OPP-0043": [
+      "H4",
+      "H5"
+    ],
+    "OPP-0044": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0045": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0046": [
+      "H5"
+    ],
+    "OPP-0047": [
+      "H10",
+      "H9"
+    ],
+    "OPP-0048": [],
+    "OPP-0049": [
+      "H6"
+    ],
+    "OPP-0050": [
+      "H1",
+      "H4",
+      "H6"
+    ],
+    "OPP-0051": [],
+    "OPP-0052": [],
+    "OPP-0053": [
+      "H6"
+    ],
+    "OPP-0054": [],
+    "OPP-0055": [
+      "H10"
+    ],
+    "OPP-0056": [
+      "H2"
+    ],
+    "OPP-0057": [
+      "H2"
+    ],
+    "OPP-0058": [],
+    "OPP-0059": [
+      "H10"
+    ],
+    "OPP-0060": [],
+    "OPP-0061": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0062": [],
+    "OPP-0063": [
+      "H6"
+    ],
+    "OPP-0064": [],
+    "OPP-0065": [
+      "H6"
+    ],
+    "OPP-0066": [],
+    "OPP-0067": [],
+    "OPP-0068": [],
+    "OPP-0069": [
+      "H9"
+    ],
+    "OPP-0070": [
+      "H2"
+    ],
+    "OPP-0071": [
+      "H4"
+    ],
+    "OPP-0072": [],
+    "OPP-0073": [
+      "H1",
+      "H4",
+      "H6"
+    ],
+    "OPP-0074": [],
+    "OPP-0075": [
+      "H10"
+    ],
+    "OPP-0076": [
+      "H8"
+    ],
+    "OPP-0077": [
+      "H2",
+      "H3"
+    ],
+    "OPP-0078": [
+      "H5"
+    ],
+    "OPP-0079": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0080": [
+      "H5"
+    ],
+    "OPP-0081": [],
+    "OPP-0082": [
+      "H10"
+    ],
+    "OPP-0083": [],
+    "OPP-0084": [],
+    "OPP-0085": [
+      "H1",
+      "H2",
+      "H4",
+      "H6"
+    ],
+    "OPP-0086": [
+      "H2"
+    ],
+    "OPP-0087": [],
+    "OPP-0088": [],
+    "OPP-0089": [
+      "H7"
+    ],
+    "OPP-0090": [],
+    "OPP-0091": [
+      "H3"
+    ],
+    "OPP-0092": [],
+    "OPP-0093": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0094": [],
+    "OPP-0095": [],
+    "OPP-0096": [],
+    "OPP-0097": [],
+    "OPP-0098": [],
+    "OPP-0099": [
+      "H2"
+    ],
+    "OPP-0100": [
+      "H3"
+    ],
+    "OPP-0101": [
+      "H6"
+    ],
+    "OPP-0102": [],
+    "OPP-0103": [
+      "H2"
+    ],
+    "OPP-0104": [],
+    "OPP-0105": [
+      "H1",
+      "H2",
+      "H4",
+      "H6"
+    ],
+    "OPP-0106": [
+      "H2"
+    ],
+    "OPP-0107": [],
+    "OPP-0108": [],
+    "OPP-0109": [],
+    "OPP-0110": [
+      "H1"
+    ],
+    "OPP-0111": [],
+    "OPP-0112": [
+      "H9"
+    ],
+    "OPP-0113": [
+      "H7"
+    ],
+    "OPP-0114": [],
+    "OPP-0115": [],
+    "OPP-0116": [],
+    "OPP-0117": [
+      "H1",
+      "H4",
+      "H6"
+    ],
+    "OPP-0118": [],
+    "OPP-0119": [
+      "H6"
+    ],
+    "OPP-0120": [
+      "H2"
+    ],
+    "OPP-0121": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0122": [
+      "H6"
+    ],
+    "OPP-0123": [],
+    "OPP-0124": [],
+    "OPP-0125": [],
+    "OPP-0126": [
+      "H4"
+    ],
+    "OPP-0127": [],
+    "OPP-0128": [],
+    "OPP-0129": [],
+    "OPP-0130": [],
+    "OPP-0131": [
+      "H1",
+      "H2",
+      "H4",
+      "H6"
+    ],
+    "OPP-0132": [],
+    "OPP-0133": [
+      "H1",
+      "H4",
+      "H6"
+    ],
+    "OPP-0134": [
+      "H4",
+      "H5"
+    ],
+    "OPP-0135": [
+      "H8"
+    ],
+    "OPP-0136": [],
+    "OPP-0137": [
+      "H5"
+    ],
+    "OPP-0138": [
+      "H5"
+    ],
+    "OPP-0139": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0140": [
+      "H2"
+    ],
+    "OPP-0141": [
+      "H10"
+    ],
+    "OPP-0142": [
+      "H10"
+    ],
+    "OPP-0143": [],
+    "OPP-0144": [
+      "H2"
+    ],
+    "OPP-0145": [],
+    "OPP-0146": [],
+    "OPP-0147": [
+      "H9"
+    ],
+    "OPP-0148": [],
+    "OPP-0149": [],
+    "OPP-0150": [],
+    "OPP-0151": [
+      "H3"
+    ],
+    "OPP-0152": [],
+    "OPP-0153": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0154": [],
+    "OPP-0155": [],
+    "OPP-0156": [],
+    "OPP-0157": [],
+    "OPP-0158": [],
+    "OPP-0159": [
+      "H4",
+      "H5"
+    ],
+    "OPP-0160": [
+      "H4",
+      "H5"
+    ],
+    "OPP-0161": [
+      "H8"
+    ],
+    "OPP-0162": [
+      "H2",
+      "H3"
+    ],
+    "OPP-0163": [
+      "H5"
+    ],
+    "OPP-0164": [
+      "H1"
+    ],
+    "OPP-0165": [
+      "H2"
+    ],
+    "OPP-0166": [],
+    "OPP-0167": [],
+    "OPP-0168": [],
+    "OPP-0169": [],
+    "OPP-0170": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0171": [
+      "H6"
+    ],
+    "OPP-0172": [],
+    "OPP-0173": [],
+    "OPP-0174": [],
+    "OPP-0175": [],
+    "OPP-0176": [
+      "H9"
+    ],
+    "OPP-0177": [],
+    "OPP-0178": [],
+    "OPP-0179": [
+      "H9"
+    ],
+    "OPP-0180": [
+      "H4"
+    ],
+    "OPP-0181": [],
+    "OPP-0182": [
+      "H7"
+    ],
+    "OPP-0183": [
+      "H9"
+    ],
+    "OPP-0184": [],
+    "OPP-0185": [
+      "H6"
+    ],
+    "OPP-0186": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0187": [],
+    "OPP-0188": [],
+    "OPP-0189": [
+      "H6"
+    ],
+    "OPP-0190": [],
+    "OPP-0191": [
+      "H1",
+      "H2",
+      "H4",
+      "H6"
+    ],
+    "OPP-0192": [
+      "H10"
+    ],
+    "OPP-0193": [
+      "H2"
+    ],
+    "OPP-0194": [
+      "H2"
+    ],
+    "OPP-0195": [
+      "H10",
+      "H9"
+    ],
+    "OPP-0196": [],
+    "OPP-0197": [
+      "H3"
+    ],
+    "OPP-0198": [
+      "H9"
+    ],
+    "OPP-0199": [
+      "H1",
+      "H2",
+      "H4",
+      "H6"
+    ],
+    "OPP-0200": [
+      "H2"
+    ],
+    "OPP-0201": [
+      "H10"
+    ],
+    "OPP-0202": [
+      "H10"
+    ],
+    "OPP-0203": [
+      "H9"
+    ],
+    "OPP-0204": [],
+    "OPP-0205": [
+      "H2"
+    ],
+    "OPP-0206": [],
+    "OPP-0207": [],
+    "OPP-0208": [
+      "H9"
+    ],
+    "OPP-0209": [],
+    "OPP-0210": [
+      "H9"
+    ],
+    "OPP-0211": [
+      "H2",
+      "H3"
+    ],
+    "OPP-0212": [],
+    "OPP-0213": [],
+    "OPP-0214": [
+      "H6"
+    ],
+    "OPP-0215": [
+      "H7"
+    ],
+    "OPP-0216": [],
+    "OPP-0217": [],
+    "OPP-0218": [
+      "H3"
+    ],
+    "OPP-0219": [
+      "H5"
+    ],
+    "OPP-0220": [
+      "H4",
+      "H5"
+    ],
+    "OPP-0221": [],
+    "OPP-0222": [
+      "H2"
+    ],
+    "OPP-0223": [
+      "H5"
+    ],
+    "OPP-0224": [],
+    "OPP-0225": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0226": [
+      "H5"
+    ],
+    "OPP-0227": [
+      "H9"
+    ],
+    "OPP-0228": [
+      "H7"
+    ],
+    "OPP-0229": [],
+    "OPP-0230": [
+      "H1"
+    ],
+    "OPP-0231": [],
+    "OPP-0232": [
+      "H6"
+    ],
+    "OPP-0233": [
+      "H9"
+    ],
+    "OPP-0234": [],
+    "OPP-0235": [
+      "H7"
+    ],
+    "OPP-0236": [],
+    "OPP-0237": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0238": [],
+    "OPP-0239": [
+      "H10"
+    ],
+    "OPP-0240": [],
+    "OPP-0241": [],
+    "OPP-0242": [],
+    "OPP-0243": [
+      "H10"
+    ],
+    "OPP-0244": [
+      "H6"
+    ],
+    "OPP-0245": [
+      "H9"
+    ],
+    "OPP-0246": [
+      "H4"
+    ],
+    "OPP-0247": [],
+    "OPP-0248": [
+      "H8"
+    ],
+    "OPP-0249": [],
+    "OPP-0250": [
+      "H9"
+    ],
+    "OPP-0251": [
+      "H2"
+    ],
+    "OPP-0252": [
+      "H8"
+    ],
+    "OPP-0253": [
+      "H1",
+      "H4",
+      "H6"
+    ],
+    "OPP-0254": [
+      "H4",
+      "H5"
+    ],
+    "OPP-0255": [],
+    "OPP-0256": [],
+    "OPP-0257": [
+      "H2",
+      "H3"
+    ],
+    "OPP-0258": [
+      "H3"
+    ],
+    "OPP-0259": [],
+    "OPP-0260": [
+      "H5"
+    ],
+    "OPP-0261": [
+      "H10",
+      "H9"
+    ],
+    "OPP-0262": [
+      "H10",
+      "H9"
+    ],
+    "OPP-0263": [],
+    "OPP-0264": [],
+    "OPP-0265": [
+      "H1"
+    ],
+    "OPP-0266": [
+      "H3"
+    ],
+    "OPP-0267": [],
+    "OPP-0268": [],
+    "OPP-0269": [],
+    "OPP-0270": [],
+    "OPP-0271": [
+      "H9"
+    ],
+    "OPP-0272": [],
+    "OPP-0273": [
+      "H1"
+    ],
+    "OPP-0274": [],
+    "OPP-0275": [
+      "H8"
+    ],
+    "OPP-0276": [
+      "H8"
+    ],
+    "OPP-0277": [],
+    "OPP-0278": [
+      "H2",
+      "H3"
+    ],
+    "OPP-0279": [],
+    "OPP-0280": [
+      "H2"
+    ],
+    "OPP-0281": [],
+    "OPP-0282": [
+      "H5"
+    ],
+    "OPP-0283": [],
+    "OPP-0284": [
+      "H2"
+    ],
+    "OPP-0285": [],
+    "OPP-0286": [],
+    "OPP-0287": [
+      "H7"
+    ],
+    "OPP-0288": [
+      "H6"
+    ],
+    "OPP-0289": [],
+    "OPP-0290": [],
+    "OPP-0291": [],
+    "OPP-0292": [],
+    "OPP-0293": [],
+    "OPP-0294": [
+      "H8"
+    ],
+    "OPP-0295": [
+      "H10"
+    ],
+    "OPP-0296": [
+      "H9"
+    ],
+    "OPP-0297": [],
+    "OPP-0298": [
+      "H8"
+    ],
+    "OPP-0299": [],
+    "OPP-0300": [
+      "H1",
+      "H4",
+      "H6"
+    ],
+    "OPP-0301": [
+      "H1"
+    ],
+    "OPP-0302": [
+      "H10",
+      "H9"
+    ],
+    "OPP-0303": [],
+    "OPP-0304": [
+      "H8"
+    ],
+    "OPP-0305": [],
+    "OPP-0306": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0307": [],
+    "OPP-0308": [],
+    "OPP-0309": [],
+    "OPP-0310": [],
+    "OPP-0311": [
+      "H1"
+    ],
+    "OPP-0312": [],
+    "OPP-0313": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0314": [],
+    "OPP-0315": [],
+    "OPP-0316": [
+      "H8"
+    ],
+    "OPP-0317": [
+      "H4",
+      "H5"
+    ],
+    "OPP-0318": [
+      "H4",
+      "H5"
+    ],
+    "OPP-0319": [
+      "H1"
+    ],
+    "OPP-0320": [
+      "H5"
+    ],
+    "OPP-0321": [],
+    "OPP-0322": [
+      "H10"
+    ],
+    "OPP-0323": [
+      "H6"
+    ],
+    "OPP-0324": [
+      "H6"
+    ],
+    "OPP-0325": [
+      "H1"
+    ],
+    "OPP-0326": [
+      "H2"
+    ],
+    "OPP-0327": [],
+    "OPP-0328": [],
+    "OPP-0329": [],
+    "OPP-0330": [
+      "H6"
+    ],
+    "OPP-0331": [],
+    "OPP-0332": [],
+    "OPP-0333": [
+      "H4"
+    ],
+    "OPP-0334": [
+      "H6"
+    ],
+    "OPP-0335": [
+      "H7"
+    ],
+    "OPP-0336": [],
+    "OPP-0337": [
+      "H9"
+    ],
+    "OPP-0338": [
+      "H2",
+      "H3"
+    ],
+    "OPP-0339": [
+      "H2"
+    ],
+    "OPP-0340": [
+      "H5"
+    ],
+    "OPP-0341": [],
+    "OPP-0342": [
+      "H5"
+    ],
+    "OPP-0343": [
+      "H5"
+    ],
+    "OPP-0344": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0345": [],
+    "OPP-0346": [
+      "H4",
+      "H5"
+    ],
+    "OPP-0347": [],
+    "OPP-0348": [],
+    "OPP-0349": [],
+    "OPP-0350": [
+      "H1"
+    ],
+    "OPP-0351": [],
+    "OPP-0352": [
+      "H7"
+    ],
+    "OPP-0353": [
+      "H9"
+    ],
+    "OPP-0354": [],
+    "OPP-0355": [
+      "H9"
+    ],
+    "OPP-0356": [],
+    "OPP-0357": [
+      "H1",
+      "H4",
+      "H6"
+    ],
+    "OPP-0358": [],
+    "OPP-0359": [
+      "H9"
+    ],
+    "OPP-0360": [
+      "H1",
+      "H4",
+      "H6"
+    ],
+    "OPP-0361": [],
+    "OPP-0362": [],
+    "OPP-0363": [
+      "H9"
+    ],
+    "OPP-0364": [],
+    "OPP-0365": [],
+    "OPP-0366": [
+      "H1",
+      "H4",
+      "H6"
+    ],
+    "OPP-0367": [],
+    "OPP-0368": [
+      "H7"
+    ],
+    "OPP-0369": [
+      "H6"
+    ],
+    "OPP-0370": [
+      "H9"
+    ],
+    "OPP-0371": [],
+    "OPP-0372": [],
+    "OPP-0373": [
+      "H1",
+      "H4",
+      "H6"
+    ],
+    "OPP-0374": [
+      "H2",
+      "H3"
+    ],
+    "OPP-0375": [],
+    "OPP-0376": [],
+    "OPP-0377": [
+      "H2"
+    ],
+    "OPP-0378": [],
+    "OPP-0379": [],
+    "OPP-0380": [
+      "H5"
+    ],
+    "OPP-0381": [
+      "H10"
+    ],
+    "OPP-0382": [
+      "H10"
+    ],
+    "OPP-0383": [
+      "H6"
+    ],
+    "OPP-0384": [],
+    "OPP-0385": [
+      "H1",
+      "H4",
+      "H6"
+    ],
+    "OPP-0386": [
+      "H5"
+    ],
+    "OPP-0387": [],
+    "OPP-0388": [],
+    "OPP-0389": [],
+    "OPP-0390": [
+      "H6"
+    ],
+    "OPP-0391": [
+      "H5"
+    ],
+    "OPP-0392": [],
+    "OPP-0393": [
+      "H1",
+      "H4"
+    ],
+    "OPP-0394": [
+      "H6"
+    ],
+    "OPP-0395": [
+      "H8"
+    ],
+    "OPP-0396": [],
+    "OPP-0397": [
+      "H9"
+    ],
+    "OPP-0398": [],
+    "OPP-0399": [
+      "H9"
+    ],
+    "OPP-0400": []
+  },
+  "generated_as_of": "2026-08-10",
+  "owners": {
+    "Avery Calloway": {
+      "persona": "clean_operator",
+      "quota": 960000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-2"
+    },
+    "Avery Ristori": {
+      "persona": "happy_ears",
+      "quota": 350000.0,
+      "region": "APAC",
+      "segment": "mid_market",
+      "team": "Team APAC-1"
+    },
+    "Blair Denholm": {
+      "persona": "clean_operator",
+      "quota": 1070000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-1"
+    },
+    "Blair Hollowell": {
+      "persona": "sandbagger",
+      "quota": 320000.0,
+      "region": "APAC",
+      "segment": "mid_market",
+      "team": "Team APAC-2"
+    },
+    "Blair Oakhurst": {
+      "persona": "ghost",
+      "quota": 1180000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-2"
+    },
+    "Casey Grantley": {
+      "persona": "happy_ears",
+      "quota": 1500000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-1"
+    },
+    "Corin Farrow": {
+      "persona": "happy_ears",
+      "quota": 340000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-2"
+    },
+    "Corin Kirkwood": {
+      "persona": "ghost",
+      "quota": 520000.0,
+      "region": "APAC",
+      "segment": "mid_market",
+      "team": "Team APAC-1"
+    },
+    "Darby Ashford": {
+      "persona": "sandbagger",
+      "quota": 470000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-3"
+    },
+    "Darby Bramwell": {
+      "persona": "happy_ears",
+      "quota": 700000.0,
+      "region": "APAC",
+      "segment": "mid_market",
+      "team": "Team APAC-2"
+    },
+    "Darby Kirkwood": {
+      "persona": "sandbagger",
+      "quota": 480000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-2"
+    },
+    "Ellis Lindqvist": {
+      "persona": "clean_operator",
+      "quota": 1420000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-1"
+    },
+    "Finley Underhill": {
+      "persona": "sandbagger",
+      "quota": 1150000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-2"
+    },
+    "Frankie Denholm": {
+      "persona": "happy_ears",
+      "quota": 670000.0,
+      "region": "APAC",
+      "segment": "mid_market",
+      "team": "Team APAC-2"
+    },
+    "Greer Ristori": {
+      "persona": "ghost",
+      "quota": 640000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-1"
+    },
+    "Greer Westerley": {
+      "persona": "clean_operator",
+      "quota": 480000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-2"
+    },
+    "Harper Bramwell": {
+      "persona": "clean_operator",
+      "quota": 680000.0,
+      "region": "APAC",
+      "segment": "mid_market",
+      "team": "Team APAC-1"
+    },
+    "Harper Grantley": {
+      "persona": "clean_operator",
+      "quota": 460000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-1"
+    },
+    "Harper Ivesdale": {
+      "persona": "sandbagger",
+      "quota": 1240000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-1"
+    },
+    "Hollis Marchetti": {
+      "persona": "sandbagger",
+      "quota": 1050000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-2"
+    },
+    "Hollis Southgate": {
+      "persona": "clean_operator",
+      "quota": 470000.0,
+      "region": "APAC",
+      "segment": "mid_market",
+      "team": "Team APAC-1"
+    },
+    "Hollis Underhill": {
+      "persona": "happy_ears",
+      "quota": 1370000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-1"
+    },
+    "Jordan Vantrease": {
+      "persona": "clean_operator",
+      "quota": 1300000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-2"
+    },
+    "Kendall Grantley": {
+      "persona": "happy_ears",
+      "quota": 370000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-2"
+    },
+    "Kendall Lindqvist": {
+      "persona": "ghost",
+      "quota": 1440000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-2"
+    },
+    "Logan Denholm": {
+      "persona": "sandbagger",
+      "quota": 1080000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-2"
+    },
+    "Logan Ivesdale": {
+      "persona": "happy_ears",
+      "quota": 1040000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-1"
+    },
+    "Marlow Bramwell": {
+      "persona": "happy_ears",
+      "quota": 460000.0,
+      "region": "APAC",
+      "segment": "mid_market",
+      "team": "Team APAC-2"
+    },
+    "Morgan Calloway": {
+      "persona": "ghost",
+      "quota": 1170000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-1"
+    },
+    "Noor Underhill": {
+      "persona": "clean_operator",
+      "quota": 1230000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-1"
+    },
+    "Parker Thistlewood": {
+      "persona": "clean_operator",
+      "quota": 380000.0,
+      "region": "APAC",
+      "segment": "mid_market",
+      "team": "Team APAC-2"
+    },
+    "Quinn Lindqvist": {
+      "persona": "clean_operator",
+      "quota": 690000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-1"
+    },
+    "Quinn Oakhurst": {
+      "persona": "ghost",
+      "quota": 1480000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-1"
+    },
+    "Quinn Ristori": {
+      "persona": "happy_ears",
+      "quota": 470000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-3"
+    },
+    "Reese Denholm": {
+      "persona": "clean_operator",
+      "quota": 1490000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-1"
+    },
+    "Reese Northcote": {
+      "persona": "clean_operator",
+      "quota": 1060000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-2"
+    },
+    "Riley Grantley": {
+      "persona": "sandbagger",
+      "quota": 570000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-2"
+    },
+    "Riley Hollowell": {
+      "persona": "clean_operator",
+      "quota": 940000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-1"
+    },
+    "Riley Ristori": {
+      "persona": "ghost",
+      "quota": 490000.0,
+      "region": "APAC",
+      "segment": "mid_market",
+      "team": "Team APAC-2"
+    },
+    "Riley Southgate": {
+      "persona": "clean_operator",
+      "quota": 440000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-2"
+    },
+    "Rowan Hollowell": {
+      "persona": "clean_operator",
+      "quota": 400000.0,
+      "region": "APAC",
+      "segment": "mid_market",
+      "team": "Team APAC-1"
+    },
+    "Rowan Westerley": {
+      "persona": "ghost",
+      "quota": 530000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-2"
+    },
+    "Sage Bramwell": {
+      "persona": "happy_ears",
+      "quota": 390000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-3"
+    },
+    "Sage Eastvale": {
+      "persona": "sandbagger",
+      "quota": 940000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-2"
+    },
+    "Sage Jasperson": {
+      "persona": "clean_operator",
+      "quota": 670000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-1"
+    },
+    "Sage Oakhurst": {
+      "persona": "happy_ears",
+      "quota": 390000.0,
+      "region": "APAC",
+      "segment": "mid_market",
+      "team": "Team APAC-1"
+    },
+    "Sage Vantrease": {
+      "persona": "sandbagger",
+      "quota": 640000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-3"
+    },
+    "Skyler Grantley": {
+      "persona": "clean_operator",
+      "quota": 610000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-1"
+    },
+    "Skyler Ivesdale": {
+      "persona": "ghost",
+      "quota": 1490000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-1"
+    },
+    "Tatum Ivesdale": {
+      "persona": "ghost",
+      "quota": 1380000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-2"
+    },
+    "Tatum Lindqvist": {
+      "persona": "ghost",
+      "quota": 400000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-1"
+    },
+    "Tatum Underhill": {
+      "persona": "clean_operator",
+      "quota": 1460000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-2"
+    },
+    "Vesper Calloway": {
+      "persona": "clean_operator",
+      "quota": 1130000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-2"
+    },
+    "Vesper Westerley": {
+      "persona": "clean_operator",
+      "quota": 640000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-3"
+    },
+    "Wren Ivesdale": {
+      "persona": "sandbagger",
+      "quota": 380000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-1"
+    },
+    "Wren Yardley": {
+      "persona": "clean_operator",
+      "quota": 1340000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-1"
+    },
+    "Zion Calloway": {
+      "persona": "ghost",
+      "quota": 990000.0,
+      "region": "EMEA",
+      "segment": "enterprise",
+      "team": "Team EMEA-1"
+    },
+    "Zion Northcote": {
+      "persona": "clean_operator",
+      "quota": 490000.0,
+      "region": "NA-West",
+      "segment": "mid_market",
+      "team": "Team NA-West-3"
+    },
+    "Zion Ristori": {
+      "persona": "clean_operator",
+      "quota": 1400000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-2"
+    },
+    "Zion Vantrease": {
+      "persona": "sandbagger",
+      "quota": 1330000.0,
+      "region": "NA-East",
+      "segment": "enterprise",
+      "team": "Team NA-East-2"
+    }
+  },
+  "quotas": {
+    "Avery Calloway": 960000.0,
+    "Avery Ristori": 350000.0,
+    "Blair Denholm": 1070000.0,
+    "Blair Hollowell": 320000.0,
+    "Blair Oakhurst": 1180000.0,
+    "Casey Grantley": 1500000.0,
+    "Corin Farrow": 340000.0,
+    "Corin Kirkwood": 520000.0,
+    "Darby Ashford": 470000.0,
+    "Darby Bramwell": 700000.0,
+    "Darby Kirkwood": 480000.0,
+    "Ellis Lindqvist": 1420000.0,
+    "Finley Underhill": 1150000.0,
+    "Frankie Denholm": 670000.0,
+    "Greer Ristori": 640000.0,
+    "Greer Westerley": 480000.0,
+    "Harper Bramwell": 680000.0,
+    "Harper Grantley": 460000.0,
+    "Harper Ivesdale": 1240000.0,
+    "Hollis Marchetti": 1050000.0,
+    "Hollis Southgate": 470000.0,
+    "Hollis Underhill": 1370000.0,
+    "Jordan Vantrease": 1300000.0,
+    "Kendall Grantley": 370000.0,
+    "Kendall Lindqvist": 1440000.0,
+    "Logan Denholm": 1080000.0,
+    "Logan Ivesdale": 1040000.0,
+    "Marlow Bramwell": 460000.0,
+    "Morgan Calloway": 1170000.0,
+    "Noor Underhill": 1230000.0,
+    "Parker Thistlewood": 380000.0,
+    "Quinn Lindqvist": 690000.0,
+    "Quinn Oakhurst": 1480000.0,
+    "Quinn Ristori": 470000.0,
+    "Reese Denholm": 1490000.0,
+    "Reese Northcote": 1060000.0,
+    "Riley Grantley": 570000.0,
+    "Riley Hollowell": 940000.0,
+    "Riley Ristori": 490000.0,
+    "Riley Southgate": 440000.0,
+    "Rowan Hollowell": 400000.0,
+    "Rowan Westerley": 530000.0,
+    "Sage Bramwell": 390000.0,
+    "Sage Eastvale": 940000.0,
+    "Sage Jasperson": 670000.0,
+    "Sage Oakhurst": 390000.0,
+    "Sage Vantrease": 640000.0,
+    "Skyler Grantley": 610000.0,
+    "Skyler Ivesdale": 1490000.0,
+    "Tatum Ivesdale": 1380000.0,
+    "Tatum Lindqvist": 400000.0,
+    "Tatum Underhill": 1460000.0,
+    "Vesper Calloway": 1130000.0,
+    "Vesper Westerley": 640000.0,
+    "Wren Ivesdale": 380000.0,
+    "Wren Yardley": 1340000.0,
+    "Zion Calloway": 990000.0,
+    "Zion Northcote": 490000.0,
+    "Zion Ristori": 1400000.0,
+    "Zion Vantrease": 1330000.0
+  },
+  "rows": 400,
+  "rule_counts": {
+    "H1": 46,
+    "H10": 22,
+    "H2": 37,
+    "H3": 17,
+    "H4": 52,
+    "H5": 30,
+    "H6": 43,
+    "H7": 12,
+    "H8": 12,
+    "H9": 33
+  },
+  "seed": 42
+}
