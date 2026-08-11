@@ -207,6 +207,43 @@ def _since_last_run(lines, data):
     lines.append(f"- Opps removed: {', '.join(delta['removed']) or 'none'}")
 
 
+def _slipping(lines, data, config):
+    """Dollar-weighted list of open opps with observed close-date pushes.
+
+    Push stats are history-only derivations from the snapshot store; rows
+    evaluated outside the store (in-memory uploads) carry none. Distinct-opp
+    dollar totals — same discipline as at-risk dollars."""
+    lines.append("## Slipping pipeline")
+    lines.append("")
+    open_rows = [r for r in data["rows"] if is_open(r)]
+    if not any(r.get("push_count") is not None for r in open_rows):
+        lines.append("No push history available (rows evaluated outside the "
+                     "snapshot store).")
+        return
+    slipping = [r for r in open_rows if (r.get("push_count") or 0) >= 1]
+    if not slipping:
+        lines.append("No close-date pushes observed in stored history.")
+        return
+    slipping.sort(key=lambda r: (-(r["amount"] or 0.0), r["opp_id"]))
+    total = sum(r["amount"] or 0.0 for r in slipping)
+    lines.append(f"Slipping dollars (distinct opps with >= 1 observed push): "
+                 f"{_money(total)} across {len(slipping)} opps.")
+    lines.append("")
+    lines.append("| Opp | Owner | Stage | Amount | Pushes | Cum. days later "
+                 "| Max push | Rules | Review |")
+    lines.append("|---|---|---|---|---|---|---|---|---|")
+    for row in slipping:
+        result = data["results"][row["opp_id"]]
+        badges = " ".join(v.rule_id for v in result.violations) or "-"
+        review = ("recommend disqualification review"
+                  if row["push_count"] >= config["disqualify_review_pushes"]
+                  else "-")
+        lines.append(f"| {row['opp_id']} | {row['owner']} | {row['stage']} "
+                     f"| {_money(row['amount'])} | {row['push_count']} "
+                     f"| {row['cumulative_extension_days']} "
+                     f"| {row['max_push_days']} | {badges} | {review} |")
+
+
 def _fiscal_quarters(lines, data, config):
     fy_start = config["fiscal_year_start_month"]
     lines.append(f"## Fiscal quarters (fiscal year starts month {fy_start})")
@@ -313,6 +350,8 @@ def render(data, config):
     _headline(lines, data, config)
     lines.append("")
     _since_last_run(lines, data)
+    lines.append("")
+    _slipping(lines, data, config)
     lines.append("")
     _fiscal_quarters(lines, data, config)
     lines.append("")

@@ -19,6 +19,10 @@ Snapshot 2026-08-10 (opps_2026-08-10.csv), evaluated as of 2026-08-10.
 
 No previous run recorded.
 
+## Slipping pipeline
+
+No close-date pushes observed in stored history.
+
 ## Fiscal quarters (fiscal year starts month 7)
 
 | Quarter | At-risk $ | At-risk opps | H5 opps |

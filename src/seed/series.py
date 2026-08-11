@@ -7,6 +7,11 @@ violation sets are invariant by construction as the evaluation date moves.
 
 Couplings are bookkept field-by-field, never by running the rules engine:
 - a close-date push increments close_date_changes and may introduce H3;
+- a scripted BIG push (single push >= push_alarm_days) introduces H11 (push
+  derivations are history-only, so H11 can only ever appear from week 2 on);
+  regular pushes are sized below push_alarm_days AND kept under the
+  cumulative_push_alarm_days budget per opp, so they never trip H11;
+- H11 is never clearable: push history is immutable once snapshotted;
 - clearing is restricted to uncoupled rules {H1, H4 (only where H5 is not
   expected), H7, H8, H9} — H2/H3/H6/H10 cannot be cleared by editing history
   and H5 clears would couple to stage/next-step state;
@@ -21,6 +26,7 @@ CLEARS_PER_WEEK = 6
 INTRODUCES_PER_WEEK = 5
 CLOSES_PER_WEEK = 4
 PUSHES_PER_WEEK = 5
+BIG_PUSHES_PER_WEEK = 1
 
 CLEARABLE = ("H1", "H4", "H7", "H8", "H9")
 
@@ -69,8 +75,12 @@ def _apply_clear(row, rule, d_next, org, config, rng):
         row["amount"] = sample_amount(rng, org.by_name(row["owner"]).segment)
 
 
-def evolve_week(rows, exp, d_prev, d_next, d0, org, config, rng):
-    """Mutate rows/exp from snapshot d_prev to d_next; return the delta record."""
+def evolve_week(rows, exp, d_prev, d_next, d0, org, config, rng, pushed_days):
+    """Mutate rows/exp from snapshot d_prev to d_next; return the delta record.
+
+    pushed_days: per-opp cumulative later-drift (days) scripted so far across
+    the series — the field-by-field book that keeps regular pushes under the
+    H11 thresholds and makes scripted big pushes the only H11 source."""
     delta = {"from": d_prev.isoformat(), "to": d_next.isoformat(),
              "cleared": {}, "introduced": {}, "closed": {}, "close_dates_pushed": {}}
     _maintenance(rows, exp, rng)
@@ -135,23 +145,55 @@ def evolve_week(rows, exp, d_prev, d_next, d0, org, config, rng):
         exp[opp_id] = set()
         touched.add(opp_id)
 
-    # 4) push close dates (never past d0+horizon, so no uncontrolled H10)
+    # 4) close-date pushes (never past d0+horizon, so no uncontrolled H10):
+    #    one scripted BIG push (>= push_alarm_days -> introduces H11), then
+    #    regular pushes sized below the single-push alarm and kept under the
+    #    per-opp cumulative budget so they never trip H11 (Gong: frequent
+    #    small updates are normal; serial/LARGE drift is the signal).
     cap = d0 + timedelta(days=horizon)
-    push_pool = [o for o in sorted(rows)
-                 if _is_open(rows[o]) and o not in touched
-                 and "H2" not in exp[o] and "H10" not in exp[o]
-                 and rows[o]["close_date"] <= cap - timedelta(days=28)]
-    for opp_id in rng.sample(push_pool, min(PUSHES_PER_WEEK, len(push_pool))):
+    alarm = config["push_alarm_days"]
+    cum_alarm = config["cumulative_push_alarm_days"]
+
+    def _record_push(opp_id, old, introduces_h11):
         row = rows[opp_id]
-        old = row["close_date"]
-        row["close_date"] = min(old + timedelta(days=rng.randint(7, 28)), cap)
         row["close_date_changes"] += 1
-        rec = {"old": old.isoformat(), "new": row["close_date"].isoformat(),
-               "close_date_changes": row["close_date_changes"]}
+        pushed_days[opp_id] = (pushed_days.get(opp_id, 0)
+                               + (row["close_date"] - old).days)
         if row["close_date_changes"] >= 2 and "H3" not in exp[opp_id]:
             exp[opp_id].add("H3")
             delta["introduced"].setdefault(opp_id, []).append("H3")
-        delta["close_dates_pushed"][opp_id] = rec
+        if introduces_h11 and "H11" not in exp[opp_id]:
+            exp[opp_id].add("H11")
+            delta["introduced"].setdefault(opp_id, []).append("H11")
+        delta["close_dates_pushed"][opp_id] = {
+            "old": old.isoformat(), "new": row["close_date"].isoformat(),
+            "close_date_changes": row["close_date_changes"]}
+
+    def _push_pool(exclude_h11_budget):
+        return [o for o in sorted(rows)
+                if _is_open(rows[o]) and o not in touched
+                and "H2" not in exp[o] and "H10" not in exp[o]
+                and "H11" not in exp[o]
+                and rows[o]["close_date"] <= cap - timedelta(days=28)
+                and (not exclude_h11_budget
+                     or (cum_alarm - 1) - pushed_days.get(o, 0) >= 7)]
+
+    big_pool = _push_pool(exclude_h11_budget=False)
+    for opp_id in rng.sample(big_pool, min(BIG_PUSHES_PER_WEEK, len(big_pool))):
+        row = rows[opp_id]
+        old = row["close_date"]
+        row["close_date"] = old + timedelta(days=alarm + rng.randint(0, 7))
+        _record_push(opp_id, old, introduces_h11=True)
+        touched.add(opp_id)
+
+    push_pool = _push_pool(exclude_h11_budget=True)
+    for opp_id in rng.sample(push_pool, min(PUSHES_PER_WEEK, len(push_pool))):
+        row = rows[opp_id]
+        old = row["close_date"]
+        headroom = min(alarm - 1, 28,
+                       (cum_alarm - 1) - pushed_days.get(opp_id, 0))
+        row["close_date"] = old + timedelta(days=rng.randint(7, headroom))
+        _record_push(opp_id, old, introduces_h11=False)
     return delta
 
 
@@ -170,8 +212,10 @@ def generate_series(org, n_rows, weeks, as_of, config, rng):
     snapshots = [(d0, [dict(rows[o]) for o in order])]
     expected_by_snapshot = {d0.isoformat(): {o: sorted(exp[o]) for o in order}}
     deltas = []
+    pushed_days = {}
     for d_prev, d_next in zip(dates, dates[1:]):
-        deltas.append(evolve_week(rows, exp, d_prev, d_next, d0, org, config, rng))
+        deltas.append(evolve_week(rows, exp, d_prev, d_next, d0, org, config,
+                                  rng, pushed_days))
         snapshots.append((d_next, [dict(rows[o]) for o in order]))
         expected_by_snapshot[d_next.isoformat()] = {o: sorted(exp[o]) for o in order}
 

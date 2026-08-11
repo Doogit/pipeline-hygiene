@@ -141,10 +141,46 @@ class SnapshotStore:
             (opp_id, up_to.isoformat()))
         return cur.fetchall()
 
+    def push_stats(self, snapshot_date):
+        """Per-opp close-date push derivations over history <= snapshot_date:
+        {opp_id: {push_count, cumulative_extension_days, max_push_days}}.
+
+        A push is a consecutive-pair transition where close_date moved LATER;
+        earlier moves (pull-ins) are excluded entirely. With fewer than 2
+        snapshots there are zero observed transitions, so all stats are 0 —
+        genuinely zero, not unknown (these are history-only derivations; no
+        source column ever exists for them). One query, one pass: O(rows),
+        never per-opp queries."""
+        cur = self.conn.execute(
+            "SELECT opp_id, close_date FROM opportunities "
+            "WHERE snapshot_date <= ? ORDER BY opp_id, snapshot_date",
+            (snapshot_date.isoformat(),))
+        stats, prev_opp, prev_close = {}, None, None
+        for opp_id, close in cur:
+            if opp_id != prev_opp:
+                stats[opp_id] = {"push_count": 0, "cumulative_extension_days": 0,
+                                 "max_push_days": 0}
+                prev_opp, prev_close = opp_id, close
+                continue
+            if close is not None and prev_close is not None and close > prev_close:
+                pushed = ((date.fromisoformat(close)
+                           - date.fromisoformat(prev_close)).days)
+                s = stats[opp_id]
+                s["push_count"] += 1
+                s["cumulative_extension_days"] += pushed
+                s["max_push_days"] = max(s["max_push_days"], pushed)
+            prev_close = close
+        return stats
+
     def rows_with_history(self, snapshot_date):
         """Rows for a snapshot with optional columns filled from history when
-        absent and >= 2 snapshots exist at-or-before snapshot_date."""
+        absent and >= 2 snapshots exist at-or-before snapshot_date. Push
+        derivations (push_stats) are always attached."""
         rows = self.load_rows(snapshot_date)
+        pushes = self.push_stats(snapshot_date)
+        zero = {"push_count": 0, "cumulative_extension_days": 0, "max_push_days": 0}
+        for row in rows:
+            row.update(pushes.get(row["opp_id"], zero))
         n_snapshots = len([d for d in self.snapshot_dates() if d <= snapshot_date])
         if n_snapshots < 2:
             return rows

@@ -107,6 +107,28 @@ never by running the rules engine, so the comparison is non-circular.
   by construction; only scripted deltas change expectations, including
   bookkept couplings (a close-date push increments `close_date_changes` and
   may introduce H3 — recorded in the delta manifest).
+- H11 ("lost deal control") fires on `max_push_days >= push_alarm_days` OR
+  `cumulative_extension_days >= cumulative_push_alarm_days`, always high
+  severity (weight 20). Push derivations (`push_count`,
+  `cumulative_extension_days`, `max_push_days`) are history-only — computed
+  from consecutive stored-snapshot pairs where close_date moved LATER
+  (pull-ins excluded), never from a CSV column. Evidence framing: Gong
+  (n=13,439) shows won deals update close dates MORE than lost, so frequent
+  small updates must not trip anything; only serial/large later-drift does.
+- H11 has no `insufficient_history` state: with fewer than 2 snapshots there
+  are zero observed transitions, so push stats are genuinely 0 (unlike
+  H3/H6, no source column can ever supply them) and the rule is simply
+  silent. Rows evaluated outside the store (property tests, in-memory
+  uploads) carry no push keys and are also silent. A single-seed manifest
+  therefore provably contains no H11 (asserted in tests).
+- Series mode scripts one BIG push per week (>= `push_alarm_days`, the only
+  H11 source, recorded under `introduced`); regular pushes are sized below
+  the single-push alarm and budgeted per-opp below the cumulative alarm so
+  they can never introduce H11 uncontrolled.
+- The brief's "Slipping pipeline" section lists open opps with >= 1 observed
+  push, dollar-ranked with distinct-opp totals, and marks
+  `push_count >= disqualify_review_pushes` with "recommend disqualification
+  review".
 
 ## Handoff
 
