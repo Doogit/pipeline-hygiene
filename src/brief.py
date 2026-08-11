@@ -23,8 +23,9 @@ from pathlib import Path
 from .ingest import load_config
 from .patterns import commit_ledger, ledger_rollups, owner_patterns
 from .rules import RULE_LABELS, evaluate_snapshot, is_open
-from .scoring import (desk_rollup, fiscal_quarter, group_rollups, opp_score,
-                      owner_rollups, required_coverage_multiple)
+from .scoring import (desk_rollup, fiscal_quarter, fiscal_quarter_end,
+                      group_rollups, opp_score, owner_rollups,
+                      required_coverage_multiple)
 from .snapshots import SnapshotStore
 
 _SEV_RANK = {"high": 0, "medium": 1, "low": 2}
@@ -135,6 +136,14 @@ def trajectory_data(rows, delta, config, as_of, outcomes, multiple=None,
             and fiscal_quarter(o["close_date"], fy_start) == quarter)
         remaining_quota = max(total_quota - won_this_quarter, 0.0)
         required = remaining_quota * multiple
+        # informational split: how much of the open pipeline can even land
+        # in the quarter the coverage is computed for (overdue close dates
+        # count as in-quarter — they are due, not late-quarter)
+        q_end = fiscal_quarter_end(as_of, fy_start)
+        in_quarter_open = sum(
+            r["amount"] or 0.0 for r in rows
+            if is_open(r) and r["close_date"] is not None
+            and r["close_date"] <= q_end)
         coverage = {"quarter": quarter, "total_quota": total_quota,
                     "won_this_quarter": won_this_quarter,
                     "remaining_quota": remaining_quota,
@@ -142,6 +151,8 @@ def trajectory_data(rows, delta, config, as_of, outcomes, multiple=None,
                     "required_pipeline": required,
                     "ratio": (open_pipeline / required) if required > 0
                     else None,
+                    "in_quarter_open": in_quarter_open,
+                    "later_open": open_pipeline - in_quarter_open,
                     "basis": basis}
     return {"flow": flow, "open_pipeline": open_pipeline,
             "coverage": coverage}
@@ -154,6 +165,26 @@ def currency_symbol(config):
 def _money(amount, config=None):
     return ("n/a" if amount is None
             else f"{currency_symbol(config)}{amount:,.0f}")
+
+
+def desk_score_series(store, config, up_to_snapshot, n=None):
+    """Snapshot-anchored desk score trend: the engine re-run per stored
+    snapshot with as_of = that snapshot's own date. Deterministic and
+    cache-free — unlike the runs table it has no holes for snapshots
+    without recorded runs and cannot be skewed by re-running an old brief.
+    Returns [(snapshot_date, weighted_mean_score)] over the last n stored
+    snapshots at-or-before up_to_snapshot (n from optional config
+    trend_snapshots, default 8)."""
+    if n is None:
+        n = config.get("trend_snapshots") or 8
+    dates = [d for d in store.snapshot_dates() if d <= up_to_snapshot][-n:]
+    series = []
+    for d in dates:
+        rows = store.rows_with_history(d)
+        results = evaluate_snapshot(rows, config, d)
+        series.append((d, desk_rollup(rows, results, config)
+                       .weighted_mean_score))
+    return series
 
 
 def pacing_data(waterfalls, config):
@@ -316,6 +347,10 @@ def build(store, snapshot_date, as_of, config, owner_filter=None,
     stored = [d for d in store.snapshot_dates() if d <= snapshot_date]
     waterfalls = [store.waterfall(a, b, owners=owner_filter)
                   for a, b in zip(stored, stored[1:])]
+    # The headline trend is a desk-wide series; a filtered brief drops it
+    # (same reasoning as dropping the previous run's desk score).
+    score_trend = (desk_score_series(store, config, snapshot_date)
+                   if owner_filter is None else None)
     return build_from_rows(
         store.rows_with_history(snapshot_date), snapshot_date, as_of, config,
         validation=store.validation_report_dict(snapshot_date),
@@ -325,14 +360,15 @@ def build(store, snapshot_date, as_of, config, owner_filter=None,
         patterns=owner_patterns(store, as_of, config, snapshot_date),
         ledger=commit_ledger(store, as_of, config, snapshot_date),
         owner_mismatch=mismatch, waterfalls=waterfalls,
+        score_trend=score_trend,
         owner_filter=owner_filter, filter_label=filter_label)
 
 
 def build_from_rows(rows, snapshot_date, as_of, config,
                     validation=None, prev_summary=None, outcomes=None,
                     prev_opens=None, patterns=None, ledger=None,
-                    owner_mismatch=None, waterfalls=None, owner_filter=None,
-                    filter_label=None):
+                    owner_mismatch=None, waterfalls=None, score_trend=None,
+                    owner_filter=None, filter_label=None):
     """Compute all brief data from in-memory rows (e.g. a validated upload).
     outcomes: stored closed outcomes (store.closed_outcomes) for the
     trailing-win-rate coverage basis; None outside the store. prev_opens:
@@ -413,6 +449,7 @@ def build_from_rows(rows, snapshot_date, as_of, config,
         "owner_mismatch": owner_mismatch,
         "waterfall": waterfalls[-1] if waterfalls else None,
         "pacing": pacing_data(waterfalls, config),
+        "score_trend": score_trend,
         "insufficient": insufficient,
         "since_last_run": delta,
         "risky_commits": risky_commits(rows, results, config),
@@ -438,6 +475,12 @@ def _headline(lines, data, config):
     else:
         lines.append(f"- {score_label}: {desk.weighted_mean_score:.1f} amount-weighted "
                      f"mean / {desk.median_score:.1f} median")
+        trend = [(d, s) for d, s in (data.get("score_trend") or [])
+                 if s is not None]
+        if len(trend) >= 2:
+            lines.append(f"- Desk score, last {len(trend)} snapshots: "
+                         + " ".join(f"{s:.1f}" for _, s in trend)
+                         + " (snapshot-anchored, oldest first)")
         lines.append(f"- Healthy opps (score >= "
                      f"{config['healthy_score_threshold']}): {desk.pct_healthy:.1f}% "
                      f"of {desk.n_open} open")
@@ -535,6 +578,11 @@ def _trajectory(lines, data, config):
                  f"quarter {_money(coverage['won_this_quarter'], config)}) x "
                  f"{coverage['required_multiple']:.2f}")
     lines.append(f"  - Basis: {coverage['basis']}")
+    lines.append(f"  - Of open pipeline: "
+                 f"{_money(coverage['in_quarter_open'], config)} closes in "
+                 f"{coverage['quarter']} or earlier (overdue included), "
+                 f"{_money(coverage['later_open'], config)} later "
+                 f"(informational — the ratio above is unchanged)")
 
 
 def _waterfall_table(lines, data, config):
@@ -622,14 +670,29 @@ def _since_last_run_detail(lines, data, config):
         row = rows_by_id.get(opp_id)
         return f" {row['account']} — {row['owner']}" if row else ""
 
+    # A mass delta (a threshold change, a bulk CRM edit) turns the per-opp
+    # detail into hundreds of identical lines: any rule exceeding
+    # delta_detail_max_per_rule opps collapses to one summary line.
+    max_per_rule = config.get("delta_detail_max_per_rule") or 20
     for label, key in (("New violations", "new_violations"),
                        ("Cleared violations", "cleared_violations")):
         opps = delta[key]
         total = sum(len(v) for v in opps.values())
         lines.append(f"- {label}: {total} on {len(opps)} opps")
+        rule_counts = {}
+        for rules in opps.values():
+            for rule in rules:
+                rule_counts[rule] = rule_counts.get(rule, 0) + 1
+        collapsed = {rule for rule, n in rule_counts.items()
+                     if n > max_per_rule}
+        for rule in sorted(collapsed, key=lambda r: int(r[1:])):
+            lines.append(f"  - {rule}: {rule_counts[rule]} opps "
+                         f"(detail collapsed, > {max_per_rule} per rule)")
         for opp_id in sorted(opps):
-            lines.append(f"  - {opp_id}{_who(opp_id)}: "
-                         f"{', '.join(opps[opp_id])}")
+            kept = [r for r in opps[opp_id] if r not in collapsed]
+            if kept:
+                lines.append(f"  - {opp_id}{_who(opp_id)}: "
+                             f"{', '.join(kept)}")
     lines.append(f"- Closed: {len(delta['closed'])} opps")
     for opp_id in sorted(delta["closed"]):
         info = delta["closed"][opp_id]
@@ -746,6 +809,31 @@ def _coverage_note(lines, data):
                  f"{data['coverage_basis']}.")
 
 
+def _gap_to_cover(stats, config):
+    """Dollars still needed to reach required pipeline on the flag's own
+    basis; $0 when covered, n/a without a quota."""
+    if stats.required_pipeline is None:
+        return "n/a"
+    return _money(max(stats.required_pipeline - stats.open_pipeline, 0.0),
+                  config)
+
+
+def desk_coverage_note(owners, config):
+    """When most quota'd owners are under 1.00x, low coverage is a desk
+    condition, not an individual finding — say so (the flag and its basis
+    do not change). None when under the threshold share."""
+    share_min = config.get("low_coverage_desk_note_share")
+    share_min = 0.75 if share_min is None else share_min
+    with_cov = [s for s in owners.values() if s.coverage_ratio is not None]
+    flagged = [s for s in with_cov if s.coverage_flagged]
+    if not with_cov or len(flagged) / len(with_cov) <= share_min:
+        return None
+    return (f"Note: {len(flagged)} of {len(with_cov)} quota'd owners are "
+            f"under 1.00x — desk-wide under-coverage, not individual "
+            f"laggards; ordering carries the signal. The flag and its "
+            f"basis are unchanged.")
+
+
 def _owner_table(lines, data, config):
     lines.append("### Owners")
     lines.append("")
@@ -754,9 +842,13 @@ def _owner_table(lines, data, config):
         lines.append("No open opportunities.")
         return
     _coverage_note(lines, data)
+    note = desk_coverage_note(owners, config)
+    if note:
+        lines.append("")
+        lines.append(note)
     lines.append("")
-    lines.append("| Owner | Open | Mean | Median | Violations | Pipeline | Coverage | Flags |")
-    lines.append("|---|---|---|---|---|---|---|---|")
+    lines.append("| Owner | Open | Mean | Median | Violations | Pipeline | Coverage | Gap to cover | Flags |")
+    lines.append("|---|---|---|---|---|---|---|---|---|")
     for stats in owners.values():
         coverage = ("n/a" if stats.coverage_ratio is None
                     else f"{stats.coverage_ratio:.2f}")
@@ -765,7 +857,8 @@ def _owner_table(lines, data, config):
                           if on) or "-"
         lines.append(f"| {stats.owner} | {stats.n_open} | {stats.mean_score:.1f} "
                      f"| {stats.median_score:.1f} | {stats.violation_count} "
-                     f"| {_money(stats.open_pipeline, config)} | {coverage} | {flags} |")
+                     f"| {_money(stats.open_pipeline, config)} | {coverage} "
+                     f"| {_gap_to_cover(stats, config)} | {flags} |")
 
 
 def _group_table(lines, groups, label, config):
@@ -778,8 +871,8 @@ def _group_table(lines, groups, label, config):
                      "(pass --quotas data/seed_manifest.json).")
         return
     lines.append(f"| {label} | Owners | Open | Mean | Pipeline | Quota "
-                 "| Coverage | Violations | At-risk $ | Flags |")
-    lines.append("|---|---|---|---|---|---|---|---|---|---|")
+                 "| Coverage | Gap to cover | Violations | At-risk $ | Flags |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|")
     ranked = sorted(groups.values(),
                     key=lambda g: (g.coverage_ratio is None,
                                    g.coverage_ratio or 0.0, g.key))
@@ -790,7 +883,8 @@ def _group_table(lines, groups, label, config):
         flags = "low_coverage" if g.coverage_flagged else "-"
         lines.append(f"| {g.key} | {g.n_owners} | {g.n_open} | {mean_cell} "
                      f"| {_money(g.open_pipeline, config)} | {_money(g.quota, config)} "
-                     f"| {coverage} | {g.violation_count} "
+                     f"| {coverage} | {_gap_to_cover(g, config)} "
+                     f"| {g.violation_count} "
                      f"| {_money(g.at_risk_dollars, config)} | {flags} |")
 
 
@@ -888,7 +982,9 @@ def _commit_ledger(lines, data, config):
                  "quarter of the close date when first called commit (immune "
                  "to later pushes). Won/resolved counts closed opps only, "
                  f"shown as won/closed; the percentage appears once {min_n}+ "
-                 "have resolved (small-n rates mislead).")
+                 "have resolved (small-n rates mislead). Of which pushed "
+                 "first = resolved (won/lost) commits that pushed after the "
+                 "commit and before closing.")
     lines.append("")
     entries = data["ledger"]
     if entries is None:
@@ -901,13 +997,14 @@ def _commit_ledger(lines, data, config):
 
     def table(label, rollups):
         lines.append(f"| {label} | Ever commit | Won | Lost | Pushed "
-                     "| Still open | Won/resolved |")
-        lines.append("|---|---|---|---|---|---|---|")
+                     "| Still open | Won/resolved | Of which pushed first |")
+        lines.append("|---|---|---|---|---|---|---|---|")
         for key in sorted(rollups, key=lambda k: (k is None, k or "")):
             g = rollups[key]
             lines.append(f"| {'unknown' if key is None else key} | {g['n']} "
                          f"| {g['won']} | {g['lost']} | {g['pushed']} "
-                         f"| {g['open']} | {ledger_rate(g, min_n)} |")
+                         f"| {g['open']} | {ledger_rate(g, min_n)} "
+                         f"| {g['resolved_pushed_first']} |")
 
     table("Owner", ledger_rollups(entries, lambda e: e.owner))
     owner_meta = config.get("owner_meta") or {}

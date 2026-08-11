@@ -131,6 +131,9 @@ _OPTIONAL_CONFIG = {
     "owner_meta": dict,
     "display_currency_symbol": str,
     "pipeline_gen_weekly_target": _NUMBER,
+    "trend_snapshots": int,
+    "delta_detail_max_per_rule": int,
+    "low_coverage_desk_note_share": _NUMBER,
 }
 
 

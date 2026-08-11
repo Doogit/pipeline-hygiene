@@ -242,6 +242,8 @@ LEDGER_CAPTION = ("Of opps ever forecast commit in stored history: outcome "
                   "the first commit snapshot. Won/resolved counts closed "
                   "opps only, shown as won/closed; the percentage appears "
                   "once {min_n}+ have resolved (small-n rates mislead). "
+                  "Of which pushed first = resolved commits that pushed "
+                  "after the commit and before closing. "
                   "Coaching signal, not a comp input.")
 
 
@@ -256,6 +258,7 @@ def _ledger_df(entries, key_fn, label):
             "ever commit": g["n"], "won": g["won"], "lost": g["lost"],
             "pushed": g["pushed"], "still open": g["open"],
             "won/resolved": brief.ledger_rate(g, min_n),
+            "of which pushed first": g["resolved_pushed_first"],
         })
     return pd.DataFrame(records)
 
@@ -414,30 +417,24 @@ with tab_traj:
         if basis:
             st.caption(f"Coverage basis: {basis}")
 
-    # desk score trend from the runs table
-    run_scores = []
-    if store is not None:
-        for i, summary in enumerate(
-                json.loads(r[0]) for r in store.conn.execute(
-                    "SELECT summary_json FROM runs ORDER BY run_id")
-                if r[0]):
-            score = summary.get("desk", {}).get("weighted_mean_score")
-            if score is not None:
-                run_scores.append({"run": i + 1,
-                                   "as_of": summary.get("as_of"),
-                                   "desk score": score})
-    if len(run_scores) >= 2:
+    # desk score trend, snapshot-anchored: the engine re-run per stored
+    # snapshot (no holes from snapshots without recorded runs)
+    trend = (brief.desk_score_series(store, config, snapshot_date)
+             if store is not None else [])
+    trend = [(d, s) for d, s in trend if s is not None]
+    if len(trend) >= 2:
         st.altair_chart(
-            alt.Chart(pd.DataFrame(run_scores)).mark_line(point=True).encode(
-                x=alt.X("run:O", title="run"),
+            alt.Chart(pd.DataFrame(
+                [{"snapshot": d.isoformat(), "desk score": s}
+                 for d, s in trend])).mark_line(point=True).encode(
+                x=alt.X("snapshot:N", title=None),
                 y=alt.Y("desk score:Q",
                         scale=alt.Scale(domain=[0, 100])),
-                tooltip=["run", "as_of", "desk score"])
+                tooltip=["snapshot", "desk score"])
             .properties(height=180, width=950,
-                        title="Desk score trend (recorded brief runs)"))
+                        title="Desk score trend (snapshot-anchored)"))
     else:
-        st.caption("Desk score trend appears after 2+ recorded brief runs "
-                   "(python -m src.brief).")
+        st.caption("Desk score trend appears after 2+ stored snapshots.")
 
     st.subheader("Commit accuracy by committed-for quarter")
     st.caption("Committed-for quarter = fiscal quarter of the close date "
@@ -553,6 +550,8 @@ with tab_owners:
             "pipeline": stats.open_pipeline,
             "coverage": None if stats.coverage_ratio is None
             else round(stats.coverage_ratio, 2),
+            "gap to cover": None if stats.required_pipeline is None
+            else max(stats.required_pipeline - stats.open_pipeline, 0.0),
             "flags": ", ".join(f for f, on in
                                (("small_n", stats.small_n),
                                 ("low_coverage", stats.coverage_flagged))
@@ -563,14 +562,18 @@ with tab_owners:
             pd.DataFrame(owner_records), width="stretch", hide_index=True,
             column_config={
                 "mean": _SCORE_COL, "median": _SCORE_COL,
-                "pipeline": _MONEY_COL,
+                "pipeline": _MONEY_COL, "gap to cover": _MONEY_COL,
                 "coverage": st.column_config.NumberColumn(format="%.2fx"),
             })
     st.caption(f"small_n = fewer than {config['min_opps_for_owner_score']} "
                f"open opps, treat the score as anecdotal. Coverage = open "
                f"pipeline vs required pipeline (remaining quota net of wins "
                f"this quarter x the required multiple); low_coverage means "
-               f"under 1.00x. Basis: {data['coverage_basis']}.")
+               f"under 1.00x; gap to cover = required minus open pipeline "
+               f"on the same basis. Basis: {data['coverage_basis']}.")
+    desk_note = brief.desk_coverage_note(data["owners"], config)
+    if desk_note:
+        st.caption(desk_note)
 
     st.subheader("Forecast integrity patterns")
     st.caption("Coaching signal, not a comp input.")
@@ -626,6 +629,8 @@ with tab_teams:
                 "quota": g.quota,
                 "coverage": None if g.coverage_ratio is None
                 else round(g.coverage_ratio, 2),
+                "gap to cover": None if g.required_pipeline is None
+                else max(g.required_pipeline - g.open_pipeline, 0.0),
                 "violations": g.violation_count,
                 "at-risk": g.at_risk_dollars,
                 "flags": "low_coverage" if g.coverage_flagged else "",
@@ -633,7 +638,7 @@ with tab_teams:
 
         _GROUP_COLS = {
             "mean": _SCORE_COL, "pipeline": _MONEY_COL, "quota": _MONEY_COL,
-            "at-risk": _MONEY_COL,
+            "at-risk": _MONEY_COL, "gap to cover": _MONEY_COL,
             "coverage": st.column_config.NumberColumn(format="%.2fx"),
         }
         for label, groups in (("Teams", data["teams"]),
