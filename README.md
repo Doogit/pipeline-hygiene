@@ -17,7 +17,7 @@ CRM-vendor deal-risk AI.
 ```
 src/            ingest.py, snapshots.py, rules.py, scoring.py, brief.py
 src/seed/       org simulator: __main__.py, org.py, pathologies.py, series.py
-app/            dashboard.py (Task 6 placeholder)
+app/            dashboard.py (read-only Streamlit dashboard)
 data/           generated CSVs, seed_manifest.json, delta_manifest.json, pipeline.db
 tests/          pytest + hypothesis; loads tests/config_test.yaml ONLY
 out/            generated desk briefs (Task 5)
@@ -30,11 +30,11 @@ config.yaml     runtime thresholds, stage_map, rule weights
 python -m src.seed --rows 400 --as-of 2026-08-10        # single snapshot + ground-truth manifest
 python -m src.seed --series 4 --as-of 2026-08-10        # weekly snapshots T0..T3 + delta manifest
 python -m src.ingest data/opps_2026-08-10.csv           # validate + load into data/pipeline.db
+python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json
+                                                        # write out/desk_brief_2026-08-10.md
+streamlit run app/dashboard.py                          # read-only dashboard
 pytest -q                                               # full test suite
 ```
-
-Desk brief generation and the read-only Streamlit dashboard are scaffolded for
-Tasks 5-6, but are not implemented in this branch.
 
 ## Clock determinism
 
@@ -77,6 +77,31 @@ never by running the rules engine, so the comparison is non-circular.
   spec.
 - Insufficient-history threshold ("fewer than 2 snapshots") is counted over
   snapshots stored at-or-before the evaluated snapshot date, store-wide.
+- The per-snapshot ValidationReport is persisted as `validation_json` on the
+  `snapshots` table (written at ingest; older dbs are migrated in place), which
+  is how the brief and dashboard surface it without re-running validation.
+- Fiscal quarters are labeled `FY<year>-Q<n>` where the fiscal year is named
+  for the calendar year it ends in (with `fiscal_year_start_month: 7`,
+  2026-08 falls in FY2027-Q1, Microsoft-style).
+- The brief CLI takes `--quotas <json>` (e.g. `data/seed_manifest.json`) and
+  merges its `"quotas"` mapping into `config["quotas"]` at run time, per the
+  seed-does-not-mutate-config decision above.
+- Since-last-run semantics mirror the delta manifest: violations that vanish
+  because a deal closed are reported under "Closed", never under "Cleared";
+  newly appearing opps are listed under "Opps added" and their violations are
+  not counted as new violations on tracked opps. Each brief run records its
+  per-opp rule sets in the `runs` table; the next run diffs against that.
+- The golden brief (`tests/golden/desk_brief_golden.md`) is compared exactly;
+  `.gitattributes` disables CRLF conversion for it. To regenerate: delete it
+  and run the test once (it recreates the file and fails asking for review).
+- Dashboard: `as_of` defaults to the selected snapshot's date (no
+  `date.today()` outside CLI defaults); an uploaded CSV runs the same ingest
+  validation but is evaluated in memory and never written to the store; the
+  download-brief button renders from the displayed data and does not record a
+  run; quotas auto-merge from `data/seed_manifest.json` when present. Runtime
+  paths can be overridden with `PIPELINE_HYGIENE_CONFIG`,
+  `PIPELINE_HYGIENE_DB`, and `PIPELINE_HYGIENE_QUOTAS` for isolated tests or
+  alternate deployments.
 - In series evolution, fields of unscripted rows are shifted week-over-week
   (activity/next-step dates +7) so their expected violation sets are invariant
   by construction; only scripted deltas change expectations, including
