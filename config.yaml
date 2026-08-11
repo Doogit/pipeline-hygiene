@@ -2,7 +2,7 @@ staleness_days: {commit: 7, propose: 14, develop: 21, qualify: 30, prospect: 45}
 aging_norm_days: {prospect: 30, qualify: 30, develop: 45, propose: 30, commit: 21}
 big_deal_threshold: 100000
 close_date_horizon_days: 270
-fiscal_year_start_month: 7        # July — matches Microsoft FY; configurable per org
+fiscal_year_start_month: 7        # July fiscal-year start; configurable per org
 expected_currency: USD
 coverage_ratio_min: 3.0
 quotas: {}                        # owner -> quarterly quota; seed fills this

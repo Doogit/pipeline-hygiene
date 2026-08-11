@@ -167,7 +167,7 @@ never by running the rules engine, so the comparison is non-circular.
   is how the brief and dashboard surface it without re-running validation.
 - Fiscal quarters are labeled `FY<year>-Q<n>` where the fiscal year is named
   for the calendar year it ends in (with `fiscal_year_start_month: 7`,
-  2026-08 falls in FY2027-Q1, Microsoft-style).
+  2026-08 falls in FY2027-Q1).
 - The brief CLI takes `--quotas <json>` (e.g. `data/seed_manifest.json`) and
   merges its `"quotas"` mapping into `config["quotas"]` at run time, per the
   seed-does-not-mutate-config decision above.
