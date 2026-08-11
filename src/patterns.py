@@ -45,14 +45,14 @@ class OwnerPatterns:
     undercall_flagged: bool
 
 
-def _histories(store, as_of):
+def _histories(store, snapshot_date):
     """{opp_id: [(snapshot_date, owner, stage, forecast, close_date), ...]}
-    ascending, over snapshots <= as_of. One query, one pass."""
+    ascending, over snapshots <= snapshot_date. One query, one pass."""
     cur = store.conn.execute(
         "SELECT opp_id, snapshot_date, owner, stage, forecast_category, "
         "close_date FROM opportunities WHERE snapshot_date <= ? "
         "ORDER BY opp_id, snapshot_date",
-        (as_of.isoformat(),))
+        (snapshot_date.isoformat(),))
     histories = {}
     for opp_id, snap, owner, stage, forecast, close in cur:
         histories.setdefault(opp_id, []).append(
@@ -60,9 +60,16 @@ def _histories(store, as_of):
     return histories
 
 
-def owner_patterns(store, as_of, config):
-    """Per-owner OwnerPatterns over stored history <= as_of, keyed by owner,
-    sorted. Owners are attributed from each opp's last stored row."""
+def owner_patterns(store, as_of, config, snapshot_date=None):
+    """Per-owner OwnerPatterns over stored history <= snapshot_date, keyed by
+    owner, sorted. Owners are attributed from each opp's row at that snapshot.
+
+    snapshot_date defaults to as_of for compatibility, but callers evaluating a
+    specific stored snapshot should pass it explicitly so forecast-pattern
+    metrics cannot read future snapshots while the rest of the brief/dashboard
+    is anchored to an older snapshot.
+    """
+    snapshot_date = snapshot_date or as_of
     thresholds = config["patterns"]
     min_n = config["min_opps_for_owner_score"]
     horizon_cap = as_of + timedelta(days=config["close_date_horizon_days"])
@@ -76,10 +83,10 @@ def owner_patterns(store, as_of, config):
             "open_dollars": 0.0, "omitted_dollars": 0.0,
             "farout_dollars": 0.0, "n_open": 0})
 
-    snapshot_dates = [d for d in store.snapshot_dates() if d <= as_of]
+    snapshot_dates = [d for d in store.snapshot_dates() if d <= snapshot_date]
     last_snapshot = snapshot_dates[-1].isoformat() if snapshot_dates else None
 
-    for opp_id, history in _histories(store, as_of).items():
+    for opp_id, history in _histories(store, snapshot_date).items():
         owner = history[-1][1]
         stats = bucket(owner)
         last_stage = history[-1][2]

@@ -105,7 +105,8 @@ else:
     outcomes = store.closed_outcomes(snapshot_date)
 
 as_of = st.sidebar.date_input("Evaluate as of", value=snapshot_date)
-patterns = owner_patterns(store, as_of, config) if store else None
+patterns = (owner_patterns(store, as_of, config, snapshot_date)
+            if store else None)
 data = brief.build_from_rows(rows, snapshot_date, as_of, config,
                              validation=validation, prev_summary=prev_summary,
                              outcomes=outcomes, prev_opens=prev_opens,

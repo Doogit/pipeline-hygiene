@@ -235,7 +235,7 @@ def build(store, snapshot_date, as_of, config):
         prev_summary=prev["summary"] if prev else None,
         outcomes=store.closed_outcomes(snapshot_date),
         prev_opens=store.run_opens(),
-        patterns=owner_patterns(store, as_of, config))
+        patterns=owner_patterns(store, as_of, config, snapshot_date))
 
 
 def build_from_rows(rows, snapshot_date, as_of, config,

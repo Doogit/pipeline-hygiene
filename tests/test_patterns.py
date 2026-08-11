@@ -61,6 +61,25 @@ def test_overcall_mechanics_and_suppression(tmp_path, config):
     assert p.overcall_small_n and not p.overcall_flagged
 
 
+def test_patterns_follow_evaluated_snapshot_not_later_as_of(tmp_path, config):
+    cfg = dict(config)
+    cfg["min_opps_for_owner_score"] = 1
+    d1, d2 = AS_OF - timedelta(days=7), AS_OF
+    store = SnapshotStore(":memory:", cfg)
+    _ingest(store, tmp_path, d1, [
+        _row("OPP-A", "Casey Farrow", d1, forecast_category="commit")])
+    _ingest(store, tmp_path, d2, [
+        _row("OPP-A", "Casey Farrow", d2, stage="closed_lost",
+             forecast_category="commit")])
+
+    assert owner_patterns(store, d2, cfg)["Casey Farrow"].overcall_flagged
+    data = brief.build(store, d1, d2, cfg)
+    pattern = data["patterns"]["Casey Farrow"]
+    assert pattern.n_ever_commit == 1
+    assert pattern.overcall_share == 0.0
+    assert not pattern.overcall_flagged
+
+
 def test_undercall_won_share_counts_only_observed_wins(tmp_path, config):
     d1, d2 = AS_OF - timedelta(days=7), AS_OF
     store = SnapshotStore(":memory:", config)
