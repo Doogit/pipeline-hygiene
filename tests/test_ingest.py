@@ -160,6 +160,42 @@ def test_single_snapshot_without_optional_columns_stays_none(tmp_path, config):
     assert rows[0]["stage_entered_date"] is None
 
 
+def test_all_rejected_is_fatal_and_not_stored(tmp_path, config):
+    """A non-empty snapshot with zero accepted rows is fatal: nothing is
+    stored and the CLI exits nonzero (a silent empty snapshot would let a
+    scheduled ingest report success while the brief runs on nothing)."""
+    p = tmp_path / "opps_2026-08-10.csv"
+    _write_fixture(p, [_row(opp_id="OPP-0001", stage="Nope"),
+                       _row(opp_id="OPP-0002", stage="Nope")])
+    store = SnapshotStore(":memory:", config)
+    with pytest.raises(IngestError, match="all 2 rows rejected"):
+        store.ingest_csv(p, AS_OF)
+    assert store.snapshot_dates() == []          # nothing persisted
+    test_config = Path(__file__).parent / "config_test.yaml"
+    code = ingest_main([str(p), "--db", str(tmp_path / "t.db"),
+                        "--config", str(test_config)])
+    assert code != 0
+
+
+def test_since_last_run_anchors_to_prior_snapshot(tmp_path, config):
+    """Re-running a brief on the same snapshot diffs against the previous
+    snapshot's run (not itself) and never accumulates duplicate runs."""
+    from src import brief
+    store = SnapshotStore(":memory:", config)
+    d0, d1 = date(2026, 8, 3), date(2026, 8, 10)
+    for d in (d0, d1):
+        p = tmp_path / f"opps_{d.isoformat()}.csv"
+        _write_fixture(p, [_row(last_activity_date=d.isoformat())])
+        store.ingest_csv(p, d)
+    brief.run(store, d0, d0, config, tmp_path / "out")
+    brief.run(store, d1, d1, config, tmp_path / "out")
+    # re-run d1: still anchors to d0, and does not add a third run
+    _, again = brief.run(store, d1, d1, config, tmp_path / "out")
+    assert again["since_last_run"]["prev_snapshot_date"] == d0.isoformat()
+    runs = store.conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+    assert runs == 2
+
+
 def test_source_columns_take_precedence(tmp_path, config):
     store = SnapshotStore(":memory:", config)
     for snap_date, close in [(date(2026, 8, 3), "2026-09-30"), (date(2026, 8, 10), "2026-10-15")]:

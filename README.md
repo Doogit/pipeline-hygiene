@@ -38,6 +38,45 @@ streamlit run app/dashboard.py                          # read-only dashboard
 pytest -q                                               # full test suite
 ```
 
+## Bring your own CSV
+
+The simulator above is a demo. To run against a real CRM export, produce a CSV
+with these **required** columns (extra columns are ignored):
+
+`opp_id, account, opp_name, owner, stage, amount, currency, created_date,
+close_date, last_activity_date, next_step, next_step_date, forecast_category,
+contact_count, product_line`
+
+- Optional history columns (`stage_entered_date`, `close_date_changes`) are
+  derived from stored snapshots when absent; with a single snapshot the
+  dependent rules (H3, H6) report `insufficient_history` rather than firing.
+- `forecast_category` must be one of `pipeline, best_case, commit, omitted`.
+  Dates are ISO (`YYYY-MM-DD`). Amount may be blank (H8 catches it).
+- `stage` is your CRM's own vocabulary; map it to the canonical stages
+  (`prospect, qualify, develop, propose, commit, closed_won, closed_lost`) by
+  adding a block under `stage_map:` in `config.yaml` and passing its name:
+  `python -m src.ingest your_export.csv --stage-map your_map`. An unknown stage
+  is rejected per-row with the offending label named — it is never guessed.
+- Set `expected_currency` in `config.yaml`; a uniform but unexpected currency
+  warns, mixed currency in one file is fatal.
+
+Ingest is safe to schedule: it exits nonzero (and stores nothing) if every row
+is rejected, prints the rejected rows with reasons, and names the snapshot date
+from the filename (`opps_YYYY-MM-DD.csv`) or `--snapshot-date`.
+
+```
+python -m src.ingest your_export.csv --stage-map your_map
+python -m src.brief --as-of 2026-08-10 --quotas your_quotas.json --digests
+```
+
+## Persona pass
+
+`.claude/skills/persona-pass` runs a usability simulation: it role-plays each
+user persona in [docs/personas.md](docs/personas.md) (frontline manager,
+RevOps analyst, VP, flagged AE) against the real product to surface usability
+and product gaps that unit tests miss. Run it before a release or after any
+change to the brief, digests, dashboard, or CLI.
+
 ## Dashboard (Streamlit)
 
 ```

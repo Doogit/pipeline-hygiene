@@ -99,7 +99,10 @@ else:
                                          format_func=lambda d: d.isoformat())
     rows = store.rows_with_history(snapshot_date)
     validation = store.validation_report_dict(snapshot_date)
-    prev = store.last_run()
+    # Diff against the run for the previous snapshot, not the globally latest
+    # run — otherwise the selected snapshot diffs against itself (every delta
+    # reads +0.0), and an older selection diffs backwards against a newer run.
+    prev = store.last_run_before_snapshot(snapshot_date)
     prev_summary = prev["summary"] if prev else None
     prev_opens = store.run_opens()
     outcomes = store.closed_outcomes(snapshot_date)
@@ -220,7 +223,8 @@ with tab_call:
                     f"flag — **${total:,.0f}** (distinct opps), "
                     f"dollar-ranked. Coaching prompts, not gotchas.")
         risky_df = pd.DataFrame([{
-            "opp_id": e["row"]["opp_id"], "owner": e["row"]["owner"],
+            "opp_id": e["row"]["opp_id"], "account": e["row"]["account"],
+            "owner": e["row"]["owner"],
             "stage": e["row"]["stage"], "amount": e["row"]["amount"],
             "forecast": e["row"]["forecast_category"],
             "score": opp_score(e["result"], config),
@@ -442,13 +446,13 @@ with tab_owners:
         if not over and not under:
             st.caption("No overcall/undercall patterns flagged.")
         for p in over:
-            st.markdown(f"- :red[Overcall (happy ears)] {p.owner} — "
+            st.markdown(f"- :orange[Overcall pattern] {p.owner} — "
                         f"{p.overcall_share:.0%} of {p.n_ever_commit} "
                         f"ever-commit opps later pushed or lost")
         for p in under:
             om = "n/a" if p.omitted_share is None else f"{p.omitted_share:.0%}"
             far = "n/a" if p.farout_share is None else f"{p.farout_share:.0%}"
-            st.markdown(f"- :blue[Undercall (sandbagging)] {p.owner} — open "
+            st.markdown(f"- :blue[Undercall pattern] {p.owner} — open "
                         f"pipeline {om} omitted, {far} far-out "
                         f"(n={p.n_open})")
         small = sum(1 for p in patterns.values()

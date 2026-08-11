@@ -239,8 +239,18 @@ def main(argv=None):
     if report.rejected:
         for count_reason, n in report.reason_counts().items():
             print(f"  rejected {n}: {count_reason}")
+        # Per-row detail so an operator can fix the offending deals without
+        # opening the store; the aggregate counts alone are not actionable.
+        for row_number, opp_id, reason in report.row_reasons[:10]:
+            print(f"    line {row_number} {opp_id or '(no opp_id)'}: {reason}")
+        if report.rejected > 10:
+            print(f"    ... and {report.rejected - 10} more")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Run the packaged main, not this module-as-__main__: otherwise IngestError
+    # raised through src.snapshots (which imports src.ingest) is a different
+    # class object than the __main__ one, and main's except would miss it.
+    from src.ingest import main as _main
+    sys.exit(_main())
