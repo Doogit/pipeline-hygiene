@@ -230,6 +230,14 @@ class SnapshotStore:
                  if validation_report else None))
         return cur.lastrowid
 
+    def run_opens(self):
+        """The per-run open-opp rule-set maps ({opp_id: [rules]}), ascending
+        by run_id — the memory that flag streaks are computed from."""
+        cur = self.conn.execute(
+            "SELECT summary_json FROM runs ORDER BY run_id")
+        return [json.loads(row[0]).get("open", {})
+                for row in cur.fetchall() if row[0]]
+
     def last_run(self, before_run_id=None):
         query = "SELECT run_id, as_of, snapshot_date, summary_json FROM runs"
         params = ()

@@ -71,6 +71,7 @@ if uploaded is not None:
     st.sidebar.caption(f"Uploaded snapshot {snapshot_date} — single snapshot, "
                        f"so H3/H6 may report insufficient history.")
     prev_summary = None
+    prev_opens = []
 else:
     if not Path(DB_PATH).exists():
         st.warning(f"No store at `{DB_PATH}`. Run `python -m src.ingest "
@@ -88,10 +89,12 @@ else:
     validation = store.validation_report_dict(snapshot_date)
     prev = store.last_run()
     prev_summary = prev["summary"] if prev else None
+    prev_opens = store.run_opens()
 
 as_of = st.sidebar.date_input("Evaluate as of", value=snapshot_date)
 data = brief.build_from_rows(rows, snapshot_date, as_of, config,
-                             validation=validation, prev_summary=prev_summary)
+                             validation=validation, prev_summary=prev_summary,
+                             prev_opens=prev_opens)
 results, desk = data["results"], data["desk"]
 rows_by_id = {r["opp_id"]: r for r in rows}
 
@@ -157,6 +160,8 @@ for result in results.values():
         "score": opp_score(result, config),
         "worst": ["high", "medium", "low"][worst],
         "rules": " ".join(v.rule_id for v in result.violations),
+        "streak": (f"flagged {brief.opp_streak(data['streaks'], result)} runs"
+                   if brief.opp_streak(data["streaks"], result) >= 2 else ""),
         "detail": "; ".join(v.detail for v in result.violations),
         "_rank": (worst, -(row["amount"] or 0.0), result.opp_id),
     })

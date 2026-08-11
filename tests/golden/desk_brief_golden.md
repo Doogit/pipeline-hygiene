@@ -62,18 +62,18 @@ Drill-down detail. The forecast call runs off page 1.
 
 ### Top 10 exceptions
 
-| # | Opp | Account | Owner | Stage | Amount | Score | Rules | Detail |
-|---|---|---|---|---|---|---|---|---|
-| 1 | OPP-0044 | Novafinancial Co | Quinn Oakhurst | commit | $839,954 | 65 | H1 H4 | no activity for 15d (> 7d for commit); next step date 2026-07-21 expired |
-| 2 | OPP-0193 | Zenithnetworks Group | Kendall Lindqvist | commit | $616,126 | 80 | H2 | close date 2026-07-03 is 38d in the past |
-| 3 | OPP-0046 | Vertexenergy Group | Hollis Underhill | prospect | $474,715 | 75 | H5 | forecast commit but stage prospect |
-| 4 | OPP-0153 | Pacificfinancial LLC | Zion Calloway | prospect | $417,076 | 65 | H1 H4 | no activity for 83d (> 45d for prospect); next step date 2026-07-19 expired |
-| 5 | OPP-0237 | Silverdynamics Inc | Skyler Ivesdale | qualify | $399,808 | 65 | H1 H4 | no activity for 69d (> 30d for qualify); next step date 2026-07-26 expired |
-| 6 | OPP-0137 | Vertexsoftware Corp | Logan Ivesdale | qualify | $385,849 | 75 | H5 | forecast commit but stage qualify |
-| 7 | OPP-0317 | Blueretail Group | Logan Ivesdale | propose | $368,677 | 55 | H4 H5 | next step empty; forecast commit without a valid next step |
-| 8 | OPP-0133 | Goldenfoods Group | Kendall Lindqvist | prospect | $284,740 | 55 | H1 H4 H6 | no activity for 48d (> 45d for prospect); next step has no date; 48d in prospect (norm 30d) |
-| 9 | OPP-0199 | Harborsystems LLC | Morgan Calloway | develop | $267,875 | 35 | H1 H2 H4 H6 | no activity for 24d (> 21d for develop); close date 2026-07-08 is 33d in the past; next step empty; 53d in develop (norm 45d) |
-| 10 | OPP-0057 | Harborlabs Corp | Skyler Ivesdale | propose | $244,820 | 80 | H2 | close date 2026-08-05 is 5d in the past |
+| # | Opp | Account | Owner | Stage | Amount | Score | Rules | Streak | Detail |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | OPP-0044 | Novafinancial Co | Quinn Oakhurst | commit | $839,954 | 65 | H1 H4 | - | no activity for 15d (> 7d for commit); next step date 2026-07-21 expired |
+| 2 | OPP-0193 | Zenithnetworks Group | Kendall Lindqvist | commit | $616,126 | 80 | H2 | - | close date 2026-07-03 is 38d in the past |
+| 3 | OPP-0046 | Vertexenergy Group | Hollis Underhill | prospect | $474,715 | 75 | H5 | - | forecast commit but stage prospect |
+| 4 | OPP-0153 | Pacificfinancial LLC | Zion Calloway | prospect | $417,076 | 65 | H1 H4 | - | no activity for 83d (> 45d for prospect); next step date 2026-07-19 expired |
+| 5 | OPP-0237 | Silverdynamics Inc | Skyler Ivesdale | qualify | $399,808 | 65 | H1 H4 | - | no activity for 69d (> 30d for qualify); next step date 2026-07-26 expired |
+| 6 | OPP-0137 | Vertexsoftware Corp | Logan Ivesdale | qualify | $385,849 | 75 | H5 | - | forecast commit but stage qualify |
+| 7 | OPP-0317 | Blueretail Group | Logan Ivesdale | propose | $368,677 | 55 | H4 H5 | - | next step empty; forecast commit without a valid next step |
+| 8 | OPP-0133 | Goldenfoods Group | Kendall Lindqvist | prospect | $284,740 | 55 | H1 H4 H6 | - | no activity for 48d (> 45d for prospect); next step has no date; 48d in prospect (norm 30d) |
+| 9 | OPP-0199 | Harborsystems LLC | Morgan Calloway | develop | $267,875 | 35 | H1 H2 H4 H6 | - | no activity for 24d (> 21d for develop); close date 2026-07-08 is 33d in the past; next step empty; 53d in develop (norm 45d) |
+| 10 | OPP-0057 | Harborlabs Corp | Skyler Ivesdale | propose | $244,820 | 80 | H2 | - | close date 2026-08-05 is 5d in the past |
 
 ### Owners
 

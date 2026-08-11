@@ -184,6 +184,20 @@ RULES = {
     "H11": h11_lost_deal_control,
 }
 
+RULE_LABELS = {
+    "H1": "stale by stage",
+    "H2": "close date in past",
+    "H3": "serial slippage",
+    "H4": "missing/expired next step",
+    "H5": "forecast mismatch",
+    "H6": "aging in stage",
+    "H7": "single-threaded big deal",
+    "H8": "amount hygiene",
+    "H9": "vague next step",
+    "H10": "parked close date",
+    "H11": "lost deal control",
+}
+
 
 @dataclass(frozen=True)
 class OppResult:

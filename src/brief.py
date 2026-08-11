@@ -15,12 +15,13 @@ manifest: violations that vanish because a deal closed are reported under
 """
 import argparse
 import json
+import re
 import sys
 from datetime import date
 from pathlib import Path
 
 from .ingest import load_config
-from .rules import evaluate_snapshot, is_open
+from .rules import RULE_LABELS, evaluate_snapshot, is_open
 from .scoring import desk_rollup, opp_score, owner_rollups
 from .snapshots import SnapshotStore
 
@@ -201,6 +202,29 @@ def since_last_run(prev_summary, rows, results, desk):
     return delta
 
 
+def flag_streaks(prev_opens, results):
+    """Consecutive-run streak per currently flagged (opp_id, rule): 1 for the
+    current evaluation plus how many immediately preceding recorded runs also
+    carried the flag. A cleared run breaks the streak, so re-flagging starts
+    over at 1."""
+    streaks = {}
+    for opp_id, result in results.items():
+        for rule in result.rule_ids():
+            n = 1
+            for open_map in reversed(prev_opens):
+                if rule not in open_map.get(opp_id, []):
+                    break
+                n += 1
+            streaks[(opp_id, rule)] = n
+    return streaks
+
+
+def opp_streak(streaks, result):
+    """Longest current streak across an opp's flags (0 when unflagged)."""
+    return max((streaks.get((result.opp_id, rule), 1)
+                for rule in result.rule_ids()), default=0)
+
+
 def build(store, snapshot_date, as_of, config):
     """Compute all brief data for one stored snapshot. No side effects."""
     prev = store.last_run()
@@ -208,14 +232,17 @@ def build(store, snapshot_date, as_of, config):
         store.rows_with_history(snapshot_date), snapshot_date, as_of, config,
         validation=store.validation_report_dict(snapshot_date),
         prev_summary=prev["summary"] if prev else None,
-        outcomes=store.closed_outcomes(snapshot_date))
+        outcomes=store.closed_outcomes(snapshot_date),
+        prev_opens=store.run_opens())
 
 
 def build_from_rows(rows, snapshot_date, as_of, config,
-                    validation=None, prev_summary=None, outcomes=None):
+                    validation=None, prev_summary=None, outcomes=None,
+                    prev_opens=None):
     """Compute all brief data from in-memory rows (e.g. a validated upload).
     outcomes: stored closed outcomes (store.closed_outcomes) for the
-    trailing-win-rate coverage basis; None outside the store."""
+    trailing-win-rate coverage basis; None outside the store. prev_opens:
+    prior runs' rule-set maps (store.run_opens) for flag streaks."""
     results = evaluate_snapshot(rows, config, as_of)
     desk = desk_rollup(rows, results, config)
     insufficient = {"H3": 0, "H6": 0}
@@ -235,6 +262,7 @@ def build_from_rows(rows, snapshot_date, as_of, config,
         "since_last_run": delta,
         "risky_commits": risky_commits(rows, results, config),
         "trajectory": trajectory_data(rows, delta, config, as_of, outcomes),
+        "streaks": flag_streaks(prev_opens or [], results),
         "summary": run_summary(snapshot_date, as_of, desk, results),
     }
 
@@ -475,15 +503,18 @@ def _top_exceptions(lines, data, config):
         worst = min(_SEV_RANK[v.severity] for v in result.violations)
         return (worst, -(rows_by_id[result.opp_id]["amount"] or 0.0), result.opp_id)
 
-    lines.append("| # | Opp | Account | Owner | Stage | Amount | Score | Rules | Detail |")
-    lines.append("|---|---|---|---|---|---|---|---|---|")
+    lines.append("| # | Opp | Account | Owner | Stage | Amount | Score | Rules | Streak | Detail |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|")
     for i, result in enumerate(sorted(flagged, key=rank)[:10], start=1):
         row = rows_by_id[result.opp_id]
         badges = " ".join(v.rule_id for v in result.violations)
         detail = "; ".join(v.detail for v in result.violations)
+        streak = opp_streak(data["streaks"], result)
+        streak_cell = f"flagged {streak} runs" if streak >= 2 else "-"
         lines.append(f"| {i} | {result.opp_id} | {row['account']} | {row['owner']} "
                      f"| {row['stage']} | {_money(row['amount'])} "
-                     f"| {opp_score(result, config)} | {badges} | {detail} |")
+                     f"| {opp_score(result, config)} | {badges} "
+                     f"| {streak_cell} | {detail} |")
 
 
 def _owner_table(lines, data):
@@ -561,6 +592,119 @@ def render(data, config):
     return "\n".join(lines)
 
 
+# --- private per-owner coaching digests ---
+
+def owner_slug(owner):
+    slug = re.sub(r"[^a-z0-9]+", "-", owner.lower()).strip("-")
+    return slug or "owner"
+
+
+def digest_markdown(data, owner, config):
+    """One PRIVATE coaching digest: only this owner's deals, no rankings, no
+    cross-owner data (coaching moves sellers; published rankings raise
+    attrition). Deterministic render of the brief data."""
+    results, streaks = data["results"], data["streaks"]
+    stats = data["owners"][owner]
+    owned_ids = {r["opp_id"] for r in data["rows"] if r["owner"] == owner}
+    open_rows = [r for r in data["rows"]
+                 if r["owner"] == owner and is_open(r)]
+    lines = [f"# Coaching digest — {owner} — {data['as_of'].isoformat()}",
+             "",
+             "Private: covers only this seller's deals. Coaching input — "
+             "never a scorecard, never a comp input.",
+             ""]
+    if stats.small_n:
+        lines.append(f"Note: only {stats.n_open} open opps (small_n) — treat "
+                     f"patterns as anecdotal.")
+        lines.append("")
+
+    lines.append("## Top risks (dollar-weighted)")
+    lines.append("")
+    flagged = [r for r in open_rows if results[r["opp_id"]].violations]
+    if not flagged:
+        lines.append("No flagged deals this week.")
+    flagged.sort(key=lambda r: (-(r["amount"] or 0.0), r["opp_id"]))
+    for row in flagged[:5]:
+        result = results[row["opp_id"]]
+        streak = opp_streak(streaks, result)
+        note = f" — flagged {streak} runs" if streak >= 2 else ""
+        lines.append(f"- {row['opp_id']} ({row['stage']}, "
+                     f"{_money(row['amount'])}): "
+                     f"{' '.join(result.rule_ids())}{note}")
+
+    lines.append("")
+    lines.append("## Week over week")
+    lines.append("")
+    delta = data["since_last_run"]
+    if delta is None:
+        lines.append("No previous run recorded.")
+    else:
+        for label, key in (("New flags", "new_violations"),
+                           ("Cleared", "cleared_violations")):
+            owned = {o: v for o, v in delta[key].items() if o in owned_ids}
+            detail = "; ".join(f"{o} ({', '.join(v)})"
+                               for o, v in sorted(owned.items()))
+            lines.append(f"- {label}: {sum(map(len, owned.values()))}"
+                         + (f" — {detail}" if detail else ""))
+        closed = {o: i for o, i in delta["closed"].items() if o in owned_ids}
+        won = sorted(o for o, i in closed.items()
+                     if i["stage"] == "closed_won")
+        lost = sorted(o for o in closed if o not in won)
+        lines.append(f"- Closed: {len(won)} won"
+                     + (f" ({', '.join(won)})" if won else "")
+                     + f", {len(lost)} lost"
+                     + (f" ({', '.join(lost)})" if lost else ""))
+
+    lines.append("")
+    lines.append("## Longest unresolved")
+    lines.append("")
+    unresolved = sorted(
+        ((streaks[(r["opp_id"], rule)], r["opp_id"], rule)
+         for r in open_rows
+         for rule in results[r["opp_id"]].rule_ids()
+         if streaks.get((r["opp_id"], rule), 1) >= 2),
+        key=lambda t: (-t[0], t[1], int(t[2][1:])))
+    if not unresolved:
+        lines.append("Nothing carried over from previous runs.")
+    for streak, opp_id, rule in unresolved[:3]:
+        lines.append(f"- {rule} ({RULE_LABELS[rule]}) on {opp_id} — "
+                     f"flagged {streak} runs")
+
+    lines.append("")
+    lines.append("## Suggested coaching focus")
+    lines.append("")
+    exposure, deals = {}, {}
+    for row in flagged:
+        for rule in results[row["opp_id"]].rule_ids():
+            exposure[rule] = exposure.get(rule, 0.0) + (row["amount"] or 0.0)
+            deals[rule] = deals.get(rule, 0) + 1
+    if not exposure:
+        lines.append("Nothing to focus on — clean week.")
+    else:
+        focus = min(exposure, key=lambda r: (-exposure[r], int(r[1:])))
+        lines.append(f"{focus} — {RULE_LABELS[focus]}: "
+                     f"{_money(exposure[focus])} at risk across "
+                     f"{deals[focus]} deal(s).")
+        if focus in COACHING_PROMPTS:
+            lines.append(f"Ask: {COACHING_PROMPTS[focus]}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_digests(data, config, out_dir):
+    """Write out/digests/<as_of>/<owner_slug>.md for every owner with open
+    opps. Returns the written paths."""
+    digest_dir = Path(out_dir) / "digests" / data["as_of"].isoformat()
+    digest_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for owner in data["owners"]:
+        path = digest_dir / f"{owner_slug(owner)}.md"
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(digest_markdown(data, owner, config))
+        paths.append(path)
+    return paths
+
+
 def run(store, snapshot_date, as_of, config, out_dir):
     """Build, render, record the run, write the brief. Returns (path, data)."""
     data = build(store, snapshot_date, as_of, config)
@@ -586,6 +730,9 @@ def main(argv=None):
     p.add_argument("--quotas", default=None,
                    help="JSON file whose 'quotas' mapping (e.g. data/seed_manifest.json) "
                         "is merged into config at run time")
+    p.add_argument("--digests", action="store_true",
+                   help="also write private per-owner coaching digests to "
+                        "<out-dir>/digests/<as-of>/<owner_slug>.md")
     args = p.parse_args(argv)
 
     # CLI entry point: the only place date.today() is allowed (spec).
@@ -614,6 +761,10 @@ def main(argv=None):
     desk = data["desk"]
     print(f"wrote {path} (snapshot {snapshot_date}, {desk.n_open} open opps, "
           f"at-risk {_money(desk.at_risk_dollars)})")
+    if args.digests:
+        paths = write_digests(data, config, args.out_dir)
+        print(f"wrote {len(paths)} coaching digests to "
+              f"{Path(args.out_dir) / 'digests' / as_of.isoformat()}")
     return 0
 
 

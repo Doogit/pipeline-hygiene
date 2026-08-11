@@ -150,6 +150,20 @@ never by running the rules engine, so the comparison is non-circular.
   falls back to `coverage_ratio_min`. The basis used is always printed.
   Remaining quota = sum of configured quotas minus closed-won dollars whose
   close_date falls in the current fiscal quarter of as_of.
+- Flag streaks count consecutive RUNS (from the `runs` table), not
+  snapshots: the current evaluation plus immediately preceding recorded
+  runs carrying the same (opp, rule); a cleared run resets the streak.
+  Re-running the brief on the same snapshot therefore extends streaks —
+  runs are the accountability cadence. Annotated as "flagged N runs" (from
+  N >= 2) in the brief exceptions table and the dashboard.
+- `python -m src.brief --digests` writes one PRIVATE coaching digest per
+  owner with open opps to `out/digests/<as_of>/<owner_slug>.md`: top 3-5
+  dollar-weighted risks, that owner's week-over-week new/cleared/closed,
+  longest-unresolved flags (streaks), and exactly ONE suggested coaching
+  focus (deterministic: rule with most dollars at risk, ties to the lowest
+  rule number). No other owner's data, no rankings, small_n carried over —
+  coaching evidence favors private weekly digests; published rankings
+  raise attrition.
 
 ## Handoff
 
