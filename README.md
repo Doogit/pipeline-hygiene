@@ -32,9 +32,67 @@ python -m src.seed --series 4 --as-of 2026-08-10        # weekly snapshots T0..T
 python -m src.ingest data/opps_2026-08-10.csv           # validate + load into data/pipeline.db
 python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json
                                                         # write out/desk_brief_2026-08-10.md
+python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json --digests
+                                                        # ...plus out/digests/<as_of>/<owner>.md
 streamlit run app/dashboard.py                          # read-only dashboard
 pytest -q                                               # full test suite
 ```
+
+## Dashboard (Streamlit)
+
+```
+streamlit run app/dashboard.py
+```
+
+![Forecast call tab](docs/screenshots/tab-forecast-call.png)
+
+The dashboard is a read-only Streamlit app whose tabs mirror the brief
+structure — it never writes to the store or to source data, and viewing or
+downloading a brief from it does not record a run.
+
+- **Forecast call** (landing tab): headline `st.metric` row with
+  week-over-week delta arrows wired to since-last-run (desk score, open
+  pipeline, at-risk dollars — at-risk uses `delta_color="inverse"` so rising
+  risk reads red), the severity mix as a compact stacked bar, and the risky
+  commits table with per-deal coaching prompts. Built to stand alone for a
+  Monday meeting.
+- **Slippage**: the Task 8 push analytics, including a per-opp close-date
+  drift sparkline (`st.column_config.LineChartColumn`).
+- **Trajectory**: Altair charts — coverage (open vs required pipeline at
+  1 / trailing win rate) across stored snapshots, created-vs-closed weekly
+  flow bars, and the desk score trend from recorded brief runs. Needs at
+  least 2 stored snapshots; with fewer it degrades to a clear caption
+  instead of a one-point trend.
+- **Owners**: owner scoreboard plus the forecast-integrity patterns
+  (coaching signal, not a comp input).
+- **Appendix**: the full exception list (the only place it appears —
+  drill-down, never the headline), validation report, and the
+  download-brief button.
+
+Implementation notes:
+
+- Data source: the latest stored snapshot from `data/pipeline.db` by
+  default (snapshot selectable in the sidebar); an uploaded CSV runs the
+  same ingest validation and is evaluated entirely in memory. Sidebar
+  owner/stage/severity filters apply to the Slippage, Owners, and Appendix
+  tables.
+- Tables use `st.column_config` throughout: `ProgressColumn` for 0-100
+  scores, `NumberColumn` `$%d`-style formatting for amounts,
+  `LineChartColumn` sparklines for close-date drift and score history,
+  plain text badges for rules (Okabe-Ito colorblind-safe severity palette;
+  colored text, no emoji).
+- Charts are Streamlit built-ins + the Altair that ships with Streamlit —
+  no extra dependencies.
+- Runtime paths can be overridden with `PIPELINE_HYGIENE_CONFIG`,
+  `PIPELINE_HYGIENE_DB`, and `PIPELINE_HYGIENE_QUOTAS` (used by the
+  `streamlit.testing.v1.AppTest` suite in `tests/test_dashboard.py` to run
+  the app against isolated fixtures).
+- Per-tab screenshots live in `docs/screenshots/`:
+  [Forecast call](docs/screenshots/tab-forecast-call.png),
+  [Slippage](docs/screenshots/tab-slippage.png),
+  [Trajectory](docs/screenshots/tab-trajectory.png),
+  [Owners](docs/screenshots/tab-owners.png),
+  [Appendix](docs/screenshots/tab-appendix.png).
 
 ## Clock determinism
 
