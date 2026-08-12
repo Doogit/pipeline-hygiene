@@ -157,6 +157,17 @@ def _check_type(path, value, expected):
                           f"got {type(value).__name__}")
 
 
+def _require_positive(config, key):
+    if key in config and config[key] is not None and config[key] <= 0:
+        raise ConfigError(f"config key {key!r} must be > 0")
+
+
+def _require_unit_interval(config, key):
+    if key in config and config[key] is not None \
+            and not 0 <= config[key] <= 1:
+        raise ConfigError(f"config key {key!r} must be between 0 and 1")
+
+
 def validate_config(config):
     """Fail fast on a missing or wrong-typed config key (ConfigError naming
     the exact key path); warn once on unknown top-level keys (a typo'd
@@ -173,9 +184,16 @@ def validate_config(config):
         if key in config and config[key] is not None:
             _check_type(key, config[key], expected)
     esc = config.get("staleness_escalation")
+    _require_positive(config, "pipeline_gen_weekly_target")
+    _require_positive(config, "trend_snapshots")
+    _require_positive(config, "delta_detail_max_per_rule")
+    _require_unit_interval(config, "low_coverage_desk_note_share")
     if esc and esc["escalate_days"] >= esc["review_days"]:
         raise ConfigError("config key 'staleness_escalation' requires "
                           "escalate_days < review_days")
+    if esc and (esc["escalate_days"] <= 0 or esc["review_days"] <= 0):
+        raise ConfigError("config key 'staleness_escalation' requires "
+                          "positive day values")
     unknown = sorted(set(config) - set(_REQUIRED_CONFIG)
                      - set(_OPTIONAL_CONFIG))
     if unknown:

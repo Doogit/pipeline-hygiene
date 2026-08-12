@@ -85,6 +85,25 @@ def test_staleness_escalation_validation(config):
         validate_config(dict(config,
                              staleness_escalation={"escalate_days": 21,
                                                    "review_days": 21}))
+    with pytest.raises(ConfigError, match="positive day values"):
+        validate_config(dict(config,
+                             staleness_escalation={"escalate_days": 0,
+                                                   "review_days": 21}))
+
+
+def test_optional_numeric_config_ranges(config):
+    for key in ("pipeline_gen_weekly_target", "trend_snapshots",
+                "delta_detail_max_per_rule"):
+        validate_config(dict(config, **{key: 1}))
+        with pytest.raises(ConfigError, match=rf"{key!r} must be > 0"):
+            validate_config(dict(config, **{key: 0}))
+
+    validate_config(dict(config, low_coverage_desk_note_share=0.0))
+    validate_config(dict(config, low_coverage_desk_note_share=1.0))
+    with pytest.raises(ConfigError, match="between 0 and 1"):
+        validate_config(dict(config, low_coverage_desk_note_share=-0.1))
+    with pytest.raises(ConfigError, match="between 0 and 1"):
+        validate_config(dict(config, low_coverage_desk_note_share=1.1))
 
 
 # --- display currency ---
