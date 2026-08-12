@@ -1,0 +1,17 @@
+# Keep the build context small and reproducible. NOTE: data/ is intentionally
+# NOT ignored — the Dockerfile ingests data/snapshots/*.csv and reads the
+# manifests at build time. Only the generated store is excluded so the build
+# creates its own.
+.git
+.claude
+.lavish
+tests
+docs
+out
+data/pipeline.db
+**/__pycache__
+*.pyc
+.venv
+venv
+.pytest_cache
+.hypothesis

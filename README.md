@@ -24,6 +24,23 @@ pip install -r requirements.txt
 Python 3.10+. Runtime needs pyyaml, pandas, streamlit and altair;
 pytest/hypothesis are dev-only. No services, no API keys, no LLM calls.
 
+## Run it hosted (Azure App Service)
+
+To put the dashboard on a URL instead of a laptop, `deploy/azure-deploy.ps1`
+builds a container image *inside Azure* (no local Docker) and provisions
+App Service for Containers with the committed synthetic demo data baked in:
+
+```powershell
+az login
+./deploy/azure-deploy.ps1
+```
+
+It serves synthetic data with no auth by default; see
+[deploy/README.md](deploy/README.md) for the one-command Entra (Microsoft
+sign-in) gate to add before using real data. The `Dockerfile` also runs
+anywhere Docker does (`docker build -t pipeline-hygiene . && docker run -p
+8000:8000 pipeline-hygiene`).
+
 ## Bring your own CSV
 
 The simulator is only a demo. For a real CRM export, run `python -m src.ingest
