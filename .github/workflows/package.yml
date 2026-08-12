@@ -1,0 +1,51 @@
+name: package
+
+# Builds the actual container and boots it — catches packaging drift the
+# no-Docker contract tests (tests/test_packaging.py) can't: real dependency
+# resolution, real image build, real startup, and that the baked demo data +
+# quotas wiring are present in the running container.
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "app/**"
+      - "data/**"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "requirements.txt"
+      - "deploy/**"
+      - ".github/workflows/package.yml"
+
+jobs:
+  docker-build-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t pipeline-hygiene:ci .
+
+      - name: Boot container
+        run: docker run -d --name ph -p 8000:8000 pipeline-hygiene:ci
+
+      - name: Wait for health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/_stcore/health; then echo " healthy"; exit 0; fi
+            sleep 2
+          done
+          echo "container did not become healthy in time"; exit 1
+
+      - name: Assert baked demo data + quotas wiring
+        run: >
+          docker exec ph python -c "import json,os,sqlite3;
+          n=sqlite3.connect(os.environ['PIPELINE_HYGIENE_DB']).execute('select count(*) from snapshots').fetchone()[0];
+          assert n>=2, ('snapshots baked', n);
+          q=os.environ['PIPELINE_HYGIENE_QUOTAS'];
+          d=json.load(open(q));
+          assert d.get('quotas') and d.get('owners'), 'quotas/owners empty -> coverage/Teams blank';
+          print('OK:', n, 'snapshots, quotas+owners present')"
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs ph || true

@@ -13,13 +13,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Bake the four committed weekly snapshots into a SQLite store. A series (not a
-# single snapshot) is what makes the Trajectory / Slippage / Flow tabs populate.
+# Bake the committed weekly snapshots into a SQLite store. Globbed (not a fixed
+# filename list) so re-seeding with different dates can't silently break the
+# build; sh expands the glob in sorted (chronological) order. A series — not a
+# single snapshot — is what makes the Trajectory / Slippage / Flow tabs populate
+# (tests/test_packaging.py asserts >=2 exist).
 ENV PIPELINE_HYGIENE_DB=/app/data/pipeline.db
-RUN python -m src.ingest data/snapshots/opps_2026-07-20.csv \
- && python -m src.ingest data/snapshots/opps_2026-07-27.csv \
- && python -m src.ingest data/snapshots/opps_2026-08-03.csv \
- && python -m src.ingest data/snapshots/opps_2026-08-10.csv
+RUN set -e; for f in data/snapshots/opps_*.csv; do python -m src.ingest "$f"; done
 
 # Quotas + owner team/region metadata drive coverage and the Teams tab; the
 # series manifest carries them. Without this they render blank.
