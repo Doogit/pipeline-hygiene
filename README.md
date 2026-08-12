@@ -283,10 +283,15 @@ so the shown ratio and the flag can never disagree.
 
 Team and region roll-ups over the same open opps — owners, open pipeline,
 roster quota, coverage, violations, at-risk dollars — sorted worst coverage
-first so ordering itself carries the signal, plus commit accuracy by team
-and region. Team/region membership comes from the `owners` block of the
-`--quotas`/`PIPELINE_HYGIENE_QUOTAS` JSON (the seed manifest already
-carries it); without that metadata the tab degrades to a clear caption.
+first so ordering itself carries the signal, each table carrying the
+desk-wide under-coverage note when most groups trip the flag (so a uniform
+`low_coverage` column reads as a desk condition, not "every team failing").
+Below the tables, a per-team and per-region **coverage trend** across stored
+snapshots (each point on its own win-rate basis, with a 1.00x reference
+line), and commit accuracy by team and region. Team/region membership comes
+from the `owners` block of the `--quotas`/`PIPELINE_HYGIENE_QUOTAS` JSON (the
+seed manifest already carries it); without that metadata the tab degrades to
+a clear caption.
 
 ![Teams tab](docs/screenshots/tab-teams.png)
 
