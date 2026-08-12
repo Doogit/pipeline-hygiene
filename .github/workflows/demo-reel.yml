@@ -1,0 +1,40 @@
+name: Refresh demo reel
+
+# When the dashboard screenshots change, rebuild docs/demo-reel.gif from them
+# and commit the result so the README animation never drifts from the stills.
+# The commit only touches docs/demo-reel.gif (outside the trigger path) and is
+# marked [skip ci], so it cannot re-trigger this workflow.
+on:
+  push:
+    paths:
+      - "docs/screenshots/**"
+      - "scripts/build_demo_reel.py"
+      - ".github/workflows/demo-reel.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pillow
+      - run: python scripts/build_demo_reel.py
+      - name: Commit refreshed reel if it changed
+        run: |
+          if git diff --quiet -- docs/demo-reel.gif; then
+            echo "demo reel already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/demo-reel.gif
+          git commit -m "chore: refresh demo reel [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
