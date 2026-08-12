@@ -1,7 +1,7 @@
 # Runtime
 pyyaml>=6.0
 pandas>=2.0
-streamlit>=1.40
+streamlit>=1.57  # width="stretch" charts/tables plus theme keys used by the dashboard
 altair>=5.0
 # Dev / tests
 pytest>=8.0

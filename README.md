@@ -119,7 +119,11 @@ structure — it never writes to the store or to source data, and viewing or
 downloading a brief from it does not record a run. The committed
 `.streamlit/config.toml` binds it to 127.0.0.1 (Streamlit's own default is
 0.0.0.0, which would serve the private digest data to the network) —
-override deliberately if you mean to serve it. Every view shares the
+override deliberately if you mean to serve it. The same file carries a light
+Fluent/Microsoft-web `[theme]` (Segoe UI system stack, no CDN fonts; accent
+`#0072B2`, the Okabe-Ito "low" blue that doubles as Microsoft brand blue) and
+uses Streamlit's `width="stretch"` chart/table sizing, so it needs Streamlit
+>=1.57. Every view shares the
 same headline: an `st.metric` row with week-over-week delta arrows wired to
 since-last-run (desk score, open pipeline, at-risk dollars — at-risk uses
 `delta_color="inverse"` so rising risk reads red), the violation counts as
@@ -447,11 +451,14 @@ never by running the rules engine, so the comparison is non-circular.
 - Dashboard tabs mirror the brief structure (Forecast call landing,
   Slippage, Trajectory, Flow, Owners, Teams, Appendix) rather than
   inventing a second information architecture; each tab is designed to fit one screen. Charts
-  are Streamlit built-ins + bundled Altair only, with explicit pixel sizes
-  and right-side legends: container-sized charts collapse when rendered
-  inside an initially hidden tab, and `alt.Legend(orient="bottom")`
-  collapses the plot area under Streamlit's Vega theme (both verified
-  empirically). Severity palette is Okabe-Ito (colorblind-safe) everywhere;
+  are Streamlit built-ins + bundled Altair only, sized with `width="stretch"`
+  and right-side legends. `width="stretch"` fills the tab responsively;
+  Streamlit >=1.57 measures the container correctly even for a chart in an
+  initially hidden tab, so the old pre-1.47 hidden-tab collapse workaround
+  (hard-coded pixel widths) is gone — verified full-width across all seven
+  tabs with headless Playwright. `alt.Legend(orient="bottom")` still
+  collapses the plot area under Streamlit's Vega theme, so legends stay on
+  the right. Severity palette is Okabe-Ito (colorblind-safe) everywhere;
   colored text chips (:red[] etc.) instead of emoji.
 - Task 12 disclosure: `tests/test_dashboard.py` (added during PR #2 review;
   not one of the original 50) asserted the pre-redesign layout literally

@@ -149,26 +149,30 @@ if store is not None and prev_summary is not None:
     prev_open_pipeline = sum(r["amount"] or 0.0
                              for r in prev_rows if is_open(r))
 
-cols = st.columns(5)
-cols[0].metric("Open opps", desk.n_open)
+cols = st.columns(5, gap="small", vertical_alignment="center")
+cols[0].metric("Open opps", desk.n_open, border=True)
 cols[1].metric(
     "Desk score (weighted mean)",
     "n/a" if desk.weighted_mean_score is None
     else f"{desk.weighted_mean_score:.1f}",
     delta=(None if prev_desk is None or desk.weighted_mean_score is None
            or prev_desk["weighted_mean_score"] is None
-           else f"{desk.weighted_mean_score - prev_desk['weighted_mean_score']:+.1f}"))
+           else f"{desk.weighted_mean_score - prev_desk['weighted_mean_score']:+.1f}"),
+    border=True)
 cols[2].metric(f"Healthy (score >= {config['healthy_score_threshold']})",
-               "n/a" if desk.pct_healthy is None else f"{desk.pct_healthy:.1f}%")
+               "n/a" if desk.pct_healthy is None else f"{desk.pct_healthy:.1f}%",
+               border=True)
 cols[3].metric(
     "Open pipeline", f"{CURRENCY}{open_pipeline:,.0f}",
     delta=(None if prev_open_pipeline is None
-           else f"{open_pipeline - prev_open_pipeline:+,.0f}"))
+           else f"{open_pipeline - prev_open_pipeline:+,.0f}"),
+    border=True)
 cols[4].metric(
     "At-risk dollars", f"{CURRENCY}{desk.at_risk_dollars:,.0f}",
     delta=(None if prev_desk is None
            else f"{desk.at_risk_dollars - prev_desk['at_risk_dollars']:+,.0f}"),
     delta_color="inverse",
+    border=True,
     help="Distinct open opps with at least one high-severity violation; "
          "each opp's amount counted once.")
 
@@ -186,8 +190,8 @@ st.markdown(f"Violations: :red[{severity_counts['high']} high] · "
 if sum(severity_counts.values()):
     mix = pd.DataFrame([{"severity": s, "count": n, "y": "violations"}
                         for s, n in severity_counts.items() if n])
-    # explicit pixel sizes throughout: charts inside initially-hidden tabs
-    # measure a zero-size container, so container sizing collapses them
+    # width="stretch": Streamlit >=1.47 sizes charts to the tab container even
+    # when a tab starts hidden, so no hard-coded pixel width is needed.
     st.altair_chart(
         alt.Chart(mix).mark_bar(size=26).encode(
             x=alt.X("count:Q", stack="zero", title=None),
@@ -197,7 +201,8 @@ if sum(severity_counts.values()):
                                             range=list(SEVERITY_COLORS.values())),
                             legend=alt.Legend(orient="right", title=None)),
             order=alt.Order("severity:N"),
-            tooltip=["severity", "count"]).properties(height=40, width=950))
+            tooltip=["severity", "count"]).properties(height=40),
+        width="stretch")
 
 # --- filters (apply to Slippage, Owners, Appendix tables) ---
 
@@ -267,7 +272,9 @@ def _ledger_df(entries, key_fn, label):
 def _ledger_section(entries, key_fn, label):
     """One commit-accuracy table with the standing disclaimer; degrades to a
     clear caption outside the store or with no ever-commit history."""
-    st.caption(LEDGER_CAPTION.format(min_n=config["min_opps_for_owner_score"]))
+    with st.popover("How commit accuracy is computed"):
+        st.caption(
+            LEDGER_CAPTION.format(min_n=config["min_opps_for_owner_score"]))
     if entries is None:
         st.caption("Unavailable outside the snapshot store.")
     elif not entries:
@@ -328,11 +335,13 @@ with tab_call:
 
 with tab_slip:
     st.subheader("Slipping pipeline")
-    st.caption(f"Close-date pushes observed in stored history. H11 fires on "
-               f"a single push >= {config['push_alarm_days']}d or "
-               f">= {config['cumulative_push_alarm_days']}d cumulative "
-               f"later-drift; movement per se is not risk. Review marker at "
-               f"push_count >= {config['disqualify_review_pushes']}.")
+    st.caption("Close-date pushes observed in stored history; movement per se "
+               "is not risk.")
+    with st.popover("How H11 fires"):
+        st.caption(f"H11 fires on a single push >= {config['push_alarm_days']}d "
+                   f"or >= {config['cumulative_push_alarm_days']}d cumulative "
+                   f"later-drift. Review marker at push_count >= "
+                   f"{config['disqualify_review_pushes']}.")
     open_rows = [r for r in rows if is_open(r)]
     if not any(r.get("push_count") is not None for r in open_rows):
         st.caption("No push history available (rows evaluated outside the "
@@ -403,17 +412,20 @@ with tab_traj:
                                                 var_name="series",
                                                 value_name="dollars")
         st.altair_chart(
-            alt.Chart(cov_df.dropna()).mark_line(point=True).encode(
+            alt.Chart(cov_df.dropna()).mark_line(point=True, strokeWidth=2.5)
+            .encode(
                 x=alt.X("snapshot:N", title=None),
-                y=alt.Y("dollars:Q", title=CURRENCY),
+                y=alt.Y("dollars:Q", title=CURRENCY,
+                        axis=alt.Axis(format="~s")),
                 color=alt.Color("series:N",
                                 scale=alt.Scale(range=["#0072B2", "#D55E00"]),
                                 legend=alt.Legend(title=None)),
                 tooltip=["snapshot", "series",
                          alt.Tooltip("dollars:Q", format=",.0f")])
-            .properties(height=220, width=950,
+            .properties(height=220,
                         title="Coverage: open vs required pipeline "
-                              "(1 / trailing win rate)"))
+                              "(1 / trailing win rate)"),
+            width="stretch")
         basis = (data["trajectory"]["coverage"] or {}).get("basis")
         if basis:
             st.caption(f"Coverage basis: {basis}")
@@ -427,16 +439,19 @@ with tab_traj:
         st.altair_chart(
             alt.Chart(pd.DataFrame(
                 [{"snapshot": d.isoformat(), "desk score": s}
-                 for d, s in trend])).mark_line(point=True).encode(
+                 for d, s in trend])).mark_line(point=True, strokeWidth=2.5)
+            .encode(
                 x=alt.X("snapshot:N", title=None),
                 y=alt.Y("desk score:Q",
                         scale=alt.Scale(domain=[0, 100])),
                 tooltip=["snapshot", "desk score"])
-            .properties(height=180, width=950,
-                        title="Desk score trend (snapshot-anchored)"))
+            .properties(height=180,
+                        title="Desk score trend (snapshot-anchored)"),
+            width="stretch")
     else:
         st.caption("Desk score trend appears after 2+ stored snapshots.")
 
+    st.divider()
     st.subheader("Commit accuracy by committed-for quarter")
     st.caption("Committed-for quarter = fiscal quarter of the close date "
                "when the deal was first called commit — immune to later "
@@ -471,9 +486,10 @@ with tab_flow:
                       else "in" if label.startswith("+") else "out")}
             for label, key in zip(_WF_ORDER, _WF_KEYS)])
         st.altair_chart(
-            alt.Chart(wf_df).mark_bar().encode(
+            alt.Chart(wf_df).mark_bar(cornerRadiusEnd=2).encode(
                 x=alt.X("bucket:N", sort=_WF_ORDER, title=None),
-                y=alt.Y("dollars:Q", title=CURRENCY),
+                y=alt.Y("dollars:Q", title=CURRENCY,
+                        axis=alt.Axis(format="~s")),
                 color=alt.Color(
                     "kind:N",
                     scale=alt.Scale(domain=["level", "in", "out"],
@@ -481,9 +497,10 @@ with tab_flow:
                     legend=alt.Legend(orient="right", title=None)),
                 tooltip=["bucket", "opps",
                          alt.Tooltip("dollars:Q", format=",.0f")])
-            .properties(height=240, width=950,
+            .properties(height=240,
                         title="Open-pipeline waterfall (latest snapshot "
-                              "pair)"))
+                              "pair)"),
+            width="stretch")
         pushed = latest["pushed"]
         st.caption(f"Reconciles exactly: beginning + created + increased − "
                    f"decreased − won − lost − removed = ending. Close-date "
@@ -497,9 +514,9 @@ with tab_flow:
                                  "created": w["dollars"], "opps": w["n"]}
                                 for w in pacing["weekly"]])
         pace_chart = alt.Chart(pace_df).mark_bar(
-            size=26, color=FLOW_COLORS["created"]).encode(
+            size=26, cornerRadiusEnd=2, color=FLOW_COLORS["created"]).encode(
             x=alt.X("week:N", title=None),
-            y=alt.Y("created:Q", title=CURRENCY),
+            y=alt.Y("created:Q", title=CURRENCY, axis=alt.Axis(format="~s")),
             tooltip=["week", "opps",
                      alt.Tooltip("created:Q", format=",.0f")])
         if pacing["target"]:
@@ -513,8 +530,9 @@ with tab_flow:
             pace_note = (" No pipeline_gen_weekly_target configured — no "
                          "target line is guessed.")
         st.altair_chart(pace_chart.properties(
-            height=200, width=950,
-            title="Pipeline generation: created per snapshot week"))
+            height=200,
+            title="Pipeline generation: created per snapshot week"),
+            width="stretch")
         st.caption(f"Mean {CURRENCY}{pacing['mean_dollars']:,.0f}/week over "
                    f"{len(pacing['weekly'])} snapshot pair(s).{pace_note}")
 
@@ -526,19 +544,29 @@ with tab_flow:
                 flow_records.append({"week": week, "flow": label,
                                      "dollars": w[label]["dollars"],
                                      "count": w[label]["n"]})
+        # hover a flow to highlight it and dim the others (client-side Vega,
+        # no rerun); empty=True keeps every bar full when nothing is hovered.
+        flow_hover = alt.selection_point(fields=["flow"], on="mouseover",
+                                         empty=True)
         st.altair_chart(
-            alt.Chart(pd.DataFrame(flow_records)).mark_bar().encode(
+            alt.Chart(pd.DataFrame(flow_records)).mark_bar(cornerRadiusEnd=2)
+            .encode(
                 x=alt.X("week:N", title=None),
-                y=alt.Y("dollars:Q", title=CURRENCY),
+                y=alt.Y("dollars:Q", title=CURRENCY,
+                        axis=alt.Axis(format="~s")),
                 color=alt.Color("flow:N",
                                 scale=alt.Scale(domain=list(FLOW_COLORS),
                                                 range=list(FLOW_COLORS.values())),
                                 legend=alt.Legend(title=None)),
                 xOffset="flow:N",
+                opacity=alt.condition(flow_hover, alt.value(1.0),
+                                      alt.value(0.35)),
                 tooltip=["week", "flow", "count",
                          alt.Tooltip("dollars:Q", format=",.0f")])
-            .properties(height=220, width=950,
-                        title="Created vs closed per snapshot week"))
+            .add_params(flow_hover)
+            .properties(height=220,
+                        title="Created vs closed per snapshot week"),
+            width="stretch")
 
 # --- Owners ---
 
@@ -563,13 +591,34 @@ with tab_owners:
                                if on),
         })
     if owner_records:
-        st.dataframe(
+        owner_event = st.dataframe(
             pd.DataFrame(owner_records), width="stretch", hide_index=True,
+            on_select="rerun", selection_mode="single-row",
+            key="owner_scoreboard",
             column_config={
                 "mean": _SCORE_COL, "median": _SCORE_COL,
                 "pipeline": _MONEY_COL, "gap to cover": _MONEY_COL,
                 "coverage": st.column_config.NumberColumn(format="%.2fx"),
             })
+        picked = owner_event.selection.rows
+        if picked:
+            sel_owner = owner_records[picked[0]]["owner"]
+            detail = brief.owner_flagged_opps(sel_owner, results, rows_by_id,
+                                              config)
+            st.markdown(f"**{sel_owner} — open flagged opps** "
+                        f"({len(detail)}, read-only)")
+            if detail:
+                st.dataframe(
+                    pd.DataFrame(detail), width="stretch", hide_index=True,
+                    column_config={
+                        "amount": _MONEY_COL, "score": _SCORE_COL,
+                        "detail": st.column_config.TextColumn(width="large"),
+                    })
+            else:
+                st.caption(f"{sel_owner} has no open opps with violations.")
+        else:
+            st.caption("Select an owner row to drill into their open flagged "
+                       "opps.")
     st.caption(f"small_n = fewer than {config['min_opps_for_owner_score']} "
                f"open opps, treat the score as anecdotal. Coverage = open "
                f"pipeline vs required pipeline (remaining quota net of wins "
@@ -580,6 +629,7 @@ with tab_owners:
     if desk_note:
         st.caption(desk_note)
 
+    st.divider()
     st.subheader("Forecast integrity patterns")
     st.caption("Coaching signal, not a comp input.")
     if patterns is None:
@@ -604,6 +654,7 @@ with tab_owners:
         st.caption(f"Suppressed as small_n: {small} owners with too little "
                    f"history to score.")
 
+    st.divider()
     st.subheader("Commit accuracy")
     owner_entries = (None if ledger is None else
                      [e for e in ledger
@@ -652,6 +703,7 @@ with tab_teams:
             st.dataframe(_group_df(groups), width="stretch", hide_index=True,
                          column_config=_GROUP_COLS)
 
+        st.divider()
         st.subheader("Commit accuracy by team and region")
         owner_meta = config.get("owner_meta") or {}
         _ledger_section(

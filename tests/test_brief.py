@@ -139,6 +139,31 @@ def test_brief_reports_insufficient_history(tmp_path, config):
             f"(reported, not counted as violations)") in markdown
 
 
+def test_owner_flagged_opps_scopes_and_ranks(tmp_path, config):
+    from src.rules import is_open
+    store, cfg, _ = _seeded_store(tmp_path, config)
+    data = brief.build(store, AS_OF, AS_OF, cfg)
+    results = data["results"]
+    rows_by_id = {r["opp_id"]: r for r in data["rows"]}
+    owner = next(rows_by_id[r.opp_id]["owner"] for r in results.values()
+                 if r.violations and is_open(rows_by_id[r.opp_id]))
+
+    recs = brief.owner_flagged_opps(owner, results, rows_by_id, cfg)
+    assert recs, "expected at least one open flagged opp for the owner"
+    # scoped to the one owner, open only, every row carries its rule badges
+    assert all(rows_by_id[rec["opp_id"]]["owner"] == owner for rec in recs)
+    assert all(is_open(rows_by_id[rec["opp_id"]]) for rec in recs)
+    assert all(rec["rules"] and rec["detail"] for rec in recs)
+    # matches the Appendix ordering: worst severity, then descending amount
+    order = {"high": 0, "medium": 1, "low": 2}
+    keys = [(order[rec["worst"]], -(rec["amount"] or 0.0), rec["opp_id"])
+            for rec in recs]
+    assert keys == sorted(keys)
+    # unknown owner -> empty (drives the "no open flagged opps" caption)
+    assert brief.owner_flagged_opps("::nobody::", results, rows_by_id,
+                                    cfg) == []
+
+
 def test_staleness_escalation_section(tmp_path, config):
     from src.rules import is_open, staleness_tier
     store, cfg, _ = _seeded_store(tmp_path, config)
