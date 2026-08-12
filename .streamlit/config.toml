@@ -6,3 +6,29 @@ address = "127.0.0.1"
 
 [browser]
 gatherUsageStats = false
+
+# Light Fluent/Microsoft-web aesthetic, fully offline (no CDN fonts/assets).
+# Segoe UI is the Fluent typeface and a Windows system font, so it needs no
+# font file; the stack degrades to system-ui/sans-serif elsewhere. primaryColor
+# is the Okabe-Ito "low" blue, which also reads as Microsoft brand blue, so one
+# accent serves both the colorblind palette and the house look. Never switch
+# base off "light". chartCategoricalColors is only a safety net for charts that
+# forget an explicit scale — every existing chart keeps its explicit Okabe-Ito
+# scale so high is always vermillion regardless of category order.
+[theme]
+base = "light"
+font = "Segoe UI, Segoe UI Variable, system-ui, sans-serif"
+primaryColor = "#0072B2"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5F5F5"
+textColor = "#242424"
+baseFontSize = 14
+baseRadius = "6px"
+borderColor = "#E0E0E0"
+showSidebarBorder = true
+dataframeHeaderBackgroundColor = "#F5F5F5"
+chartCategoricalColors = ["#D55E00", "#E69F00", "#0072B2", "#009E73"]
+
+[theme.sidebar]
+backgroundColor = "#FAFAFA"
+borderColor = "#E0E0E0"

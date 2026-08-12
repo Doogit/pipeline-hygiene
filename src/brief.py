@@ -827,6 +827,34 @@ def _top_exceptions(lines, data, config):
                      f"| {streak_cell} | {detail} |")
 
 
+def owner_flagged_opps(owner, results, rows_by_id, config):
+    """Open flagged opps for one owner, worst-severity then dollar ranked.
+
+    The read-only drill-down the dashboard renders when a scoreboard row is
+    selected. Pure (no Streamlit, no store) so it is unit-testable without
+    running the app script; mirrors the Appendix exception ordering.
+    """
+    recs = []
+    for result in results.values():
+        if not result.violations:
+            continue
+        row = rows_by_id.get(result.opp_id)
+        if row is None or row["owner"] != owner or not is_open(row):
+            continue
+        worst = min(_SEV_RANK[v.severity] for v in result.violations)
+        recs.append({
+            "opp_id": result.opp_id, "account": row["account"],
+            "stage": row["stage"], "amount": row["amount"],
+            "score": opp_score(result, config),
+            "worst": ["high", "medium", "low"][worst],
+            "rules": " ".join(v.rule_id for v in result.violations),
+            "detail": "; ".join(v.detail for v in result.violations),
+            "_rank": (worst, -(row["amount"] or 0.0), result.opp_id),
+        })
+    recs.sort(key=lambda e: e.pop("_rank"))
+    return recs
+
+
 def _staleness_tiers(lines, data, config):
     """Escalation ladder over H1-stale opps, rendered only when the OPTIONAL
     staleness_escalation config block is present (absent -> the brief is
