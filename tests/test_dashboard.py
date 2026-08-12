@@ -24,6 +24,11 @@ from src.snapshots import SnapshotStore
 
 AS_OF = date(2026, 8, 10)
 
+# Absolute so AppTest.from_file works regardless of how the installed Streamlit
+# resolves relative paths (newer versions resolve against the calling test file,
+# not the CWD, which breaks a bare "app/dashboard.py").
+DASHBOARD = str(Path(__file__).resolve().parent.parent / "app" / "dashboard.py")
+
 
 def _env(tmp_path, monkeypatch, config, org, quota_payload=None):
     config_path = tmp_path / "config.yaml"
@@ -78,7 +83,7 @@ def test_dashboard_series_tabs_charts_and_filters(tmp_path, config,
     brief.run(store, dates[-1], dates[-1], cfg, tmp_path / "out")
     store.close()
 
-    app = AppTest.from_file(str(Path("app") / "dashboard.py"))
+    app = AppTest.from_file(DASHBOARD)
     app.run(timeout=60)
     assert not app.exception
     # headline metrics, with since-last-run deltas wired
@@ -123,7 +128,7 @@ def test_dashboard_single_snapshot_degrades_gracefully(tmp_path, config,
     assert store.ingest_csv(csv_path, AS_OF).rejected == 0
     store.close()
 
-    app = AppTest.from_file(str(Path("app") / "dashboard.py"))
+    app = AppTest.from_file(DASHBOARD)
     app.run(timeout=60)
     assert not app.exception
     captions = " ".join(c.value for c in app.caption)
@@ -145,7 +150,7 @@ def test_dashboard_accepts_bare_quota_json(tmp_path, config, monkeypatch):
     assert store.ingest_csv(csv_path, AS_OF).rejected == 0
     store.close()
 
-    app = AppTest.from_file(str(Path("app") / "dashboard.py"))
+    app = AppTest.from_file(DASHBOARD)
     app.run(timeout=60)
     assert not app.exception
     owners = _find_owner_df(app).value
