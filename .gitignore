@@ -2,7 +2,27 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .hypothesis/
-data/pipeline.db
+# Ingested/seeded pipeline data may be a real CRM export (customer names,
+# amounts, contacts). Default-deny data exports at ANY depth and in the common
+# export formats, plus repo-root drops (the README's --init example writes
+# your_export.csv there). The synthetic demo snapshots that ship with the repo
+# (and are baked into the container image) are the only whitelisted exceptions.
+# To add a NEW synthetic demo file, add an explicit "!" line for it -- opt-in is
+# the point, so a real export can never be committed by accident.
+/*.csv
+/*.xlsx
+/*.xls
+data/**/*.csv
+data/**/*.xlsx
+data/**/*.xls
+data/**/*.db
+data/**/*.sqlite
+data/**/*.sqlite3
+!data/opps_2026-08-10.csv
+!data/snapshots/opps_2026-07-20.csv
+!data/snapshots/opps_2026-07-27.csv
+!data/snapshots/opps_2026-08-03.csv
+!data/snapshots/opps_2026-08-10.csv
 out/*.md
 out/digests/
 .venv/

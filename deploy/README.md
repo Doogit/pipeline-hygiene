@@ -36,7 +36,21 @@ for real pipeline data until you put sign-in in front of it.
 ### Add Entra sign-in (before using real data)
 
 App Service "Easy Auth" gates the whole app behind Microsoft corporate sign-in
-with no application code. After the app exists:
+with no application code. The deploy script wires it up automatically when you
+set two environment variables before running — otherwise it deploys **open**
+and prints a warning telling you so:
+
+```powershell
+$env:ENTRA_CLIENT_ID = "<entra-app-client-id>"
+$env:ENTRA_TENANT_ID = "<tenant-id>"
+./deploy/azure-deploy.ps1        # deploys AND gates behind Microsoft sign-in
+```
+
+Every request then requires a valid corporate login; unauthenticated visitors
+are bounced to the Microsoft sign-in page.
+
+To turn Easy Auth on manually against an app that already exists (equivalent to
+what step 8 of the script runs):
 
 ```powershell
 # Creates an Entra app registration and turns on RequireAuthentication.
@@ -46,9 +60,6 @@ az webapp auth microsoft update -g rg-pipeline-hygiene -n <app-name> `
 az webapp auth update -g rg-pipeline-hygiene -n <app-name> `
     --enabled true --action RequireAuthentication --redirect-provider azureactivedirectory
 ```
-
-Every request then requires a valid corporate login; unauthenticated visitors
-are bounced to the Microsoft sign-in page.
 
 ## Notes / limitations
 

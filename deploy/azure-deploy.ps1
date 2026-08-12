@@ -12,7 +12,8 @@
 #
 # What it serves: SYNTHETIC seed data with NO authentication. That is fine for a
 # demo (no PII), but before pointing it at real pipeline data, gate it behind
-# Microsoft sign-in — see "Add Entra sign-in" in deploy/README.md.
+# Microsoft sign-in by setting ENTRA_CLIENT_ID + ENTRA_TENANT_ID before running
+# (step 8 turns on Easy Auth) — see "Add Entra sign-in" in deploy/README.md.
 #
 # Override any name via environment variable, e.g.  $env:LOCATION = "westus2".
 
@@ -71,6 +72,39 @@ az webapp config set -g $ResourceGroup -n $AppName --web-sockets-enabled true --
 
 # 7. Restart so the pull uses the identity + role granted above.
 az webapp restart -g $ResourceGroup -n $AppName -o none
+
+# 8. Authentication boundary. When ENTRA_CLIENT_ID + ENTRA_TENANT_ID are set,
+#    turn on App Service "Easy Auth" so every request requires a Microsoft
+#    corporate sign-in (the same commands documented in deploy/README.md, run
+#    for you). When they are NOT set, the app is deployed OPEN to anyone with
+#    the URL — fine for the synthetic demo data, unsafe for real pipeline data.
+if ($env:ENTRA_CLIENT_ID -and $env:ENTRA_TENANT_ID) {
+    Write-Host "Enabling Microsoft (Entra) sign-in..."
+    # az is a native command, so a non-zero exit does NOT throw under
+    # $ErrorActionPreference='Stop' -- check $LASTEXITCODE after each call. The
+    # app is already live (created + restarted above), so a SILENT auth failure
+    # would leave it open while we claim success; fail loud and closed instead.
+    az webapp auth microsoft update -g $ResourceGroup -n $AppName `
+        --client-id $env:ENTRA_CLIENT_ID `
+        --issuer "https://login.microsoftonline.com/$($env:ENTRA_TENANT_ID)/v2.0" -o none
+    if ($LASTEXITCODE -eq 0) {
+        az webapp auth update -g $ResourceGroup -n $AppName `
+            --enabled true --action RequireAuthentication `
+            --redirect-provider azureactivedirectory -o none
+    }
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Entra sign-in enabled: unauthenticated visitors are bounced to Microsoft login."
+    } else {
+        Write-Warning "Entra sign-in setup FAILED (az exit $LASTEXITCODE): app '$AppName' is LIVE and OPEN."
+        Write-Warning "Verify with 'az webapp auth show -g $ResourceGroup -n $AppName' and re-run once fixed,"
+        Write-Warning "or take it down now with 'az webapp stop -g $ResourceGroup -n $AppName'."
+    }
+} else {
+    Write-Warning "Deployed OPEN with NO authentication -- anyone with the URL can view the dashboard."
+    Write-Warning "This is acceptable ONLY for the SYNTHETIC demo data baked into the image."
+    Write-Warning "Before serving real pipeline data, set `$env:ENTRA_CLIENT_ID and"
+    Write-Warning "`$env:ENTRA_TENANT_ID and re-run, or follow 'Add Entra sign-in' in deploy/README.md."
+}
 
 $AppHost = az webapp show -g $ResourceGroup -n $AppName --query defaultHostName -o tsv
 Write-Host ""
