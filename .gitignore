@@ -6,3 +6,7 @@ data/pipeline.db
 out/*.md
 out/digests/
 .venv/
+# tailwindcss standalone CLI binary (112 MB) — fetched by scripts/build_css.sh
+app/tools/
+node_modules/
+.sesskey

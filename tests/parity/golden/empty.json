@@ -1,0 +1,34 @@
+{
+  "exception": null,
+  "title": [
+    "pipeline-hygiene — forecast-call prep"
+  ],
+  "header": [
+    "Data source"
+  ],
+  "subheader": [],
+  "caption": [
+    "Read-only: agents inspect, people sell. Nothing on this page writes to the store or to source data.",
+    "Quotas and team/region merged from `<QUOTAS>`."
+  ],
+  "sidebar_caption": [
+    "Quotas and team/region merged from `<QUOTAS>`."
+  ],
+  "markdown": [],
+  "warning": [
+    "Store is empty; ingest a snapshot or upload a CSV."
+  ],
+  "error": [],
+  "metric": [],
+  "tabs": [],
+  "selectbox": [
+    {
+      "label": "Stage vocabulary (stage_map)",
+      "value": "default"
+    }
+  ],
+  "multiselect": [],
+  "date_input": [],
+  "dataframe": [],
+  "charts": []
+}

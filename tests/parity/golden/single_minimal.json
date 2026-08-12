@@ -1,0 +1,1984 @@
+{
+  "exception": null,
+  "title": [
+    "pipeline-hygiene — forecast-call prep"
+  ],
+  "header": [
+    "Data source",
+    "Filters"
+  ],
+  "subheader": [
+    "Risky commits",
+    "Slipping pipeline",
+    "Trajectory",
+    "Commit accuracy by committed-for quarter",
+    "Pipeline flow",
+    "Owner scoreboard",
+    "Forecast integrity patterns",
+    "Commit accuracy",
+    "Teams and regions",
+    "Exceptions (full list)"
+  ],
+  "caption": [
+    "Read-only: agents inspect, people sell. Nothing on this page writes to the store or to source data.",
+    "Since last run: no previous run recorded.",
+    "Close-date pushes observed in stored history; movement per se is not risk.",
+    "H11 fires on a single push >= 21d or >= 45d cumulative later-drift. Review marker at push_count >= 3.",
+    "No close-date pushes observed in stored history (matching the filters).",
+    "Trajectory charts need at least 2 stored snapshots; showing nothing rather than a one-point trend.",
+    "Desk score trend appears after 2+ stored snapshots.",
+    "Committed-for quarter = fiscal quarter of the close date when the deal was first called commit — immune to later pushes, so a slipped commit stays counted against the quarter it was promised for.",
+    "Of opps ever forecast commit in stored history: outcome to date. Pushed = still open with a close-date move after the first commit snapshot. Won/resolved counts closed opps only, shown as won/closed; the percentage appears once 5+ have resolved (small-n rates mislead). Of which pushed first = resolved commits that pushed after the commit and before closing. Coaching signal, not a comp input.",
+    "Flow needs at least 2 stored snapshots; showing nothing rather than a one-point bridge.",
+    "Select an owner row to drill into their open flagged opps.",
+    "small_n = fewer than 5 open opps, treat the score as anecdotal. Coverage = open pipeline vs required pipeline (remaining quota net of wins this quarter x the required multiple); low_coverage means under 1.00x; gap to cover = required minus open pipeline on the same basis. Basis: config coverage_ratio_min 3.0x (stored closed history insufficient: 9 outcomes < 10).",
+    "Note: 60 of 60 quota'd owners are under 1.00x — desk-wide under-coverage, not individual laggards; ordering carries the signal. The flag and its basis are unchanged.",
+    "Coaching signal, not a comp input.",
+    "No overcall/undercall patterns flagged.",
+    "Suppressed as small_n: 60 owners with too little history to score.",
+    "Of opps ever forecast commit in stored history: outcome to date. Pushed = still open with a close-date move after the first commit snapshot. Won/resolved counts closed opps only, shown as won/closed; the percentage appears once 5+ have resolved (small-n rates mislead). Of which pushed first = resolved commits that pushed after the commit and before closing. Coaching signal, not a comp input.",
+    "No team/region metadata configured. Point PIPELINE_HYGIENE_QUOTAS at a manifest with an `owners` block (e.g. data/seed_manifest.json).",
+    "63 open opps with violations match the filters. Rule legend: H1 stale by stage; H2 close date in past; H3 serial slippage; H4 missing/expired next step; H5 forecast mismatch; H6 aging in stage; H7 single-threaded big deal; H8 amount hygiene; H9 vague next step; H10 parked close date; H11 lost deal control",
+    "Quotas and team/region merged from `<QUOTAS>`.",
+    "Filters apply to the Risky commits, Slippage, Owners and Appendix tables; headline metrics, the Flow tab and team/region rollups stay desk-wide. Severity filter: an opp appears under **each** severity it carries, so one opp can match several selections; empty filters mean no restriction."
+  ],
+  "sidebar_caption": [
+    "Quotas and team/region merged from `<QUOTAS>`.",
+    "Filters apply to the Risky commits, Slippage, Owners and Appendix tables; headline metrics, the Flow tab and team/region rollups stay desk-wide. Severity filter: an opp appears under **each** severity it carries, so one opp can match several selections; empty filters mean no restriction."
+  ],
+  "markdown": [
+    "Violations: :red[45 high] · :orange[35 medium] · :blue[15 low]",
+    "**11** commit/best_case opps carry a risk flag — **$1,138,337** (distinct opps), dollar-ranked. Coaching prompts, not gotchas.",
+    "Source `opps_2026-08-10.csv`: accepted 120/120 rows, rejected 0."
+  ],
+  "warning": [],
+  "error": [],
+  "metric": [
+    {
+      "label": "Open opps",
+      "value": "111",
+      "delta": ""
+    },
+    {
+      "label": "Desk score (weighted mean)",
+      "value": "87.3",
+      "delta": ""
+    },
+    {
+      "label": "Healthy (score >= 80)",
+      "value": "80.2%",
+      "delta": ""
+    },
+    {
+      "label": "Open pipeline",
+      "value": "$13,117,433",
+      "delta": ""
+    },
+    {
+      "label": "At-risk dollars",
+      "value": "$4,178,090",
+      "delta": ""
+    }
+  ],
+  "tabs": [
+    "Forecast call",
+    "Slippage",
+    "Trajectory",
+    "Flow",
+    "Owners",
+    "Teams",
+    "Appendix"
+  ],
+  "selectbox": [
+    {
+      "label": "Stage vocabulary (stage_map)",
+      "value": "default"
+    },
+    {
+      "label": "Snapshot",
+      "value": "2026-08-10"
+    }
+  ],
+  "multiselect": [
+    {
+      "label": "Owner",
+      "value": []
+    },
+    {
+      "label": "Stage",
+      "value": []
+    },
+    {
+      "label": "Severity",
+      "value": []
+    }
+  ],
+  "date_input": [
+    {
+      "label": "Evaluate as of",
+      "value": "2026-08-10"
+    }
+  ],
+  "dataframe": [
+    {
+      "columns": [
+        "opp_id",
+        "account",
+        "owner",
+        "stage",
+        "amount",
+        "forecast",
+        "score",
+        "flags",
+        "ask the seller"
+      ],
+      "records": [
+        {
+          "opp_id": "OPP-0046",
+          "account": "Vertexenergy Group",
+          "owner": "Hollis Underhill",
+          "stage": "prospect",
+          "amount": 474714.66,
+          "forecast": "commit",
+          "score": 75,
+          "flags": "H5",
+          "ask the seller": "What buyer evidence supports commit while the deal is still early-stage or has no valid next step?"
+        },
+        {
+          "opp_id": "OPP-0017",
+          "account": "Summitholdings Corp",
+          "owner": "Logan Ivesdale",
+          "stage": "develop",
+          "amount": 160393.44,
+          "forecast": "commit",
+          "score": 75,
+          "flags": "H5",
+          "ask the seller": "What buyer evidence supports commit while the deal is still early-stage or has no valid next step?"
+        },
+        {
+          "opp_id": "OPP-0013",
+          "account": "Cascadesoftware LLC",
+          "owner": "Kendall Lindqvist",
+          "stage": "develop",
+          "amount": 92906.19,
+          "forecast": "best_case",
+          "score": 65,
+          "flags": "H1 H4",
+          "ask the seller": "What specific step did the buyer agree to take next, and by when?"
+        },
+        {
+          "opp_id": "OPP-0001",
+          "account": "Pioneernetworks Group",
+          "owner": "Rowan Westerley",
+          "stage": "propose",
+          "amount": 69114.41,
+          "forecast": "best_case",
+          "score": 80,
+          "flags": "H2",
+          "ask the seller": "The close date has passed — what close date has the buyer actually committed to?"
+        },
+        {
+          "opp_id": "OPP-0077",
+          "account": "Cedaraerospace LLC",
+          "owner": "Logan Ivesdale",
+          "stage": "commit",
+          "amount": 63488.21,
+          "forecast": "best_case",
+          "score": 70,
+          "flags": "H2",
+          "ask the seller": "The close date has passed — what close date has the buyer actually committed to?"
+        },
+        {
+          "opp_id": "OPP-0078",
+          "account": "Goldenfinancial Group",
+          "owner": "Sage Oakhurst",
+          "stage": "develop",
+          "amount": 60482.57,
+          "forecast": "commit",
+          "score": 75,
+          "flags": "H5",
+          "ask the seller": "What buyer evidence supports commit while the deal is still early-stage or has no valid next step?"
+        },
+        {
+          "opp_id": "OPP-0043",
+          "account": "Novafoods Corp",
+          "owner": "Marlow Bramwell",
+          "stage": "qualify",
+          "amount": 59721.25,
+          "forecast": "commit",
+          "score": 55,
+          "flags": "H4 H5",
+          "ask the seller": "What buyer evidence supports commit while the deal is still early-stage or has no valid next step?"
+        },
+        {
+          "opp_id": "OPP-0080",
+          "account": "Lunarenergy Group",
+          "owner": "Corin Farrow",
+          "stage": "develop",
+          "amount": 54285.91,
+          "forecast": "commit",
+          "score": 75,
+          "flags": "H5",
+          "ask the seller": "What buyer evidence supports commit while the deal is still early-stage or has no valid next step?"
+        },
+        {
+          "opp_id": "OPP-0020",
+          "account": "Crimsonmanufacturing Group",
+          "owner": "Corin Farrow",
+          "stage": "develop",
+          "amount": 48103.11,
+          "forecast": "commit",
+          "score": 75,
+          "flags": "H5",
+          "ask the seller": "What buyer evidence supports commit while the deal is still early-stage or has no valid next step?"
+        },
+        {
+          "opp_id": "OPP-0026",
+          "account": "Summitfoods Group",
+          "owner": "Frankie Denholm",
+          "stage": "qualify",
+          "amount": 31571.55,
+          "forecast": "commit",
+          "score": 55,
+          "flags": "H4 H5",
+          "ask the seller": "What buyer evidence supports commit while the deal is still early-stage or has no valid next step?"
+        },
+        {
+          "opp_id": "OPP-0071",
+          "account": "Lunarholdings LLC",
+          "owner": "Greer Ristori",
+          "stage": "qualify",
+          "amount": 23555.84,
+          "forecast": "best_case",
+          "score": 80,
+          "flags": "H4",
+          "ask the seller": "What specific step did the buyer agree to take next, and by when?"
+        }
+      ]
+    },
+    {
+      "columns": [
+        "quarter",
+        "ever commit",
+        "won",
+        "lost",
+        "pushed",
+        "still open",
+        "won/resolved",
+        "of which pushed first"
+      ],
+      "records": [
+        {
+          "quarter": "FY2027-Q1",
+          "ever commit": 6,
+          "won": 0,
+          "lost": 0,
+          "pushed": 0,
+          "still open": 6,
+          "won/resolved": "n/a",
+          "of which pushed first": 0
+        },
+        {
+          "quarter": "FY2027-Q2",
+          "ever commit": 3,
+          "won": 0,
+          "lost": 0,
+          "pushed": 0,
+          "still open": 3,
+          "won/resolved": "n/a",
+          "of which pushed first": 0
+        },
+        {
+          "quarter": "FY2027-Q3",
+          "ever commit": 1,
+          "won": 0,
+          "lost": 0,
+          "pushed": 0,
+          "still open": 1,
+          "won/resolved": "n/a",
+          "of which pushed first": 0
+        }
+      ]
+    },
+    {
+      "columns": [
+        "owner",
+        "open",
+        "mean",
+        "median",
+        "violations",
+        "pipeline",
+        "coverage",
+        "gap to cover",
+        "flags"
+      ],
+      "records": [
+        {
+          "owner": "Avery Calloway",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 108959.63,
+          "coverage": 0.04,
+          "gap to cover": 2771040.37,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Avery Ristori",
+          "open": 2,
+          "mean": 95.0,
+          "median": 95.0,
+          "violations": 1,
+          "pipeline": 104780.94,
+          "coverage": 0.1,
+          "gap to cover": 945219.06,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Blair Denholm",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 254974.55,
+          "coverage": 0.08,
+          "gap to cover": 2955025.45,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Blair Hollowell",
+          "open": 2,
+          "mean": 95.0,
+          "median": 95.0,
+          "violations": 1,
+          "pipeline": 332230.02,
+          "coverage": 0.35,
+          "gap to cover": 627769.98,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Blair Oakhurst",
+          "open": 2,
+          "mean": 70.0,
+          "median": 70.0,
+          "violations": 4,
+          "pipeline": 414828.68000000005,
+          "coverage": 0.12,
+          "gap to cover": 3125171.32,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Casey Grantley",
+          "open": 2,
+          "mean": 85.0,
+          "median": 85.0,
+          "violations": 2,
+          "pipeline": 521057.23,
+          "coverage": 0.12,
+          "gap to cover": 3978942.77,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Corin Farrow",
+          "open": 2,
+          "mean": 75.0,
+          "median": 75.0,
+          "violations": 2,
+          "pipeline": 102389.02,
+          "coverage": 0.1,
+          "gap to cover": 917610.98,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Corin Kirkwood",
+          "open": 2,
+          "mean": 90.0,
+          "median": 90.0,
+          "violations": 1,
+          "pipeline": 96311.28,
+          "coverage": 0.06,
+          "gap to cover": 1463688.72,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Darby Ashford",
+          "open": 1,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 13273.66,
+          "coverage": 0.01,
+          "gap to cover": 1396726.34,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Darby Bramwell",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 111265.09,
+          "coverage": 0.05,
+          "gap to cover": 1988734.91,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Darby Kirkwood",
+          "open": 1,
+          "mean": 95.0,
+          "median": 95.0,
+          "violations": 1,
+          "pipeline": 36886.32,
+          "coverage": 0.03,
+          "gap to cover": 1280792.0399999998,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Ellis Lindqvist",
+          "open": 1,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 116236.69,
+          "coverage": 0.03,
+          "gap to cover": 4143763.31,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Finley Underhill",
+          "open": 2,
+          "mean": 95.0,
+          "median": 95.0,
+          "violations": 1,
+          "pipeline": 284748.53,
+          "coverage": 0.08,
+          "gap to cover": 3165251.4699999997,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Frankie Denholm",
+          "open": 2,
+          "mean": 67.5,
+          "median": 67.5,
+          "violations": 3,
+          "pipeline": 72520.97,
+          "coverage": 0.04,
+          "gap to cover": 1937479.03,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Greer Ristori",
+          "open": 2,
+          "mean": 57.5,
+          "median": 57.5,
+          "violations": 5,
+          "pipeline": 53484.93,
+          "coverage": 0.03,
+          "gap to cover": 1866515.07,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Greer Westerley",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 123588.07,
+          "coverage": 0.09,
+          "gap to cover": 1316411.93,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Harper Bramwell",
+          "open": 2,
+          "mean": 95.0,
+          "median": 95.0,
+          "violations": 1,
+          "pipeline": 266524.67000000004,
+          "coverage": 0.13,
+          "gap to cover": 1773475.33,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Harper Grantley",
+          "open": 2,
+          "mean": 95.0,
+          "median": 95.0,
+          "violations": 1,
+          "pipeline": 304563.0,
+          "coverage": 0.22,
+          "gap to cover": 1075437.0,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Harper Ivesdale",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 416246.99,
+          "coverage": 0.11,
+          "gap to cover": 3303753.01,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Hollis Marchetti",
+          "open": 2,
+          "mean": 90.0,
+          "median": 90.0,
+          "violations": 2,
+          "pipeline": 285875.16000000003,
+          "coverage": 0.09,
+          "gap to cover": 2864124.84,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Hollis Southgate",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 116216.44,
+          "coverage": 0.08,
+          "gap to cover": 1293783.56,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Hollis Underhill",
+          "open": 2,
+          "mean": 77.5,
+          "median": 77.5,
+          "violations": 2,
+          "pipeline": 694305.52,
+          "coverage": 0.17,
+          "gap to cover": 3415694.48,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Jordan Vantrease",
+          "open": 2,
+          "mean": 97.5,
+          "median": 97.5,
+          "violations": 1,
+          "pipeline": 172264.61,
+          "coverage": 0.04,
+          "gap to cover": 3727735.39,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Kendall Grantley",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 71715.49,
+          "coverage": 0.06,
+          "gap to cover": 1038284.51,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Kendall Lindqvist",
+          "open": 2,
+          "mean": 60.0,
+          "median": 60.0,
+          "violations": 5,
+          "pipeline": 223540.38,
+          "coverage": 0.05,
+          "gap to cover": 4096459.62,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Logan Denholm",
+          "open": 2,
+          "mean": 90.0,
+          "median": 90.0,
+          "violations": 2,
+          "pipeline": 169959.86,
+          "coverage": 0.05,
+          "gap to cover": 3070040.14,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Logan Ivesdale",
+          "open": 2,
+          "mean": 72.5,
+          "median": 72.5,
+          "violations": 3,
+          "pipeline": 223881.65,
+          "coverage": 0.07,
+          "gap to cover": 2896118.35,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Marlow Bramwell",
+          "open": 2,
+          "mean": 67.5,
+          "median": 67.5,
+          "violations": 3,
+          "pipeline": 86332.37,
+          "coverage": 0.06,
+          "gap to cover": 1293667.63,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Morgan Calloway",
+          "open": 2,
+          "mean": 60.0,
+          "median": 60.0,
+          "violations": 5,
+          "pipeline": 211052.87,
+          "coverage": 0.06,
+          "gap to cover": 3298947.13,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Noor Underhill",
+          "open": 2,
+          "mean": 95.0,
+          "median": 95.0,
+          "violations": 1,
+          "pipeline": 433411.37,
+          "coverage": 0.12,
+          "gap to cover": 3256588.63,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Parker Thistlewood",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 177465.0,
+          "coverage": 0.16,
+          "gap to cover": 962535.0,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Quinn Lindqvist",
+          "open": 2,
+          "mean": 90.0,
+          "median": 90.0,
+          "violations": 1,
+          "pipeline": 115082.54000000001,
+          "coverage": 0.06,
+          "gap to cover": 1954917.46,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Quinn Oakhurst",
+          "open": 1,
+          "mean": 65.0,
+          "median": 65.0,
+          "violations": 2,
+          "pipeline": 839953.92,
+          "coverage": 0.25,
+          "gap to cover": 2565964.2,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Quinn Ristori",
+          "open": 2,
+          "mean": 95.0,
+          "median": 95.0,
+          "violations": 1,
+          "pipeline": 88406.08,
+          "coverage": 0.06,
+          "gap to cover": 1321593.92,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Reese Denholm",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 967557.33,
+          "coverage": 0.22,
+          "gap to cover": 3502442.67,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Reese Northcote",
+          "open": 2,
+          "mean": 90.0,
+          "median": 90.0,
+          "violations": 1,
+          "pipeline": 170734.04,
+          "coverage": 0.05,
+          "gap to cover": 3009265.96,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Riley Grantley",
+          "open": 1,
+          "mean": 85.0,
+          "median": 85.0,
+          "violations": 2,
+          "pipeline": 61946.9,
+          "coverage": 0.04,
+          "gap to cover": 1578088.9900000002,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Riley Hollowell",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 180105.82,
+          "coverage": 0.06,
+          "gap to cover": 2639894.18,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Riley Ristori",
+          "open": 1,
+          "mean": 80.0,
+          "median": 80.0,
+          "violations": 1,
+          "pipeline": 47917.62,
+          "coverage": 0.03,
+          "gap to cover": 1422082.38,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Riley Southgate",
+          "open": 2,
+          "mean": 95.0,
+          "median": 95.0,
+          "violations": 1,
+          "pipeline": 47966.79,
+          "coverage": 0.04,
+          "gap to cover": 1272033.21,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Rowan Hollowell",
+          "open": 2,
+          "mean": 95.0,
+          "median": 95.0,
+          "violations": 1,
+          "pipeline": 77672.85,
+          "coverage": 0.06,
+          "gap to cover": 1122327.15,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Rowan Westerley",
+          "open": 2,
+          "mean": 72.5,
+          "median": 72.5,
+          "violations": 3,
+          "pipeline": 84853.66,
+          "coverage": 0.05,
+          "gap to cover": 1505146.34,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Sage Bramwell",
+          "open": 2,
+          "mean": 92.5,
+          "median": 92.5,
+          "violations": 2,
+          "pipeline": 72223.68,
+          "coverage": 0.06,
+          "gap to cover": 1097776.32,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Sage Eastvale",
+          "open": 2,
+          "mean": 90.0,
+          "median": 90.0,
+          "violations": 2,
+          "pipeline": 214761.81,
+          "coverage": 0.08,
+          "gap to cover": 2605238.19,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Sage Jasperson",
+          "open": 1,
+          "mean": 90.0,
+          "median": 90.0,
+          "violations": 1,
+          "pipeline": 16798.67,
+          "coverage": 0.01,
+          "gap to cover": 1993201.33,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Sage Oakhurst",
+          "open": 2,
+          "mean": 82.5,
+          "median": 82.5,
+          "violations": 2,
+          "pipeline": 85195.14,
+          "coverage": 0.07,
+          "gap to cover": 1084804.86,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Sage Vantrease",
+          "open": 2,
+          "mean": 92.5,
+          "median": 92.5,
+          "violations": 2,
+          "pipeline": 74073.26,
+          "coverage": 0.04,
+          "gap to cover": 1845926.74,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Skyler Grantley",
+          "open": 2,
+          "mean": 97.5,
+          "median": 97.5,
+          "violations": 1,
+          "pipeline": 64845.369999999995,
+          "coverage": 0.04,
+          "gap to cover": 1765154.63,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Skyler Ivesdale",
+          "open": 2,
+          "mean": 67.5,
+          "median": 67.5,
+          "violations": 4,
+          "pipeline": 310566.58,
+          "coverage": 0.07,
+          "gap to cover": 4159433.42,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Tatum Ivesdale",
+          "open": 2,
+          "mean": 67.5,
+          "median": 67.5,
+          "violations": 4,
+          "pipeline": 957770.67,
+          "coverage": 0.23,
+          "gap to cover": 3182229.33,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Tatum Lindqvist",
+          "open": 2,
+          "mean": 50.0,
+          "median": 50.0,
+          "violations": 6,
+          "pipeline": 93460.92,
+          "coverage": 0.08,
+          "gap to cover": 1106539.08,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Tatum Underhill",
+          "open": 1,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 162694.1,
+          "coverage": 0.04,
+          "gap to cover": 4217305.9,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Vesper Calloway",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 555206.55,
+          "coverage": 0.16,
+          "gap to cover": 2834793.45,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Vesper Westerley",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 135090.77000000002,
+          "coverage": 0.07,
+          "gap to cover": 1784909.23,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Wren Ivesdale",
+          "open": 2,
+          "mean": 87.5,
+          "median": 87.5,
+          "violations": 3,
+          "pipeline": 33044.64,
+          "coverage": 0.03,
+          "gap to cover": 1106955.36,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Wren Yardley",
+          "open": 2,
+          "mean": 97.5,
+          "median": 97.5,
+          "violations": 1,
+          "pipeline": 173206.38,
+          "coverage": 0.04,
+          "gap to cover": 3846793.62,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Zion Calloway",
+          "open": 2,
+          "mean": 50.0,
+          "median": 50.0,
+          "violations": 6,
+          "pipeline": 371914.06,
+          "coverage": 0.13,
+          "gap to cover": 2598085.94,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Zion Northcote",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 142329.75,
+          "coverage": 0.1,
+          "gap to cover": 1327670.25,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Zion Ristori",
+          "open": 2,
+          "mean": 100.0,
+          "median": 100.0,
+          "violations": 0,
+          "pipeline": 181033.16999999998,
+          "coverage": 0.04,
+          "gap to cover": 4018966.83,
+          "flags": "small_n, low_coverage"
+        },
+        {
+          "owner": "Zion Vantrease",
+          "open": 1,
+          "mean": 90.0,
+          "median": 90.0,
+          "violations": 1,
+          "pipeline": 190129.34,
+          "coverage": 0.05,
+          "gap to cover": 3523526.7700000005,
+          "flags": "small_n, low_coverage"
+        }
+      ]
+    },
+    {
+      "columns": [
+        "owner",
+        "ever commit",
+        "won",
+        "lost",
+        "pushed",
+        "still open",
+        "won/resolved",
+        "of which pushed first"
+      ],
+      "records": [
+        {
+          "owner": "Avery Ristori",
+          "ever commit": 1,
+          "won": 0,
+          "lost": 0,
+          "pushed": 0,
+          "still open": 1,
+          "won/resolved": "n/a",
+          "of which pushed first": 0
+        },
+        {
+          "owner": "Corin Farrow",
+          "ever commit": 2,
+          "won": 0,
+          "lost": 0,
+          "pushed": 0,
+          "still open": 2,
+          "won/resolved": "n/a",
+          "of which pushed first": 0
+        },
+        {
+          "owner": "Frankie Denholm",
+          "ever commit": 1,
+          "won": 0,
+          "lost": 0,
+          "pushed": 0,
+          "still open": 1,
+          "won/resolved": "n/a",
+          "of which pushed first": 0
+        },
+        {
+          "owner": "Hollis Underhill",
+          "ever commit": 1,
+          "won": 0,
+          "lost": 0,
+          "pushed": 0,
+          "still open": 1,
+          "won/resolved": "n/a",
+          "of which pushed first": 0
+        },
+        {
+          "owner": "Logan Ivesdale",
+          "ever commit": 1,
+          "won": 0,
+          "lost": 0,
+          "pushed": 0,
+          "still open": 1,
+          "won/resolved": "n/a",
+          "of which pushed first": 0
+        },
+        {
+          "owner": "Marlow Bramwell",
+          "ever commit": 1,
+          "won": 0,
+          "lost": 0,
+          "pushed": 0,
+          "still open": 1,
+          "won/resolved": "n/a",
+          "of which pushed first": 0
+        },
+        {
+          "owner": "Quinn Ristori",
+          "ever commit": 1,
+          "won": 0,
+          "lost": 0,
+          "pushed": 0,
+          "still open": 1,
+          "won/resolved": "n/a",
+          "of which pushed first": 0
+        },
+        {
+          "owner": "Reese Northcote",
+          "ever commit": 1,
+          "won": 0,
+          "lost": 0,
+          "pushed": 0,
+          "still open": 1,
+          "won/resolved": "n/a",
+          "of which pushed first": 0
+        },
+        {
+          "owner": "Sage Oakhurst",
+          "ever commit": 1,
+          "won": 0,
+          "lost": 0,
+          "pushed": 0,
+          "still open": 1,
+          "won/resolved": "n/a",
+          "of which pushed first": 0
+        }
+      ]
+    },
+    {
+      "columns": [
+        "opp_id",
+        "account",
+        "owner",
+        "stage",
+        "amount",
+        "score",
+        "score history",
+        "worst",
+        "rules",
+        "streak",
+        "detail"
+      ],
+      "records": [
+        {
+          "opp_id": "OPP-0044",
+          "account": "Novafinancial Co",
+          "owner": "Quinn Oakhurst",
+          "stage": "commit",
+          "amount": 839953.92,
+          "score": 65,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H4",
+          "streak": "",
+          "detail": "no activity for 15d (> 7d for commit); next step date 2026-07-21 expired"
+        },
+        {
+          "opp_id": "OPP-0046",
+          "account": "Vertexenergy Group",
+          "owner": "Hollis Underhill",
+          "stage": "prospect",
+          "amount": 474714.66,
+          "score": 75,
+          "score history": null,
+          "worst": "high",
+          "rules": "H5",
+          "streak": "",
+          "detail": "forecast commit but stage prospect"
+        },
+        {
+          "opp_id": "OPP-0057",
+          "account": "Harborlabs Corp",
+          "owner": "Skyler Ivesdale",
+          "stage": "propose",
+          "amount": 244819.98,
+          "score": 80,
+          "score history": null,
+          "worst": "high",
+          "rules": "H2",
+          "streak": "",
+          "detail": "close date 2026-08-05 is 5d in the past"
+        },
+        {
+          "opp_id": "OPP-0093",
+          "account": "Ironmaterials Co",
+          "owner": "Zion Calloway",
+          "stage": "propose",
+          "amount": 234805.36,
+          "score": 65,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H4",
+          "streak": "",
+          "detail": "no activity for 34d (> 14d for propose); next step has no date"
+        },
+        {
+          "opp_id": "OPP-0106",
+          "account": "Summitmedia Co",
+          "owner": "Hollis Underhill",
+          "stage": "qualify",
+          "amount": 219590.86,
+          "score": 80,
+          "score history": null,
+          "worst": "high",
+          "rules": "H2",
+          "streak": "",
+          "detail": "close date 2026-07-27 is 14d in the past"
+        },
+        {
+          "opp_id": "OPP-0099",
+          "account": "Cascadedynamics LLC",
+          "owner": "Casey Grantley",
+          "stage": "develop",
+          "amount": 181093.05,
+          "score": 80,
+          "score history": null,
+          "worst": "high",
+          "rules": "H2",
+          "streak": "",
+          "detail": "close date 2026-06-15 is 56d in the past"
+        },
+        {
+          "opp_id": "OPP-0017",
+          "account": "Summitholdings Corp",
+          "owner": "Logan Ivesdale",
+          "stage": "develop",
+          "amount": 160393.44,
+          "score": 75,
+          "score history": null,
+          "worst": "high",
+          "rules": "H5",
+          "streak": "",
+          "detail": "forecast commit but stage develop"
+        },
+        {
+          "opp_id": "OPP-0085",
+          "account": "Zenithfinancial LLC",
+          "owner": "Tatum Ivesdale",
+          "stage": "develop",
+          "amount": 139473.14,
+          "score": 35,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H2 H4 H6",
+          "streak": "",
+          "detail": "no activity for 51d (> 21d for develop); close date 2026-07-17 is 24d in the past; next step empty; 66d in develop (norm 45d)"
+        },
+        {
+          "opp_id": "OPP-0079",
+          "account": "Northernfoods Corp",
+          "owner": "Morgan Calloway",
+          "stage": "develop",
+          "amount": 139190.9,
+          "score": 65,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H4",
+          "streak": "",
+          "detail": "no activity for 37d (> 21d for develop); next step empty"
+        },
+        {
+          "opp_id": "OPP-0033",
+          "account": "Crimsonfinancial Group",
+          "owner": "Zion Calloway",
+          "stage": "qualify",
+          "amount": 137108.7,
+          "score": 35,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H2 H4 H6",
+          "streak": "",
+          "detail": "no activity for 60d (> 30d for qualify); close date 2026-06-26 is 45d in the past; next step empty; 59d in qualify (norm 30d)"
+        },
+        {
+          "opp_id": "OPP-0073",
+          "account": "Cascadefoods Group",
+          "owner": "Kendall Lindqvist",
+          "stage": "develop",
+          "amount": 130634.19,
+          "score": 55,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H4 H6",
+          "streak": "",
+          "detail": "no activity for 32d (> 21d for develop); next step empty; 60d in develop (norm 45d)"
+        },
+        {
+          "opp_id": "OPP-0050",
+          "account": "Atlasnetworks LLC",
+          "owner": "Blair Oakhurst",
+          "stage": "qualify",
+          "amount": 105846.78,
+          "score": 55,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H4 H6",
+          "streak": "",
+          "detail": "no activity for 53d (> 30d for qualify); next step has no date; 42d in qualify (norm 30d)"
+        },
+        {
+          "opp_id": "OPP-0013",
+          "account": "Cascadesoftware LLC",
+          "owner": "Kendall Lindqvist",
+          "stage": "develop",
+          "amount": 92906.19,
+          "score": 65,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H4",
+          "streak": "",
+          "detail": "no activity for 30d (> 21d for develop); next step has no date"
+        },
+        {
+          "opp_id": "OPP-0070",
+          "account": "Solarenergy LLC",
+          "owner": "Reese Northcote",
+          "stage": "prospect",
+          "amount": 89880.63,
+          "score": 80,
+          "score history": null,
+          "worst": "high",
+          "rules": "H2",
+          "streak": "",
+          "detail": "close date 2026-07-05 is 36d in the past"
+        },
+        {
+          "opp_id": "OPP-0045",
+          "account": "Atlasdynamics LLC",
+          "owner": "Tatum Lindqvist",
+          "stage": "prospect",
+          "amount": 77326.5,
+          "score": 65,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H4",
+          "streak": "",
+          "detail": "no activity for 81d (> 45d for prospect); next step has no date"
+        },
+        {
+          "opp_id": "OPP-0019",
+          "account": "Atlaslabs Group",
+          "owner": "Morgan Calloway",
+          "stage": "propose",
+          "amount": 71861.97,
+          "score": 55,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H4 H6",
+          "streak": "",
+          "detail": "no activity for 45d (> 14d for propose); next step has no date; 48d in propose (norm 30d)"
+        },
+        {
+          "opp_id": "OPP-0001",
+          "account": "Pioneernetworks Group",
+          "owner": "Rowan Westerley",
+          "stage": "propose",
+          "amount": 69114.41,
+          "score": 80,
+          "score history": null,
+          "worst": "high",
+          "rules": "H2",
+          "streak": "",
+          "detail": "close date 2026-08-01 is 9d in the past"
+        },
+        {
+          "opp_id": "OPP-0117",
+          "account": "Northernmedia Inc",
+          "owner": "Skyler Ivesdale",
+          "stage": "qualify",
+          "amount": 65746.6,
+          "score": 55,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H4 H6",
+          "streak": "",
+          "detail": "no activity for 66d (> 30d for qualify); next step empty; 36d in qualify (norm 30d)"
+        },
+        {
+          "opp_id": "OPP-0120",
+          "account": "Graniteenergy Co",
+          "owner": "Corin Kirkwood",
+          "stage": "prospect",
+          "amount": 64474.52,
+          "score": 80,
+          "score history": null,
+          "worst": "high",
+          "rules": "H2",
+          "streak": "",
+          "detail": "close date 2026-07-01 is 40d in the past"
+        },
+        {
+          "opp_id": "OPP-0077",
+          "account": "Cedaraerospace LLC",
+          "owner": "Logan Ivesdale",
+          "stage": "commit",
+          "amount": 63488.21,
+          "score": 70,
+          "score history": null,
+          "worst": "high",
+          "rules": "H2 H3",
+          "streak": "",
+          "detail": "close date 2026-08-05 is 5d in the past; close date changed 3 times"
+        },
+        {
+          "opp_id": "OPP-0078",
+          "account": "Goldenfinancial Group",
+          "owner": "Sage Oakhurst",
+          "stage": "develop",
+          "amount": 60482.57,
+          "score": 75,
+          "score history": null,
+          "worst": "high",
+          "rules": "H5",
+          "streak": "",
+          "detail": "forecast commit but stage develop"
+        },
+        {
+          "opp_id": "OPP-0043",
+          "account": "Novafoods Corp",
+          "owner": "Marlow Bramwell",
+          "stage": "qualify",
+          "amount": 59721.25,
+          "score": 55,
+          "score history": null,
+          "worst": "high",
+          "rules": "H4 H5",
+          "streak": "",
+          "detail": "next step date 2026-07-27 expired; forecast commit but stage qualify"
+        },
+        {
+          "opp_id": "OPP-0056",
+          "account": "Cedaranalytics Co",
+          "owner": "Quinn Lindqvist",
+          "stage": "qualify",
+          "amount": 59609.51,
+          "score": 80,
+          "score history": null,
+          "worst": "high",
+          "rules": "H2",
+          "streak": "",
+          "detail": "close date 2026-07-29 is 12d in the past"
+        },
+        {
+          "opp_id": "OPP-0080",
+          "account": "Lunarenergy Group",
+          "owner": "Corin Farrow",
+          "stage": "develop",
+          "amount": 54285.91,
+          "score": 75,
+          "score history": null,
+          "worst": "high",
+          "rules": "H5",
+          "streak": "",
+          "detail": "forecast commit but stage develop"
+        },
+        {
+          "opp_id": "OPP-0020",
+          "account": "Crimsonmanufacturing Group",
+          "owner": "Corin Farrow",
+          "stage": "develop",
+          "amount": 48103.11,
+          "score": 75,
+          "score history": null,
+          "worst": "high",
+          "rules": "H5",
+          "streak": "",
+          "detail": "forecast commit but stage develop"
+        },
+        {
+          "opp_id": "OPP-0006",
+          "account": "Blueaerospace Co",
+          "owner": "Riley Ristori",
+          "stage": "prospect",
+          "amount": 47917.62,
+          "score": 80,
+          "score history": null,
+          "worst": "high",
+          "rules": "H4",
+          "streak": "",
+          "detail": "next step empty"
+        },
+        {
+          "opp_id": "OPP-0086",
+          "account": "Atlasfoods Group",
+          "owner": "Frankie Denholm",
+          "stage": "propose",
+          "amount": 40949.42,
+          "score": 80,
+          "score history": null,
+          "worst": "high",
+          "rules": "H2",
+          "streak": "",
+          "detail": "close date 2026-08-01 is 9d in the past"
+        },
+        {
+          "opp_id": "OPP-0042",
+          "account": "Lunarfoods Corp",
+          "owner": "Quinn Ristori",
+          "stage": "commit",
+          "amount": 36342.71,
+          "score": 90,
+          "score history": null,
+          "worst": "high",
+          "rules": "H3",
+          "streak": "",
+          "detail": "close date changed 4 times"
+        },
+        {
+          "opp_id": "OPP-0026",
+          "account": "Summitfoods Group",
+          "owner": "Frankie Denholm",
+          "stage": "qualify",
+          "amount": 31571.55,
+          "score": 55,
+          "score history": null,
+          "worst": "high",
+          "rules": "H4 H5",
+          "streak": "",
+          "detail": "next step has no date; forecast commit but stage qualify"
+        },
+        {
+          "opp_id": "OPP-0011",
+          "account": "Silveranalytics LLC",
+          "owner": "Greer Ristori",
+          "stage": "develop",
+          "amount": 29929.09,
+          "score": 35,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H2 H4 H6",
+          "streak": "",
+          "detail": "no activity for 43d (> 21d for develop); close date 2026-07-23 is 18d in the past; next step empty; 56d in develop (norm 45d)"
+        },
+        {
+          "opp_id": "OPP-0103",
+          "account": "Cascadeindustries Co",
+          "owner": "Marlow Bramwell",
+          "stage": "prospect",
+          "amount": 26611.12,
+          "score": 80,
+          "score history": null,
+          "worst": "high",
+          "rules": "H2",
+          "streak": "",
+          "detail": "close date 2026-06-23 is 48d in the past"
+        },
+        {
+          "opp_id": "OPP-0018",
+          "account": "Goldenretail Co",
+          "owner": "Sage Oakhurst",
+          "stage": "develop",
+          "amount": 24712.57,
+          "score": 90,
+          "score history": null,
+          "worst": "high",
+          "rules": "H3",
+          "streak": "",
+          "detail": "close date changed 4 times"
+        },
+        {
+          "opp_id": "OPP-0071",
+          "account": "Lunarholdings LLC",
+          "owner": "Greer Ristori",
+          "stage": "qualify",
+          "amount": 23555.84,
+          "score": 80,
+          "score history": null,
+          "worst": "high",
+          "rules": "H4",
+          "streak": "",
+          "detail": "next step date 2026-08-03 expired"
+        },
+        {
+          "opp_id": "OPP-0105",
+          "account": "Cascademedical Group",
+          "owner": "Tatum Lindqvist",
+          "stage": "qualify",
+          "amount": 16134.42,
+          "score": 35,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H2 H4 H6",
+          "streak": "",
+          "detail": "no activity for 46d (> 30d for qualify); close date 2026-08-02 is 8d in the past; next step date 2026-07-18 expired; 53d in qualify (norm 30d)"
+        },
+        {
+          "opp_id": "OPP-0061",
+          "account": "Goldendynamics Co",
+          "owner": "Rowan Westerley",
+          "stage": "qualify",
+          "amount": 15739.25,
+          "score": 65,
+          "score history": null,
+          "worst": "high",
+          "rules": "H1 H4",
+          "streak": "",
+          "detail": "no activity for 69d (> 30d for qualify); next step has no date"
+        },
+        {
+          "opp_id": "OPP-0039",
+          "account": "Silverholdings LLC",
+          "owner": "Casey Grantley",
+          "stage": "propose",
+          "amount": 339964.18,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H3",
+          "streak": "",
+          "detail": "close date changed 2 times"
+        },
+        {
+          "opp_id": "OPP-0110",
+          "account": "Goldenretail LLC",
+          "owner": "Blair Oakhurst",
+          "stage": "qualify",
+          "amount": 308981.9,
+          "score": 85,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H1",
+          "streak": "",
+          "detail": "no activity for 60d (> 30d for qualify)"
+        },
+        {
+          "opp_id": "OPP-0002",
+          "account": "Novaindustries LLC",
+          "owner": "Blair Hollowell",
+          "stage": "prospect",
+          "amount": 290285.33,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H7",
+          "streak": "",
+          "detail": "$290,285 deal with 1 contact(s)"
+        },
+        {
+          "opp_id": "OPP-0089",
+          "account": "Northernanalytics Co",
+          "owner": "Harper Grantley",
+          "stage": "qualify",
+          "amount": 260998.05,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H7",
+          "streak": "",
+          "detail": "$260,998 deal with 0 contact(s)"
+        },
+        {
+          "opp_id": "OPP-0004",
+          "account": "Northernenergy Group",
+          "owner": "Harper Bramwell",
+          "stage": "propose",
+          "amount": 223513.95,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H7",
+          "streak": "",
+          "detail": "$223,514 deal with 0 contact(s)"
+        },
+        {
+          "opp_id": "OPP-0113",
+          "account": "Novadynamics Group",
+          "owner": "Hollis Marchetti",
+          "stage": "prospect",
+          "amount": 193567.1,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H7",
+          "streak": "",
+          "detail": "$193,567 deal with 1 contact(s)"
+        },
+        {
+          "opp_id": "OPP-0049",
+          "account": "Novarobotics Corp",
+          "owner": "Noor Underhill",
+          "stage": "propose",
+          "amount": 187911.41,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H6",
+          "streak": "",
+          "detail": "41d in propose (norm 30d)"
+        },
+        {
+          "opp_id": "OPP-0119",
+          "account": "Novarobotics Group",
+          "owner": "Sage Eastvale",
+          "stage": "develop",
+          "amount": 152467.74,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H6",
+          "streak": "",
+          "detail": "72d in develop (norm 45d)"
+        },
+        {
+          "opp_id": "OPP-0053",
+          "account": "Solaraerospace Co",
+          "owner": "Hollis Marchetti",
+          "stage": "develop",
+          "amount": 92308.06,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H6",
+          "streak": "",
+          "detail": "62d in develop (norm 45d)"
+        },
+        {
+          "opp_id": "OPP-0022",
+          "account": "Cedarlogistics LLC",
+          "owner": "Logan Denholm",
+          "stage": "commit",
+          "amount": 69061.36,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H6",
+          "streak": "",
+          "detail": "36d in commit (norm 21d)"
+        },
+        {
+          "opp_id": "OPP-0091",
+          "account": "Lunarfreight Co",
+          "owner": "Sage Bramwell",
+          "stage": "qualify",
+          "amount": 53246.27,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H3",
+          "streak": "",
+          "detail": "close date changed 2 times"
+        },
+        {
+          "opp_id": "OPP-0100",
+          "account": "Solaranalytics LLC",
+          "owner": "Avery Ristori",
+          "stage": "propose",
+          "amount": 42860.82,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H3",
+          "streak": "",
+          "detail": "close date changed 2 times"
+        },
+        {
+          "opp_id": "OPP-0101",
+          "account": "Lunarretail Inc",
+          "owner": "Rowan Hollowell",
+          "stage": "qualify",
+          "amount": 32942.32,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H6",
+          "streak": "",
+          "detail": "52d in qualify (norm 30d)"
+        },
+        {
+          "opp_id": "OPP-0065",
+          "account": "Goldenmanufacturing Corp",
+          "owner": "Sage Jasperson",
+          "stage": "qualify",
+          "amount": 16798.67,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H6",
+          "streak": "",
+          "detail": "34d in qualify (norm 30d)"
+        },
+        {
+          "opp_id": "OPP-0063",
+          "account": "Quartzsystems LLC",
+          "owner": "Wren Ivesdale",
+          "stage": "qualify",
+          "amount": 12024.38,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H6",
+          "streak": "",
+          "detail": "46d in qualify (norm 30d)"
+        },
+        {
+          "opp_id": "OPP-0008",
+          "account": "Cedarfoods Inc",
+          "owner": "Riley Southgate",
+          "stage": "qualify",
+          "amount": 7907.05,
+          "score": 90,
+          "score history": null,
+          "worst": "medium",
+          "rules": "H6",
+          "streak": "",
+          "detail": "37d in qualify (norm 30d)"
+        },
+        {
+          "opp_id": "OPP-0055",
+          "account": "Goldenaerospace Group",
+          "owner": "Zion Vantrease",
+          "stage": "develop",
+          "amount": 190129.34,
+          "score": 90,
+          "score history": null,
+          "worst": "low",
+          "rules": "H10",
+          "streak": "",
+          "detail": "close date 285d out (horizon 270d)"
+        },
+        {
+          "opp_id": "OPP-0075",
+          "account": "Pacificlabs Co",
+          "owner": "Finley Underhill",
+          "stage": "propose",
+          "amount": 146683.69,
+          "score": 90,
+          "score history": null,
+          "worst": "low",
+          "rules": "H10",
+          "streak": "",
+          "detail": "close date 339d out (horizon 270d)"
+        },
+        {
+          "opp_id": "OPP-0082",
+          "account": "Graniterobotics LLC",
+          "owner": "Logan Denholm",
+          "stage": "propose",
+          "amount": 100898.5,
+          "score": 90,
+          "score history": null,
+          "worst": "low",
+          "rules": "H10",
+          "streak": "",
+          "detail": "close date 370d out (horizon 270d)"
+        },
+        {
+          "opp_id": "OPP-0069",
+          "account": "Blueenergy Co",
+          "owner": "Wren Yardley",
+          "stage": "develop",
+          "amount": 97636.73,
+          "score": 95,
+          "score history": null,
+          "worst": "low",
+          "rules": "H9",
+          "streak": "",
+          "detail": "next step has no action verb"
+        },
+        {
+          "opp_id": "OPP-0059",
+          "account": "Silverindustries Group",
+          "owner": "Sage Eastvale",
+          "stage": "propose",
+          "amount": 62294.07,
+          "score": 90,
+          "score history": null,
+          "worst": "low",
+          "rules": "H10",
+          "streak": "",
+          "detail": "close date 379d out (horizon 270d)"
+        },
+        {
+          "opp_id": "OPP-0047",
+          "account": "Zenithfinancial Corp",
+          "owner": "Riley Grantley",
+          "stage": "prospect",
+          "amount": 61946.9,
+          "score": 85,
+          "score history": null,
+          "worst": "low",
+          "rules": "H9 H10",
+          "streak": "",
+          "detail": "next step too short (9 chars); close date 331d out (horizon 270d)"
+        },
+        {
+          "opp_id": "OPP-0112",
+          "account": "Pacificlogistics Group",
+          "owner": "Darby Kirkwood",
+          "stage": "qualify",
+          "amount": 36886.32,
+          "score": 95,
+          "score history": null,
+          "worst": "low",
+          "rules": "H9",
+          "streak": "",
+          "detail": "next step is filler ('touch base')"
+        },
+        {
+          "opp_id": "OPP-0012",
+          "account": "Goldenmaterials Co",
+          "owner": "Sage Vantrease",
+          "stage": "qualify",
+          "amount": 21869.77,
+          "score": 85,
+          "score history": null,
+          "worst": "low",
+          "rules": "H9 H10",
+          "streak": "",
+          "detail": "next step is filler ('check in'); close date 349d out (horizon 270d)"
+        },
+        {
+          "opp_id": "OPP-0003",
+          "account": "Harbormanufacturing LLC",
+          "owner": "Wren Ivesdale",
+          "stage": "prospect",
+          "amount": 21020.26,
+          "score": 85,
+          "score history": null,
+          "worst": "low",
+          "rules": "H9 H10",
+          "streak": "",
+          "detail": "next step too short (9 chars); close date 385d out (horizon 270d)"
+        },
+        {
+          "opp_id": "OPP-0031",
+          "account": "Harborlabs LLC",
+          "owner": "Sage Bramwell",
+          "stage": "qualify",
+          "amount": 18977.41,
+          "score": 95,
+          "score history": null,
+          "worst": "low",
+          "rules": "H9",
+          "streak": "",
+          "detail": "next step has no action verb"
+        },
+        {
+          "opp_id": "OPP-0028",
+          "account": "Goldenretail Corp",
+          "owner": "Skyler Grantley",
+          "stage": "qualify",
+          "amount": 14965.55,
+          "score": 95,
+          "score history": null,
+          "worst": "low",
+          "rules": "H9",
+          "streak": "",
+          "detail": "next step is filler ('check in')"
+        },
+        {
+          "opp_id": "OPP-0076",
+          "account": "Cedarmedia Inc",
+          "owner": "Jordan Vantrease",
+          "stage": "propose",
+          "amount": 0.0,
+          "score": 95,
+          "score history": null,
+          "worst": "low",
+          "rules": "H8",
+          "streak": "",
+          "detail": "amount is 0.0"
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "data": {
+        "name": "a86f9cf5f124ba7f561f4736cfa56b3d"
+      },
+      "mark": {
+        "type": "bar",
+        "size": 26
+      },
+      "encoding": {
+        "color": {
+          "field": "severity",
+          "legend": {
+            "orient": "right",
+            "title": " "
+          },
+          "scale": {
+            "domain": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "range": [
+              "#D55E00",
+              "#E69F00",
+              "#0072B2"
+            ]
+          },
+          "type": "nominal"
+        },
+        "order": {
+          "field": "severity",
+          "type": "nominal"
+        },
+        "tooltip": [
+          {
+            "field": "severity",
+            "type": "nominal"
+          },
+          {
+            "field": "count",
+            "type": "quantitative"
+          }
+        ],
+        "x": {
+          "field": "count",
+          "stack": "zero",
+          "title": null,
+          "type": "quantitative"
+        },
+        "y": {
+          "axis": null,
+          "field": "y",
+          "title": null,
+          "type": "nominal"
+        }
+      },
+      "height": 40,
+      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json",
+      "autosize": {
+        "type": "fit",
+        "contains": "padding"
+      }
+    }
+  ]
+}
