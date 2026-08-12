@@ -9,7 +9,9 @@ on:
     paths:
       - "src/**"
       - "app/**"
+      - ".streamlit/**"
       - "data/**"
+      - "config.yaml"
       - "Dockerfile"
       - ".dockerignore"
       - "requirements.txt"

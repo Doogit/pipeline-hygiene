@@ -10,6 +10,8 @@ import json
 import re
 from pathlib import Path
 
+from src.ingest import load_config
+
 REPO = Path(__file__).resolve().parent.parent
 DOCKERFILE = REPO / "Dockerfile"
 
@@ -29,6 +31,12 @@ def test_demo_snapshots_present_as_a_series():
     # a series (>=2) is what populates the Trajectory / Slippage / Flow tabs.
     snaps = sorted((REPO / "data" / "snapshots").glob("opps_*.csv"))
     assert len(snaps) >= 2, f"need >=2 demo snapshots to bake, found {len(snaps)}"
+
+
+def test_default_config_used_by_docker_build_loads():
+    # The Dockerfile invokes src.ingest without --config, so default config.yaml
+    # must stay valid for the image build to work.
+    load_config(REPO / "config.yaml")
 
 
 def test_quotas_manifest_referenced_by_dockerfile_is_valid():
@@ -54,6 +62,16 @@ def test_dockerfile_and_deploy_agree_on_port():
     assert re.search(rf"\$Port\s*=\s*{port.group(1)}\b", deploy), (
         f"deploy/azure-deploy.ps1 $Port must equal Dockerfile PORT ({port.group(1)})"
     )
+
+
+def test_deploy_enables_acr_arm_audience_auth_for_managed_identity_pull():
+    deploy = (REPO / "deploy" / "azure-deploy.ps1").read_text(encoding="utf-8")
+    assert "acrUseManagedIdentityCreds" in deploy
+    assert re.search(
+        r"az\s+acr\s+config\s+authentication-as-arm\s+update\b[^\n]*"
+        r"--status\s+enabled",
+        deploy,
+    ), "managed-identity ACR pulls need authentication-as-arm enabled"
 
 
 def test_dashboard_entrypoint_present():

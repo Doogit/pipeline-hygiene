@@ -14,8 +14,9 @@ az account set -s "<your-subscription>"
 
 The script creates a resource group, an Azure Container Registry, builds the
 image with `az acr build`, provisions a Linux App Service plan + web app, wires
-up managed-identity pull, WebSockets, and the container port, and prints the
-URL. First load takes ~30-60s while the container warms.
+up managed-identity pull, enables ACR ARM-audience token auth, WebSockets, and
+the container port, and prints the URL. First load takes ~30-60s while the
+container warms.
 
 Override defaults with environment variables before running:
 
