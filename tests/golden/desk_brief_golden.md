@@ -19,7 +19,7 @@ Snapshot 2026-08-10 (opps_2026-08-10.csv), evaluated as of 2026-08-10.
 ## Risky commits
 
 51 commit/best_case opps carry a risk flag — $5,939,535 (distinct opps), dollar-ranked, top 10 shown. Coaching prompts, not gotchas.
-Of these, 46 carry a high-severity flag ($5,138,725) — the at-risk figure the commit-scrub carries forward; the rest are medium/low.
+High-severity at-risk — the figure the commit-scrub carries forward — is $5,179,723 across 47 of 114 open commit/best_case opp(s) (a different cut from the risk-flagged list above).
 
 | # | Opp | Account | Owner | Stage | Amount | Forecast | Flags | Ask the seller |
 |---|---|---|---|---|---|---|---|---|

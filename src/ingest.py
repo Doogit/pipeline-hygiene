@@ -334,8 +334,9 @@ def validate_csv(csv_path, config, stage_map_name="default"):
         report.warnings.append(
             f"uniform currency {currencies[0]} differs from expected_currency "
             f"{expected_ccy} (to render this currency set expected_currency: "
-            f"{currencies[0]} and display_currency_symbol in config.yaml — "
-            f"otherwise money prints with the default $)")
+            f"{currencies[0]} and display_currency_symbol in config.yaml, then "
+            f"re-ingest to clear this warning — otherwise money prints with "
+            f"the default $)")
     return accepted, report
 
 

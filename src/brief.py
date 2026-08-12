@@ -641,17 +641,23 @@ def _risky_commits(lines, data, config):
                  + (", grouped by owner" if filtered
                     else (", top 10 shown" if len(entries) > 10 else ""))
                  + ". Coaching prompts, not gotchas.")
-    # Name the high-severity subtotal so the two at-risk numbers a manager
-    # reads back-to-back (this "any risk flag" total vs the commit-scrub's
-    # high-severity-only "at-risk within") reconcile on the page, not live in
-    # front of the VP.
-    high_n = sum(1 for e in entries if e["result"].has_high())
-    high_total = sum(e["row"]["amount"] or 0.0 for e in entries
-                     if e["result"].has_high())
-    if high_n and high_n < len(entries):
-        lines.append(f"Of these, {high_n} carry a high-severity flag "
-                     f"({_money(high_total, config)}) — the at-risk figure the "
-                     f"commit-scrub carries forward; the rest are medium/low.")
+    # Print the commit-scrub's "at-risk within" figure so the two documents
+    # reconcile on the page, not live in front of the VP. It is a DIFFERENT cut
+    # from this list — every open commit/best_case opp with a high-severity
+    # flag, which includes high-but-not-RISKY rules (e.g. H3 at 3+ pushes) and
+    # excludes the medium/low risky flags shown here — so compute it over that
+    # universe, exactly as the scrub does, rather than over these entries.
+    open_cb = [r for r in data["rows"] if is_open(r)
+               and r["forecast_category"] in ("commit", "best_case")]
+    high_cb = [r for r in open_cb
+               if data["results"][r["opp_id"]].has_high()]
+    if high_cb:
+        lines.append(f"High-severity at-risk — the figure the commit-scrub "
+                     f"carries forward — is "
+                     f"{_money(sum(r['amount'] or 0.0 for r in high_cb), config)} "
+                     f"across {len(high_cb)} of {len(open_cb)} open "
+                     f"commit/best_case opp(s) (a different cut from the "
+                     f"risk-flagged list above).")
     lines.append("")
     if filtered:
         by_owner = {}
@@ -1477,9 +1483,9 @@ def digest_markdown(data, owner, config):
     lines.append("These figures also appear, attributed to you by name, in the "
                  "desk-wide brief tables your manager and peers may see — the "
                  "Owners scoreboard, Top exceptions, the slipping-pipeline and "
-                 "forecast-pattern lists, and the commit ledger — shown here so "
-                 "you see exactly what they see. Everything else in this digest "
-                 "is private to you.")
+                 "forecast-pattern lists, the commit ledger, and the "
+                 "since-last-run detail — shown here so you see exactly what "
+                 "they see. Everything else in this digest is private to you.")
     lines.append("")
     coverage = ("n/a" if stats.coverage_ratio is None
                 else f"{stats.coverage_ratio:.2f}x"
