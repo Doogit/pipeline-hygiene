@@ -53,11 +53,14 @@ def _coverage(v):
 
 
 def _score_bar(v):
-    pct = max(0, min(100, int(round(v or 0))))
+    s = v or 0
+    pct = max(0, min(100, int(round(s))))
+    # Color tier by score (presentation only; mirrors the healthy>=80 threshold).
+    tier = "good" if s >= 80 else "warn" if s >= 60 else "bad"
     return Div(
         Div(cls="score-bar-fill", style=f"width:{pct}%"),
-        Span(str(int(round(v or 0))), cls="score-bar-label"),
-        cls="score-bar", title=str(v))
+        Span(str(int(round(s))), cls="score-bar-label"),
+        cls=f"score-bar {tier}", title=str(v))
 
 
 def _sparkline(values):
@@ -67,13 +70,69 @@ def _sparkline(values):
     lo, hi = min(values), max(values)
     span = (hi - lo) or 1
     w, h = 72, 20
-    pts = " ".join(
-        f"{(x/(len(values)-1 or 1))*w:.1f},{h-2-((y-lo)/span)*(h-4):.1f}"
-        for x, y in zip(xs, values))
+    coords = [((x/(len(values)-1 or 1))*w, h-2-((y-lo)/span)*(h-4))
+              for x, y in zip(xs, values)]
+    pts = " ".join(f"{px:.1f},{py:.1f}" for px, py in coords)
+    ex, ey = coords[-1]
     return NotStr(
         f'<svg class="spark" width="{w}" height="{h}" viewBox="0 0 {w} {h}" '
         f'preserveAspectRatio="none"><polyline points="{pts}" fill="none" '
-        f'stroke="#0072B2" stroke-width="1.5"/></svg>')
+        f'stroke="#0072B2" stroke-width="1.5"/>'
+        f'<circle class="spark-end" cx="{ex:.1f}" cy="{ey:.1f}" r="1.8"/></svg>')
+
+
+# Canonical rule -> severity tier. Severity is per-violation in src/rules.py
+# (H1/H3/H10 vary by row context), so this is a presentation heuristic: the
+# rule's representative tier, used ONLY to color chips/stripes where the view
+# model doesn't carry an authoritative row severity. Keep in sync with rules.py.
+_CANON_SEV = {"H1": "medium", "H2": "high", "H3": "medium", "H4": "high",
+              "H5": "high", "H6": "medium", "H7": "medium", "H8": "low",
+              "H9": "low", "H10": "low", "H11": "high"}
+_SEV_RANK = {"high": 0, "medium": 1, "low": 2}
+_SEV_CLS = {"high": "high", "medium": "med", "low": "low"}
+
+# Table id -> (column holding codes, are they H rule-codes?). Non-rule columns
+# hold coverage flags (low_coverage, small_n) and get neutral chips.
+_CHIP_COL = {"risky_commits": ("flags", True), "slippage": ("rules", True),
+             "exceptions": ("rules", True), "owner_drilldown": ("rules", True),
+             "owner_scoreboard": ("flags", False), "teams": ("flags", False),
+             "regions": ("flags", False)}
+
+
+def _codes(text):
+    return [p for p in re.split(r"[ ,]+", str(text or "").strip())
+            if p and p != "-"]
+
+
+def _worst_sev(codes):
+    ranks = [_SEV_RANK[_CANON_SEV[c]] for c in codes if c in _CANON_SEV]
+    return ["high", "medium", "low"][min(ranks)] if ranks else None
+
+
+def _row_severity(t, r):
+    """Row-level severity tier for the stripe, or None. exceptions/owner_drilldown
+    carry an authoritative 'worst'; risky_commits/slippage derive it from codes."""
+    if "worst" in r:
+        return r.get("worst")
+    if t.id in ("risky_commits", "slippage"):
+        col = "flags" if t.id == "risky_commits" else "rules"
+        return _worst_sev(_codes(r.get(col)))
+    return None
+
+
+def _chip_cell(text, sev, is_rule):
+    codes = _codes(text)
+    if not codes:
+        return Td("")
+    sev_cls = _SEV_CLS.get(sev)
+    chips = []
+    for c in codes:
+        if is_rule:
+            cls = "chip mono" + (f" {sev_cls}" if sev_cls else "")
+            chips.append(Span(Span(cls="cd"), c, cls=cls))
+        else:
+            chips.append(Span(c.replace("_", " "), cls="chip"))
+    return Td(Div(*chips, cls="chips"))
 
 
 _NUMERIC = {"amount", "score", "mean", "median", "pipeline", "quota", "at-risk",
@@ -94,15 +153,26 @@ def _cell(col, val, fmt, cur):
     cls = "num" if col in _NUMERIC else ""
     if fmt.get(col) == V._WIDE:
         cls = "wide"
+    if col in ("opp_id", "forecast"):
+        cls = "mono"
     text = "" if val is None else str(val)
     return Td(text, cls=cls)
 
 
 def render_table(t, cur):
     head = Tr(*[Th(c, cls="num" if c in _NUMERIC else "") for c in t.columns])
+    chip_col, is_rule = _CHIP_COL.get(t.id, (None, False))
     body = []
     for r in t.rows:
-        cells = [_cell(c, r.get(c), t.formats, cur) for c in t.columns]
+        sev = _row_severity(t, r)
+        cells = []
+        for c in t.columns:
+            if c == chip_col:
+                cells.append(_chip_cell(r.get(c), sev if is_rule else None,
+                                        is_rule))
+            else:
+                cells.append(_cell(c, r.get(c), t.formats, cur))
+        row_cls = []
         attrs = {}
         # Owner scoreboard rows drive the drill-down (replaces Streamlit's
         # on_select rerun): hx-get returns just the drill-down partial, and
@@ -111,7 +181,12 @@ def render_table(t, cur):
             attrs = {"hx_get": f"/drilldown?owner={_q(r.get('owner'))}",
                      "hx_target": "#owner-drilldown", "hx_swap": "outerHTML",
                      "hx_include": "#sidebar-form", "hx_indicator": "#load",
-                     "cls": "row-click", "role": "button", "tabindex": "0"}
+                     "role": "button", "tabindex": "0"}
+            row_cls.append("row-click")
+        if sev:
+            row_cls.append("sev-" + _SEV_CLS[sev])
+        if row_cls:
+            attrs["cls"] = " ".join(row_cls)
         body.append(Tr(*cells, **attrs))
     return Div(Table(Thead(head), Tbody(*body), cls="ph-table"),
                cls="table-wrap", id=t.id)
@@ -136,11 +211,13 @@ def render_metric(m):
         up = m.delta.startswith("+")
         good = (up if m.delta_color != "inverse" else not up)
         delta_cls = "delta-up" if good else "delta-down"
+    # The desk score is the headline KPI — give it the primary (tinted) card.
+    primary = " primary" if m.label.startswith("Desk score") else ""
     return Div(
         Div(m.label, cls="metric-label", title=m.help or ""),
         Div(m.value, cls="metric-value"),
         Div(m.delta or " ", cls=f"metric-delta {delta_cls}"),
-        cls="metric-card")
+        cls=f"metric-card{primary}")
 
 
 def render_block(b, cur):
