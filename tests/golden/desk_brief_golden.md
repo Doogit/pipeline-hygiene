@@ -8,6 +8,7 @@ Snapshot 2026-08-10 (opps_2026-08-10.csv), evaluated as of 2026-08-10.
 - Healthy opps (score >= 80): 80.2% of 368 open
 - Open pipeline: $43,165,232
 - At-risk dollars (distinct opps with a high-severity violation): $12,081,072
+- Forecast call: commit $4,731,662 across 41 deal(s) (at-risk within $3,780,728); best_case $8,480,488 across 73 deal(s) (at-risk within $1,398,995)
 - Violations: 139 high, 100 medium, 65 low
 - Insufficient history: none
 
@@ -18,6 +19,7 @@ Snapshot 2026-08-10 (opps_2026-08-10.csv), evaluated as of 2026-08-10.
 ## Risky commits
 
 51 commit/best_case opps carry a risk flag — $5,939,535 (distinct opps), dollar-ranked, top 10 shown. Coaching prompts, not gotchas.
+High-severity at-risk — the figure the commit-scrub carries forward — is $5,179,723 across 47 of 114 open commit/best_case opp(s) (a different cut from the risk-flagged list above).
 
 | # | Opp | Account | Owner | Stage | Amount | Forecast | Flags | Ask the seller |
 |---|---|---|---|---|---|---|---|---|
@@ -152,6 +154,8 @@ Coverage = open pipeline vs required pipeline (remaining quota net of wins this 
 
 ### Teams
 
+Note: 9 of 9 teams are under 1.00x — desk-wide under-coverage, not individual laggards; ordering carries the signal. The flag and its basis are unchanged.
+
 | Team | Owners | Open | Mean | Pipeline | Quota | Coverage | Gap to cover | Violations | At-risk $ | Flags |
 |---|---|---|---|---|---|---|---|---|---|---|
 | Team NA-West-1 | 7 | 43 | 87.8 | $1,960,229 | $3,850,000 | 0.32 | $4,199,771 | 39 | $474,661 | low_coverage |
@@ -165,6 +169,8 @@ Coverage = open pipeline vs required pipeline (remaining quota net of wins this 
 | Team EMEA-1 | 7 | 40 | 84.8 | $8,910,566 | $9,310,000 | 0.66 | $4,669,458 | 38 | $4,269,631 | low_coverage |
 
 ### Regions
+
+Note: 4 of 4 regions are under 1.00x — desk-wide under-coverage, not individual laggards; ordering carries the signal. The flag and its basis are unchanged.
 
 | Region | Owners | Open | Mean | Pipeline | Quota | Coverage | Gap to cover | Violations | At-risk $ | Flags |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -223,6 +229,10 @@ Coaching signal, not a comp input.
 Of opps ever forecast commit in stored history: outcome to date. Pushed = still open with a close-date move after the first commit snapshot; committed-for quarter = fiscal quarter of the close date when first called commit (immune to later pushes). Won/resolved counts closed opps only, shown as won/closed; the percentage appears once 5+ have resolved (small-n rates mislead). Of which pushed first = resolved (won/lost) commits that pushed after the commit and before closing.
 
 0 of 41 ever-commit deal(s) resolved so far; rates render at 5+ resolved — expect a full read after roughly a quarter of stored snapshots.
+
+Current-commit integrity: 30 of 41 (73%) open commit-forecast opp(s) fail H5 — on a pre-develop stage or without a valid next step.
+Historical push rate: 0 of 41 ever-commit deal(s) (0%) moved their close date after being called commit.
+By team (pushed / ever-commit): Team APAC-1 0/9, Team APAC-2 0/8, Team EMEA-1 0/3, Team EMEA-2 0/2, Team NA-East-1 0/6, Team NA-East-2 0/2, Team NA-West-1 0/1, Team NA-West-2 0/5, Team NA-West-3 0/5.
 
 | Owner | Ever commit | Won | Lost | Pushed | Still open | Won/resolved | Of which pushed first |
 |---|---|---|---|---|---|---|---|

@@ -9,7 +9,7 @@ quotas: {}                        # owner -> quarterly quota; seed fills this
 rule_weights: {H1: 15, H2: 20, H3: 10, H4: 20, H5: 25, H6: 10, H7: 10, H8: 5, H9: 5, H10: 10, H11: 20}
 push_alarm_days: 21               # H11: single close-date push >= this (Gong: >=3-week pushes signal lost control)
 cumulative_push_alarm_days: 45    # H11: total later-drift across pushes >= this
-disqualify_review_pushes: 3       # brief marker: recommend disqualification review at this push_count
+disqualify_review_pushes: 3       # brief marker: "review close plan" at this push_count
 min_closed_for_win_rate: 10       # trailing-win-rate coverage basis needs at least this many stored closed outcomes
 patterns:                         # forecast-integrity detection — coaching signal, never a comp input
   overcall_share_min: 0.5         # flag overcall when >= this share of ever-commit opps later pushed or lost
@@ -26,6 +26,8 @@ stage_map:
   default: {prospect: prospect, qualify: qualify, develop: develop, propose: propose, commit: commit, closed_won: closed_won, closed_lost: closed_lost}
   # example alternate vocabulary a Dynamics/MSX export might carry:
   dynamics_default: {Qualify: qualify, Develop: develop, Propose: propose, Close: commit, Won: closed_won, Lost: closed_lost}
+  # HubSpot default deal-pipeline stages (edit if your pipeline is customized):
+  hubspot: {Appointment Scheduled: prospect, Qualified To Buy: qualify, Presentation Scheduled: develop, Decision Maker Bought-In: propose, Contract Sent: commit, Closed Won: closed_won, Closed Lost: closed_lost}
 
 # Optional keys — schema-checked when present, safe to omit (defaults in parens):
 # display_currency_symbol: "€"                              # money symbol everywhere ($)

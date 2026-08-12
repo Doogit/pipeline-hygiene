@@ -68,9 +68,23 @@ pytest -q                                               # full test suite
 The simulator above is a demo. To run against a real CRM export, produce a CSV
 with these **required** columns (extra columns are ignored):
 
-`opp_id, account, opp_name, owner, stage, amount, currency, created_date,
-close_date, last_activity_date, next_step, next_step_date, forecast_category,
-contact_count, product_line`
+| Column | Type / format | May be blank | Notes |
+|---|---|---|---|
+| `opp_id` | string | no | unique per opp; stable across snapshots |
+| `account` | string | no | account name (shown on the call) |
+| `opp_name` | string | no | opportunity name |
+| `owner` | string | no | seller name; must match quota/owner keys |
+| `stage` | your CRM's vocabulary | no | mapped via `stage_map` (below) |
+| `amount` | number | yes | blank/0 caught by H8 |
+| `currency` | ISO code | no | one currency per file (mixed is fatal) |
+| `created_date` | `YYYY-MM-DD` | no | |
+| `close_date` | `YYYY-MM-DD` | no | |
+| `last_activity_date` | `YYYY-MM-DD` | no | drives H1 staleness |
+| `next_step` | string | yes | empty/expired caught by H4 |
+| `next_step_date` | `YYYY-MM-DD` | yes | the only date column that may be blank |
+| `forecast_category` | enum | no | `pipeline, best_case, commit, omitted` |
+| `contact_count` | integer | no | must parse as int; drives H7 |
+| `product_line` | string | yes | |
 
 - Optional history columns (`stage_entered_date`, `close_date_changes`) are
   derived from stored snapshots when absent; with a single snapshot the
@@ -88,8 +102,17 @@ contact_count, product_line`
   `"Label": FIXME   # one of: <canonical>` lines. It exits nonzero only when
   required columns are missing (so a cron can tell "fix the export" from
   "fix the map").
+  `config.yaml` ships `default`, `dynamics_default`, and a `hubspot` preset
+  for the standard HubSpot deal-pipeline stages.
 - Set `expected_currency` in `config.yaml`; a uniform but unexpected currency
   warns, mixed currency in one file is fatal.
+- **Coverage, teams, and regions are blank without a quotas file.** Pass
+  `--quotas` (or `PIPELINE_HYGIENE_QUOTAS`) a JSON of the shape below; the
+  `owners` block unlocks the team/region rollups:
+  ```json
+  {"quotas": {"Ada Lovelace": 900000},
+   "owners": {"Ada Lovelace": {"team": "Team North", "region": "EMEA"}}}
+  ```
 
 Ingest is safe to schedule: it exits nonzero (and stores nothing) if every row
 is rejected, prints the rejected rows with reasons, and names the snapshot date
@@ -99,6 +122,69 @@ from the filename (`opps_YYYY-MM-DD.csv`) or `--snapshot-date`.
 python -m src.ingest your_export.csv --stage-map your_map
 python -m src.brief --as-of 2026-08-10 --quotas your_quotas.json --digests
 ```
+
+Point `--db`, `--config`, `--quotas`, and `--out-dir` at your files, or set
+`PIPELINE_HYGIENE_DB` / `PIPELINE_HYGIENE_CONFIG` / `PIPELINE_HYGIENE_QUOTAS` /
+`PIPELINE_HYGIENE_OUT` (ingest, brief, and the dashboard all honor the store
+and config vars; brief also honors the quotas and out-dir vars). To keep an
+evaluation trial fully isolated, set `PIPELINE_HYGIENE_DB` and
+`PIPELINE_HYGIENE_OUT` to a scratch location so neither the store nor the
+written briefs touch your production copies. The brief prints `reading
+snapshot store <path>` to stderr so a scheduled run can't silently brief the
+wrong database.
+
+## For your boss (FAQ)
+
+For an evaluator deciding between this and a commercial suite:
+
+- **Cost of operation.** Runs locally on Python 3.10+; no API keys, no LLM
+  calls, no external services, no per-seat license. Dependencies are pyyaml,
+  pandas, streamlit, altair (pytest/hypothesis are dev-only). A snapshot
+  ingests and briefs in seconds on a laptop.
+- **Auditability.** Every hygiene rule (H1–H11) is a deterministic pure
+  function with a versioned threshold in `config.yaml`; there is no model and
+  no randomness in the engine. The coverage number prints its own basis
+  (`trailing win rate 28/43 closed won (65.1%) -> required multiple 1.54x`),
+  the pipeline waterfall reconciles to the dollar, and a golden-file test pins
+  the brief byte-for-byte. A skeptic can reproduce every figure by hand.
+- **Extensibility.** Add a rule as a pure function in `src/rules.py` plus a
+  weight in `config.yaml`; map any CRM's stage vocabulary with `stage_map`;
+  get team/region rollups by adding an `owners` block to the quotas JSON. No
+  schema migration, no vendor lock-in — it's plain CSV in, Markdown/SQLite out.
+- **What it deliberately does NOT do** (by design, not omission):
+  - No CRM write-back and no contacting sellers — it is read-only over CSV
+    snapshots (*agents inspect, people sell*). The forecast-call checkboxes
+    are paper, on purpose.
+  - No real-time sync — it reasons over batch snapshots, which is what makes
+    the since-last-run and slippage history possible.
+  - No opaque AI/ML deal-risk score — the deterministic, auditable rules are
+    the intended *complement* to CRM-vendor risk AI, not a copy of it.
+  - One currency per file (mixed currency is a fatal ingest error), no
+    activity capture, no built-in SSO/RBAC (bind the dashboard to localhost
+    and distribute the private digests per seller).
+
+## Hygiene rules (H1–H11)
+
+Each rule is a deterministic pure function `(row, config, as_of)` with a
+versioned threshold in `config.yaml` (the same legend prints at the foot of
+every brief). Score starts at 100 and each violation deducts its weight.
+
+| Rule | Meaning | Key threshold(s) in `config.yaml` | Weight |
+|---|---|---|---|
+| H1 | stale by stage | `staleness_days` (per stage) | 15 |
+| H2 | close date in past | close_date < as_of | 20 |
+| H3 | serial slippage | ≥2 close-date changes (high at 3) | 10 |
+| H4 | missing/expired next step | next_step empty or next_step_date < as_of | 20 |
+| H5 | forecast mismatch | commit on pre-develop stage, or no valid next step | 25 |
+| H6 | aging in stage | `aging_norm_days` (per stage) | 10 |
+| H7 | single-threaded big deal | `big_deal_threshold` and contact_count < 2 | 10 |
+| H8 | amount hygiene | amount blank or ≤ 0 | 5 |
+| H9 | vague next step | `next_step_quality` (min chars / filler / action verb) | 5 |
+| H10 | parked close date | `close_date_horizon_days` | 10 |
+| H11 | lost deal control | `push_alarm_days` / `cumulative_push_alarm_days` | 20 |
+
+H3, H6, and H11 need snapshot history; with a single snapshot H3/H6 report
+`insufficient_history` (never a false flag) and H11 is silent.
 
 ## Persona pass
 

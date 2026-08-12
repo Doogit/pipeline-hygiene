@@ -155,4 +155,4 @@ def test_slipping_section_disqualify_marker(tmp_path, config):
     markdown = brief.render(data, config)
     section = markdown.split("## Slipping pipeline")[1].split("## ")[0]
     assert "| OPP-A |" in section
-    assert "recommend disqualification review" in section
+    assert "review close plan" in section
