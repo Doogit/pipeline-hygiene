@@ -131,3 +131,21 @@ def test_cli_commit_scrub_writes_only_the_scrub(tmp_path, config, capsys):
     assert sqlite3.connect(db).execute(
         "SELECT COUNT(*) FROM runs").fetchone()[0] == 0
     assert "2 open commit/best_case opps" in capsys.readouterr().out
+
+
+def test_cli_commit_scrub_honors_env_paths(tmp_path, config, monkeypatch,
+                                           capsys):
+    db = tmp_path / "env_pipeline.db"
+    _seeded_store(tmp_path, config, db=str(db))
+    out = tmp_path / "env_out"
+    monkeypatch.setenv("PIPELINE_HYGIENE_DB", str(db))
+    monkeypatch.setenv("PIPELINE_HYGIENE_CONFIG", str(TEST_CONFIG_PATH))
+    monkeypatch.setenv("PIPELINE_HYGIENE_OUT", str(out))
+
+    rc = brief.main(["--as-of", AS_OF.isoformat(), "--commit-scrub"])
+
+    assert rc == 0
+    assert (out / f"commit_scrub_{AS_OF.isoformat()}.md").exists()
+    captured = capsys.readouterr()
+    assert f"reading snapshot store {db}" in captured.err
+    assert "2 open commit/best_case opps" in captured.out

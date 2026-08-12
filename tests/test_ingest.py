@@ -106,6 +106,23 @@ def test_stage_map_vocabulary(tmp_path, config):
     assert report.rejected == 0
 
 
+def test_cli_honors_env_db_and_config(tmp_path, config, monkeypatch):
+    p = tmp_path / "opps_2026-08-10.csv"
+    _write_fixture(p, [_row(), _row(opp_id="OPP-0002")])
+    db = tmp_path / "env_pipeline.db"
+    test_config = Path(__file__).parent / "config_test.yaml"
+    monkeypatch.setenv("PIPELINE_HYGIENE_DB", str(db))
+    monkeypatch.setenv("PIPELINE_HYGIENE_CONFIG", str(test_config))
+
+    code = ingest_main([str(p)])
+
+    assert code == 0
+    store = SnapshotStore(db, config)
+    assert store.snapshot_dates() == [AS_OF]
+    assert [r["opp_id"] for r in store.load_rows(AS_OF)] == [
+        "OPP-0001", "OPP-0002"]
+
+
 def test_seed_csv_round_trips_clean(tmp_path, config):
     rng = random.Random(42)
     org = build_org(rng)
@@ -202,6 +219,22 @@ def test_init_doctor_reports_and_prefills_stage_map(tmp_path, config, capsys):
     # case-insensitive canonical match pre-filled; the rest FIXME
     assert '"Qualify": qualify' in out
     assert '"Negotiation/Review": FIXME   # one of: closed_lost' in out
+
+
+def test_init_doctor_mentions_existing_stage_preset(tmp_path, capsys):
+    p = tmp_path / "dynamics_export.csv"
+    _write_fixture(p, [
+        _row(stage="Qualify"), _row(opp_id="OPP-0002", stage="Develop"),
+        _row(opp_id="OPP-0003", stage="Won"),
+    ])
+    test_config = Path(__file__).parent / "config_test.yaml"
+
+    code = ingest_main([str(p), "--init", "--config", str(test_config)])
+
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "covered by the 'dynamics_default' preset" in out
+    assert "--stage-map dynamics_default" in out
 
 
 def test_init_doctor_missing_columns_exits_nonzero(tmp_path, config, capsys):
