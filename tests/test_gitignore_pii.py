@@ -21,6 +21,9 @@ def _ignored(relpath):
 REAL_EXPORTS = [
     "your_export.csv",                       # README --init example, repo root
     "opps.csv",                              # bare root drop
+    "pipeline.db",                           # root SQLite export/store
+    "pipeline.sqlite",                       # root SQLite export/store
+    "pipeline.sqlite3",                      # root SQLite export/store
     "data/opps_2099-01-01.csv",              # next real weekly snapshot
     "data/snapshots/opps_2099-01-01.csv",    # real export in the series dir
     "data/exports/crm.csv",                  # nested subdir

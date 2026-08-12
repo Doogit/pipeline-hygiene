@@ -95,9 +95,13 @@ if ($env:ENTRA_CLIENT_ID -and $env:ENTRA_TENANT_ID) {
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Entra sign-in enabled: unauthenticated visitors are bounced to Microsoft login."
     } else {
-        Write-Warning "Entra sign-in setup FAILED (az exit $LASTEXITCODE): app '$AppName' is LIVE and OPEN."
-        Write-Warning "Verify with 'az webapp auth show -g $ResourceGroup -n $AppName' and re-run once fixed,"
-        Write-Warning "or take it down now with 'az webapp stop -g $ResourceGroup -n $AppName'."
+        $AuthExitCode = $LASTEXITCODE
+        Write-Warning "Entra sign-in setup FAILED (az exit $AuthExitCode): stopping app '$AppName' so it is not left live and open."
+        az webapp stop -g $ResourceGroup -n $AppName -o none
+        if ($LASTEXITCODE -ne 0) {
+            throw "Entra sign-in setup failed (az exit $AuthExitCode), and stopping app '$AppName' also failed (az exit $LASTEXITCODE). Stop it manually with: az webapp stop -g $ResourceGroup -n $AppName"
+        }
+        throw "Entra sign-in setup failed (az exit $AuthExitCode); stopped app '$AppName' to avoid leaving it open."
     }
 } else {
     Write-Warning "Deployed OPEN with NO authentication -- anyone with the URL can view the dashboard."

@@ -12,6 +12,9 @@ __pycache__/
 /*.csv
 /*.xlsx
 /*.xls
+/*.db
+/*.sqlite
+/*.sqlite3
 data/**/*.csv
 data/**/*.xlsx
 data/**/*.xls
