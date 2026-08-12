@@ -19,6 +19,7 @@ Snapshot 2026-08-10 (opps_2026-08-10.csv), evaluated as of 2026-08-10.
 ## Risky commits
 
 51 commit/best_case opps carry a risk flag — $5,939,535 (distinct opps), dollar-ranked, top 10 shown. Coaching prompts, not gotchas.
+Of these, 46 carry a high-severity flag ($5,138,725) — the at-risk figure the commit-scrub carries forward; the rest are medium/low.
 
 | # | Opp | Account | Owner | Stage | Amount | Forecast | Flags | Ask the seller |
 |---|---|---|---|---|---|---|---|---|
@@ -229,8 +230,9 @@ Of opps ever forecast commit in stored history: outcome to date. Pushed = still 
 
 0 of 41 ever-commit deal(s) resolved so far; rates render at 5+ resolved — expect a full read after roughly a quarter of stored snapshots.
 
-Credibility today: 0 of 41 ever-commit deal(s) (0%) moved their close date after being called commit.
-Of 41 current commit-forecast open opp(s), 30 sit on a pre-develop stage or lack a valid next step (H5).
+Current-commit integrity: 30 of 41 (73%) open commit-forecast opp(s) fail H5 — on a pre-develop stage or without a valid next step.
+Historical push rate: 0 of 41 ever-commit deal(s) (0%) moved their close date after being called commit.
+By team (pushed / ever-commit): Team APAC-1 0/9, Team APAC-2 0/8, Team EMEA-1 0/3, Team EMEA-2 0/2, Team NA-East-1 0/6, Team NA-East-2 0/2, Team NA-West-1 0/1, Team NA-West-2 0/5, Team NA-West-3 0/5.
 
 | Owner | Ever commit | Won | Lost | Pushed | Still open | Won/resolved | Of which pushed first |
 |---|---|---|---|---|---|---|---|

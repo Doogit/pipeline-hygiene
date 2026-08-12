@@ -344,15 +344,17 @@ def snapshot_date_from_filename(csv_path):
     return date.fromisoformat(m.group(1)) if m else None
 
 
-def init_doctor(csv_path, out=None):
+def init_doctor(csv_path, out=None, stage_maps=None):
     """python -m src.ingest --init your.csv: pre-ingest column/stage report.
 
     Reports required columns present/missing, extra columns (ignored), the
     distinct stage labels with row counts, and a ready-to-paste stage_map
     YAML block (case-insensitive exact matches to canonical stages
-    pre-filled, everything else FIXME). Deliberately nothing else — a real
-    ingest already reports currency/date problems with row-level detail.
-    Returns nonzero only when required columns are missing."""
+    pre-filled, everything else FIXME). When every stage label is already
+    covered by a shipped stage_map preset (stage_maps), it says so first, so a
+    stock HubSpot/Dynamics export skips map authoring entirely. Deliberately
+    nothing else — a real ingest already reports currency/date problems with
+    row-level detail. Returns nonzero only when required columns are missing."""
     out = out if out is not None else sys.stdout
     csv_path = Path(csv_path)
     with open(csv_path, newline="", encoding="utf-8") as f:
@@ -387,6 +389,16 @@ def init_doctor(csv_path, out=None):
         ranked = sorted(stage_counts.items(), key=lambda kv: (-kv[1], kv[0]))
         for label, n in ranked:
             print(f"    {label or '(empty)'}: {n}", file=out)
+        # If a shipped preset already covers every label, lead with that — the
+        # persona these presets exist for should not hand-author a map that
+        # already ships.
+        labels = {label for label in stage_counts if label}
+        preset = next((name for name, mapping in (stage_maps or {}).items()
+                       if labels and labels <= set(mapping)), None)
+        if preset is not None:
+            print(f"- All stage labels are covered by the '{preset}' preset — "
+                  f"run: python -m src.ingest your.csv --stage-map {preset} "
+                  f"(no map authoring needed).", file=out)
         by_fold = {s.casefold(): s for s in sorted(CANONICAL_STAGES)}
         print("- Ready-to-paste stage_map (add under stage_map: in "
               "config.yaml, edit the FIXME lines, then run: "
@@ -431,7 +443,12 @@ def main(argv=None):
     args = p.parse_args(argv)
 
     if args.init:
-        return init_doctor(args.csv_path)
+        stage_maps = None
+        try:
+            stage_maps = load_config(args.config).get("stage_map")
+        except Exception:
+            pass   # doctor still works without config; preset hint just skipped
+        return init_doctor(args.csv_path, stage_maps=stage_maps)
 
     snapshot_date = args.snapshot_date or snapshot_date_from_filename(args.csv_path)
     if snapshot_date is None:

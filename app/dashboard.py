@@ -407,7 +407,7 @@ with tab_slip:
                     "rules": " ".join(v.rule_id
                                       for v in result.violations) or "-",
                     "close-date drift": timeline,
-                    "review": ("recommend disqualification review"
+                    "review": ("review close plan"
                                if r["push_count"]
                                >= config["disqualify_review_pushes"] else ""),
                 })

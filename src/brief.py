@@ -51,15 +51,31 @@ COACHING_PROMPTS = {
            "re-committing this deal?",
 }
 
-# The line each less-obvious rule crosses, for the digest's rule reference.
-# Most rules already print their value and threshold in the engine detail
-# string (H1 "> 30d for qualify", H2 "60d in the past", H6 "norm 45d"); H3 and
-# H5 do not, so the seller cannot tell "barely flagged" from "deep in the red"
-# without this.
-RULE_TRIP = {
-    "H3": "2+ close-date changes (high severity at 3+)",
-    "H5": "commit forecast on a pre-develop stage, or with no valid next step",
-}
+def rule_trip(rule, config):
+    """The line each rule crosses, for the digest's rule reference — every
+    rule, not just the two whose engine detail omits the threshold. Numbers
+    come from config so the seller can check the observed value in Top risks
+    against the exact trip line (bare rule tokens read as surveillance)."""
+    sym = currency_symbol(config)
+    q = config.get("next_step_quality") or {}
+    return {
+        "H1": "no activity beyond the per-stage staleness threshold",
+        "H2": "close date earlier than the evaluation date",
+        "H3": "2+ close-date changes (high severity at 3+)",
+        "H4": "next step empty, or its date missing or in the past",
+        "H5": "commit forecast on a pre-develop stage, or with no valid "
+              "next step",
+        "H6": "days in stage beyond the per-stage aging norm",
+        "H7": f"amount >= {sym}{config['big_deal_threshold']:,.0f} with fewer "
+              "than 2 contacts",
+        "H8": "amount missing or <= 0",
+        "H9": f"next step under {q.get('min_chars', 15)} chars, filler, or "
+              "without an action verb",
+        "H10": f"close date more than {config['close_date_horizon_days']}d out",
+        "H11": f"a single push >= {config['push_alarm_days']}d, or cumulative "
+               f"later-drift >= {config['cumulative_push_alarm_days']}d",
+    }.get(rule)
+
 
 # Every rule gets a "what to do about it" ask for the private digest's coaching
 # focus, so the focus line is never advice-free. RISKY_RULES reuse the
@@ -625,6 +641,17 @@ def _risky_commits(lines, data, config):
                  + (", grouped by owner" if filtered
                     else (", top 10 shown" if len(entries) > 10 else ""))
                  + ". Coaching prompts, not gotchas.")
+    # Name the high-severity subtotal so the two at-risk numbers a manager
+    # reads back-to-back (this "any risk flag" total vs the commit-scrub's
+    # high-severity-only "at-risk within") reconcile on the page, not live in
+    # front of the VP.
+    high_n = sum(1 for e in entries if e["result"].has_high())
+    high_total = sum(e["row"]["amount"] or 0.0 for e in entries
+                     if e["result"].has_high())
+    if high_n and high_n < len(entries):
+        lines.append(f"Of these, {high_n} carry a high-severity flag "
+                     f"({_money(high_total, config)}) — the at-risk figure the "
+                     f"commit-scrub carries forward; the rest are medium/low.")
     lines.append("")
     if filtered:
         by_owner = {}
@@ -860,7 +887,10 @@ def _slipping(lines, data, config):
     for row in slipping:
         result = data["results"][row["opp_id"]]
         badges = " ".join(v.rule_id for v in result.violations) or "-"
-        review = ("recommend disqualification review"
+        # Neutral, coaching-framed marker: the same deterministic signal
+        # (push_count >= threshold) without the career-loaded "disqualification"
+        # wording, since this table is name-attributed in a shared brief.
+        review = ("review close plan"
                   if row["push_count"] >= config["disqualify_review_pushes"]
                   else "-")
         lines.append(f"| {row['opp_id']} | {row['owner']} | {row['stage']} "
@@ -1103,7 +1133,9 @@ def _group_trend_lines(lines, series, label, config):
     n = len(next(iter(series.values())))
     lines.append(f"Per {label.lower()}, coverage oldest->newest (1.00x is the "
                  f"bar) and at-risk start->end, over {n} snapshots:")
-    widest = None
+    flat_threshold = config.get("trend_flat_threshold")
+    flat_threshold = 0.05 if flat_threshold is None else flat_threshold
+    widest, diverging = None, []
     for key, items in ranked:
         covs = " ".join("n/a" if c is None else f"{c:.2f}"
                         for _, c, _ in items)
@@ -1112,12 +1144,26 @@ def _group_trend_lines(lines, series, label, config):
                      f"{_money(items[-1][2], config)}")
         c0 = next((c for _, c, _ in items if c is not None), None)
         cN = latest_cov(items)
-        if c0 is not None and cN is not None \
-                and (widest is None or abs(cN - c0) > abs(widest[1])):
-            widest = (key, cN - c0)
+        if c0 is not None and cN is not None:
+            if widest is None or abs(cN - c0) > abs(widest[1]):
+                widest = (key, cN - c0)
+            # coverage rose but at-risk dollars also rose: pipeline is being
+            # built faster than it is being cleaned — the budget-routing signal
+            if cN - c0 > 0 and items[-1][2] > items[0][2]:
+                diverging.append(key)
+    # A one-line verdict, so 'is the desk trending?' is answered, not squinted:
+    # a flat month reads as the finding it is.
     if widest is not None:
-        lines.append(f"- Widest {label.lower()} coverage move: {widest[0]} "
-                     f"{widest[1]:+.2f} over the window.")
+        if abs(widest[1]) < flat_threshold:
+            lines.append(f"- Verdict: {label.lower()} coverage essentially flat "
+                         f"this month — no {label.lower()} moved more than "
+                         f"{abs(widest[1]):.2f}.")
+        else:
+            lines.append(f"- Verdict: largest {label.lower()} coverage move "
+                         f"{widest[0]} {widest[1]:+.2f} over the window.")
+    if diverging:
+        lines.append(f"- Coverage up but at-risk also up (building pipeline "
+                     f"faster than cleaning it): {', '.join(diverging)}.")
 
 
 def _group_trends_section(lines, data, config):
@@ -1263,9 +1309,11 @@ def _commit_ledger(lines, data, config):
                  f"so far; rates render at {min_n}+ resolved — expect a full "
                  f"read after roughly a quarter of stored snapshots.")
     lines.append("")
-    # Credibility today: two deterministic in-snapshot signals so a young store
-    # gives a number now instead of all-n/a while win-rates mature. Both are
-    # desk-level, coaching-not-comp.
+    # Credibility today: deterministic in-snapshot signals so a young store
+    # gives a number now instead of all-n/a while win-rates mature. Lead with
+    # the strongest (H5 on LIVE commits), then the historical push rate, then a
+    # per-team cut that routes coaching budget. All desk/team-level, never
+    # per-seller — coaching, not comp.
     ever = len(entries)
     ever_pushed = sum(1 for e in entries
                       if e.outcome == "pushed" or e.pushed_before_close)
@@ -1274,13 +1322,29 @@ def _commit_ledger(lines, data, config):
     commit_h5 = sum(1 for r in commit_open
                     if any(v.rule_id == "H5"
                            for v in data["results"][r["opp_id"]].violations))
-    lines.append(f"Credibility today: {ever_pushed} of {ever} ever-commit "
+    if commit_open:
+        lines.append(f"Current-commit integrity: {commit_h5} of "
+                     f"{len(commit_open)} "
+                     f"({commit_h5 / len(commit_open):.0%}) open "
+                     f"commit-forecast opp(s) fail H5 — on a pre-develop stage "
+                     f"or without a valid next step.")
+    lines.append(f"Historical push rate: {ever_pushed} of {ever} ever-commit "
                  f"deal(s) ({ever_pushed / ever:.0%}) moved their close date "
                  f"after being called commit.")
-    if commit_open:
-        lines.append(f"Of {len(commit_open)} current commit-forecast open "
-                     f"opp(s), {commit_h5} sit on a pre-develop stage or lack "
-                     f"a valid next step (H5).")
+    owner_meta = config.get("owner_meta") or {}
+    if any((m or {}).get("team") for m in owner_meta.values()):
+        by_team = {}
+        for e in entries:
+            team = (owner_meta.get(e.owner) or {}).get("team")
+            if team is None:
+                continue
+            g = by_team.setdefault(team, [0, 0])
+            if e.outcome == "pushed" or e.pushed_before_close:
+                g[0] += 1
+            g[1] += 1
+        parts = ", ".join(f"{team} {g[0]}/{g[1]}"
+                          for team, g in sorted(by_team.items()))
+        lines.append(f"By team (pushed / ever-commit): {parts}.")
     lines.append("")
 
     def table(label, rollups):
@@ -1411,9 +1475,11 @@ def digest_markdown(data, owner, config):
     lines.append("## Your row in the shared desk brief")
     lines.append("")
     lines.append("These figures also appear, attributed to you by name, in the "
-                 "desk-wide Owners and Top-exceptions tables your manager and "
-                 "peers may see — shown here so you see exactly what they see. "
-                 "Everything else in this digest is private to you.")
+                 "desk-wide brief tables your manager and peers may see — the "
+                 "Owners scoreboard, Top exceptions, the slipping-pipeline and "
+                 "forecast-pattern lists, and the commit ledger — shown here so "
+                 "you see exactly what they see. Everything else in this digest "
+                 "is private to you.")
     lines.append("")
     coverage = ("n/a" if stats.coverage_ratio is None
                 else f"{stats.coverage_ratio:.2f}x"
@@ -1577,7 +1643,7 @@ def digest_markdown(data, owner, config):
         lines.append("Only the rules on your deals, and the line each one "
                      "crosses:")
         for rule in rules_present:
-            trip = RULE_TRIP.get(rule)
+            trip = rule_trip(rule, config)
             lines.append(f"- {rule} {RULE_LABELS[rule]}"
                          + (f" — {trip}" if trip else ""))
     lines.append("")
@@ -1652,15 +1718,9 @@ def render_commit_scrub(data, config):
                      "selection.")
         lines.append("")
     rows = _scrub_rows(data)
-    total = sum(r["amount"] or 0.0 for r in rows)
     quarter_end = fiscal_quarter_end(as_of, fy_start)
     commit_rows = [r for r in rows if r["forecast_category"] == "commit"
                    and r["close_date"] <= quarter_end]
-    lines.append(f"{len(rows)} open commit/best_case opp(s), "
-                 f"{_money(total, config)}. Commit-forecast closing "
-                 f"{quarter} or earlier (overdue included): "
-                 f"{_money(sum(r['amount'] or 0.0 for r in commit_rows), config)} "
-                 f"across {len(commit_rows)} deal(s).")
     # Reconcile to the brief headline's "Forecast call" line (same universe,
     # same at-risk-within math) so the sheet the manager works from carries the
     # exact number she reads to the VP, split by bucket with the at-risk slice
@@ -1675,9 +1735,18 @@ def render_commit_scrub(data, config):
                 sum(1 for r in rr if results[r["opp_id"]].has_high()))
     c_n, c_tot, c_risk, c_risk_n = _bucket("commit")
     b_n, b_tot, b_risk, b_risk_n = _bucket("best_case")
+    # Display total as the sum of the displayed (rounded) bucket parts, so the
+    # printed "commit + best_case = total" ties exactly (independent rounding
+    # was $1 short in a persona hand-check of the number she defends).
+    total_disp = round(c_tot) + round(b_tot)
+    lines.append(f"{len(rows)} open commit/best_case opp(s), "
+                 f"{_money(total_disp, config)}. Commit-forecast closing "
+                 f"{quarter} or earlier (overdue included): "
+                 f"{_money(sum(r['amount'] or 0.0 for r in commit_rows), config)} "
+                 f"across {len(commit_rows)} deal(s).")
     lines.append(f"- Forecast call: commit {_money(c_tot, config)} ({c_n}) + "
                  f"best_case {_money(b_tot, config)} ({b_n}) = "
-                 f"{_money(total, config)} ({len(rows)}).")
+                 f"{_money(total_disp, config)} ({len(rows)}).")
     lines.append(f"- At-risk within (high-severity flag): commit "
                  f"{_money(c_risk, config)} across {c_risk_n} deal(s); "
                  f"best_case {_money(b_risk, config)} across {b_risk_n} "
@@ -1832,7 +1901,9 @@ def main(argv=None):
                         "present, also supplies per-owner team/region for the rollups")
     p.add_argument("--digests", action="store_true",
                    help="also write private per-owner coaching digests to "
-                        "<out-dir>/digests/<as-of>/<owner_slug>.md")
+                        "<out-dir>/digests/<as-of>/<owner_slug>.md; combine "
+                        "with --team/--owner/--region to write digests for "
+                        "just that selection (a manager's own reports)")
     p.add_argument("--commit-scrub", action="store_true",
                    help="write ONLY the pre-forecast-call scrub sheet "
                         "(every open commit/best_case opp with checklist "
