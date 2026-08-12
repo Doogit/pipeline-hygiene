@@ -7,8 +7,10 @@ app/static (versions + SHA-256 in app/static/vendor/VENDOR.md). A strict CSP
 
 Renders strictly from the pure view model (src/pipeline_hygiene_view); no
 business logic here. The page is read-only — nothing writes outside the
-snapshot store, and viewing/downloading records nothing. The Streamlit page
-(app/dashboard.py) stays live until parity + manual acceptance are signed off.
+snapshot store, and viewing/downloading records nothing. This is the sole UI:
+the prior Streamlit page (app/dashboard.py) was retired once parity + manual
+acceptance were signed off (migration Task 5); the parity gate (tests/parity)
+remains as the regression baseline against its frozen goldens.
 """
 import os
 import tempfile

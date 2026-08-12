@@ -1,9 +1,8 @@
 # Runtime
 pyyaml>=6.0
 pandas>=2.0
-streamlit>=1.57  # width="stretch" charts/tables plus theme keys used by the dashboard
-altair>=5.0      # emits the Vega-Lite specs; vendored vega-lite pinned to its $schema (v6.4.1 for altair 6.1.0)
-# FastHTML UI (app/server.py) — migration target; Streamlit stays live until parity + acceptance sign-off.
+altair>=5.0      # the view model emits the Vega-Lite specs via Altair; vendored vega-lite pinned to its $schema (v6.4.1 for altair 6.1.0)
+# FastHTML UI (app/server.py) — the read-only dashboard (Streamlit retired, Task 5).
 # Tailwind CSS is built offline via the standalone tailwindcss CLI (no Node); see scripts/build_css.sh.
 python-fasthtml==0.14.11  # pinned: confirmed zero-CDN offline in the Task 0 spike (docs/migration)
 # Dev / tests
