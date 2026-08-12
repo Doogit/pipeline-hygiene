@@ -8,11 +8,11 @@
 - **Clock determinism:** every function that evaluates time takes an explicit `as_of: date` parameter. `date.today()` may appear only in CLI entry points as the default for `--as-of`. No exceptions — rules, scoring, seed, brief, dashboard all thread `as_of` through.
 - **Test config isolation:** tests load `tests/config_test.yaml` (frozen copy of defaults), never the repo `config.yaml`. Editing runtime config must never break tests.
 - Synthetic data only. No real customer, employer, or colleague names anywhere in the repo.
-- Stack: Python 3.11+, SQLite, Streamlit, pytest + hypothesis. No paid services for the MVP.
+- Stack: Python 3.11+, SQLite, FastHTML + htmx (UI), pytest + hypothesis. No paid services for the MVP.
 - If session context strains, stop cleanly after Task 3, commit, and use the Handoff section — Tasks 4–6 run fine in a fresh session.
 
 ## Objective
-Working MVP that ingests opportunity CSV snapshots into a snapshot store, runs deterministic hygiene checks, scores every opportunity and owner, and produces: (a) an exceptions report, (b) a dated "desk brief" markdown digest with run-over-run deltas, (c) a read-only Streamlit dashboard. Done = every verification check passes against simulated data with a per-opportunity ground-truth manifest.
+Working MVP that ingests opportunity CSV snapshots into a snapshot store, runs deterministic hygiene checks, scores every opportunity and owner, and produces: (a) an exceptions report, (b) a dated "desk brief" markdown digest with run-over-run deltas, (c) a read-only FastHTML dashboard. Done = every verification check passes against simulated data with a per-opportunity ground-truth manifest.
 
 ## Context
 Sales desks lose deals to hygiene failures — stale opportunities, slipped close dates, vague next steps, forecast categories that contradict stage reality. Managers usually discover these at the forecast call, which is too late. This agent finds them continuously, before the call.
@@ -160,8 +160,8 @@ Writes `out/desk_brief_YYYY-MM-DD.md`:
 - Since last run: from `runs` + snapshot store — new violations, cleared violations, score change, opps closed/added.
 - Golden-file snapshot test: fixed seed + fixed `as_of` → brief matches `tests/golden/desk_brief_golden.md` exactly.
 
-## Task 6: Streamlit dashboard
-- `streamlit run app/dashboard.py`: loads latest snapshot from store by default; CSV upload runs the same ingest validation. Filters: owner, stage, severity (an opp appears under each severity it carries; filter semantics documented in-app). Exception table with rule badges; owner scoreboard with small-n flags; desk headline; validation report view; download-brief button.
+## Task 6: FastHTML dashboard
+- `python -m app.server`: loads latest snapshot from store by default; CSV upload runs the same ingest validation. Filters: owner, stage, severity (an opp appears under each severity it carries; filter semantics documented in-app). Exception table with rule badges; owner scoreboard with small-n flags; desk headline; validation report view; download-brief button.
 - Strictly read-only: no edit affordances of any kind.
 
 ## Task 7 (feature-flagged — skip unless LLM_ENABLED=1): LLM layer
@@ -173,7 +173,7 @@ Writes `out/desk_brief_YYYY-MM-DD.md`:
 ## Pre-flight Checks
 - [ ] `python --version` → 3.11+. If lower: stop and report.
 - [ ] `git status` clean on a fresh repo; branch `feat/mvp-rules-engine` created.
-- [ ] `pip install streamlit pytest hypothesis pyyaml pandas` succeeds. If not: stop and report.
+- [ ] `pip install -r requirements.txt` succeeds. If not: stop and report.
 
 ## Verification Checklist
 - [ ] All tests pass: `pytest -q` → 0 failures (boundary, manifest consistency, property, insufficient-history, golden brief, ingest validation).
@@ -184,7 +184,7 @@ Writes `out/desk_brief_YYYY-MM-DD.md`:
 - [ ] Insufficient history: single snapshot without optional columns → brief shows H3/H6 as insufficient_history, not violations.
 - [ ] Brief generates: `python -m src.seed && python -m src.brief` → `out/desk_brief_*.md` contains "Desk score", validation summary, fiscal-quarter section, per-owner table, forecast-integrity section.
 - [ ] Perf: `python -m src.seed --rows 50000` then full ingest + rules + brief completes < 60s on this machine (report actual).
-- [ ] Dashboard: `streamlit run app/dashboard.py` loads store data; owner/stage/severity filters change the table; no write/edit controls anywhere.
+- [ ] Dashboard: `python -m app.server` loads store data; owner/stage/severity filters change the table; no write/edit controls anywhere.
 - [ ] No real-world data: `grep -ri` the repo for anything that isn't a synthetic name → nothing found.
 
 ## Final Output

@@ -41,8 +41,10 @@ flag that fired on 97% of owners). Treat it as a standing check, not a one-off.
      (`python -m src.seed --series 4` or per README → ingest all snapshots →
      `python -m src.brief` per snapshot so since-last-run deltas exist →
      `--digests`), then role-play the persona's jobs against the generated
-     artifacts and the dashboard (headless via `streamlit.testing.v1.AppTest`
-     when practical),
+     artifacts and the dashboard (drive the FastHTML page by booting
+     `python -m app.server` on a per-persona port and fetching its routes over
+     HTTP, or read the pure view model in `src/pipeline_hygiene_view.py`
+     directly — it is what the page renders),
    - the required return shape (below).
 
 3. **Make each agent return a self-contained report:**
