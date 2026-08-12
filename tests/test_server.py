@@ -20,6 +20,12 @@ from tests.parity._build import build_empty, build_full_multi
 client = TestClient(app)
 
 
+def test_healthz_is_lightweight():
+    r = client.get("/healthz")
+    assert r.status_code == 200
+    assert r.text == "ok"
+
+
 @pytest.fixture
 def full_env(tmp_path, monkeypatch):
     env = build_full_multi(tmp_path)

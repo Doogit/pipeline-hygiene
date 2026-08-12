@@ -6,8 +6,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Runtime deps only need manylinux wheels (pandas/altair/streamlit/pyyaml) — no
-# build toolchain required.
+# Runtime deps only need manylinux wheels (pandas/altair/python-fasthtml/pyyaml)
+# — no build toolchain required. python-fasthtml pulls uvicorn+starlette; the
+# vendored htmx/vega and the pre-built Tailwind app.css ship in app/static (COPY
+# below), so there is no Node/CSS build step in the image.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -26,11 +28,16 @@ RUN set -e; for f in data/snapshots/opps_*.csv; do python -m src.ingest "$f"; do
 ENV PIPELINE_HYGIENE_QUOTAS=/app/data/delta_manifest.json
 
 # App Service routes to the port named by the WEBSITES_PORT app setting; keep it
-# in sync with the port Streamlit binds (see deploy/azure-deploy.ps1).
+# in sync with the port the app binds (see deploy/azure-deploy.ps1).
 ENV PORT=8000
 EXPOSE 8000
 
-# --server.address overrides the committed .streamlit/config.toml loopback bind
-# (CLI flags win over config.toml). Easy Auth, when enabled, fronts the app, so
-# binding 0.0.0.0 inside the container does not expose it to the open internet.
-CMD ["sh", "-c", "streamlit run app/dashboard.py --server.address=0.0.0.0 --server.port=${PORT} --server.headless=true --browser.gatherUsageStats=false"]
+# FastHTML server. It binds 127.0.0.1 by default and refuses a non-local bind
+# unless PIPELINE_HYGIENE_ALLOW_NONLOCAL_HOST=1 — set here deliberately so the
+# container can accept App Service's routed traffic. Easy Auth, when enabled,
+# fronts the app, so binding 0.0.0.0 inside the container does not expose it to
+# the open internet. PIPELINE_HYGIENE_PORT follows ${PORT} so an App Service
+# PORT override is honored.
+ENV PIPELINE_HYGIENE_HOST=0.0.0.0
+ENV PIPELINE_HYGIENE_ALLOW_NONLOCAL_HOST=1
+CMD ["sh", "-c", "PIPELINE_HYGIENE_PORT=${PORT} python -m app.server"]

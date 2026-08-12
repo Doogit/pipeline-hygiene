@@ -22,7 +22,11 @@
   .lbl { @apply text-xs font-medium text-slate-600; }
   .field input[type="date"], .field select {
     @apply border border-slate-300 rounded px-2 py-1 text-sm bg-white; }
-  .field input[type="file"] { @apply text-xs; }
+  .field input[type="file"] {
+    @apply text-xs border border-slate-300 rounded bg-white cursor-pointer text-slate-600; }
+  .field input[type="file"]::file-selector-button {
+    @apply mr-2 border-0 border-r border-slate-300 bg-slate-100 px-2 py-1 text-slate-700 font-medium cursor-pointer; }
+  .field input[type="file"]:hover::file-selector-button { @apply bg-slate-200; }
   .cb-list { @apply flex flex-col gap-1; }
   .cb-filter { @apply border border-slate-300 rounded px-2 py-1 text-xs mb-1; }
   .cb-scroll { @apply max-h-40 overflow-y-auto border border-slate-200 rounded p-1 flex flex-col; }
