@@ -121,9 +121,9 @@ downloading a brief from it does not record a run. The committed
 0.0.0.0, which would serve the private digest data to the network) —
 override deliberately if you mean to serve it. The same file carries a light
 Fluent/Microsoft-web `[theme]` (Segoe UI system stack, no CDN fonts; accent
-`#0072B2`, the Okabe-Ito "low" blue that doubles as Microsoft brand blue) —
-pure config, so it needs Streamlit >=1.47 to render and degrades to plainer
-defaults below that. Every view shares the
+`#0072B2`, the Okabe-Ito "low" blue that doubles as Microsoft brand blue) and
+uses Streamlit's `width="stretch"` chart/table sizing, so it needs Streamlit
+>=1.57. Every view shares the
 same headline: an `st.metric` row with week-over-week delta arrows wired to
 since-last-run (desk score, open pipeline, at-risk dollars — at-risk uses
 `delta_color="inverse"` so rising risk reads red), the violation counts as
@@ -453,7 +453,7 @@ never by running the rules engine, so the comparison is non-circular.
   inventing a second information architecture; each tab is designed to fit one screen. Charts
   are Streamlit built-ins + bundled Altair only, sized with `width="stretch"`
   and right-side legends. `width="stretch"` fills the tab responsively;
-  Streamlit >=1.47 measures the container correctly even for a chart in an
+  Streamlit >=1.57 measures the container correctly even for a chart in an
   initially hidden tab, so the old pre-1.47 hidden-tab collapse workaround
   (hard-coded pixel widths) is gone — verified full-width across all seven
   tabs with headless Playwright. `alt.Legend(orient="bottom")` still
