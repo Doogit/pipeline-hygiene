@@ -11,19 +11,24 @@ snapshot store, and viewing/downloading records nothing. The Streamlit page
 (app/dashboard.py) stays live until parity + manual acceptance are signed off.
 """
 import os
+import tempfile
 from datetime import date
 from pathlib import Path
 
-from fasthtml.common import FastHTML, Link, Script, Title
+from fasthtml.common import Details, Div, FastHTML, Link, Script, Summary, Title
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from starlette.staticfiles import StaticFiles
 
 from src import brief, pipeline_hygiene_view as V
+from src.ingest import AllRowsRejectedError, IngestError, load_config, \
+    snapshot_date_from_filename, validate_csv
 from app import render as R
 
 HERE = Path(__file__).resolve().parent
 STATIC = HERE / "static"
+MAX_UPLOAD_BYTES = int(os.environ.get("PIPELINE_HYGIENE_UPLOAD_LIMIT_BYTES",
+                                      str(5 * 1024 * 1024)))
 
 def _paths():
     # Read per-request so tests (and redeploys) can repoint the store via env.
@@ -85,6 +90,19 @@ def _page(sel):
         f_sev=sel["sev"])
 
 
+def _upload_status(message, *, warning=False, report=None):
+    parts = [Div(message, cls="warn" if warning else "caption")]
+    if report is not None and report.row_reasons:
+        rows = [dict(zip(("row", "opp_id", "reason"), r))
+                for r in report.row_reasons[:10]]
+        parts.append(Details(
+            Summary(f"Rejected rows ({report.rejected})"),
+            R.render_table(V.Table("upload_rejects",
+                                   ["row", "opp_id", "reason"], rows), "$"),
+            cls="expander"))
+    return Div(*parts, id="upload-status")
+
+
 @app.get("/")
 def index(request):
     sel = _selections(request)
@@ -95,7 +113,7 @@ def index(request):
 @app.get("/content")
 def content(request):
     sel = _selections(request)
-    return R.render_content(_page(sel))
+    return R.render_content(_page(sel), sel)
 
 
 @app.get("/drilldown")
@@ -132,9 +150,68 @@ def download(request):
                  f'attachment; filename="desk_brief_{as_of.isoformat()}.md"'})
 
 
+@app.post("/upload")
+async def upload(request):
+    form = await request.form()
+    uploaded = form.get("upload")
+    filename = Path(getattr(uploaded, "filename", "") or "").name
+    if uploaded is None or not filename:
+        return _upload_status("Choose a CSV file to validate.", warning=True)
+    if not filename.lower().endswith(".csv"):
+        return _upload_status("Upload rejected: choose a .csv file.",
+                              warning=True)
+
+    snapshot_date = snapshot_date_from_filename(filename)
+    if snapshot_date is None:
+        return _upload_status(
+            "No YYYY-MM-DD snapshot date found in the uploaded filename; "
+            "rename the file like opps_2026-08-10.csv.",
+            warning=True)
+
+    payload = await uploaded.read(MAX_UPLOAD_BYTES + 1)
+    await uploaded.close()
+    if len(payload) > MAX_UPLOAD_BYTES:
+        return _upload_status(
+            f"Upload rejected: file exceeds the {MAX_UPLOAD_BYTES:,} byte "
+            "limit.", warning=True)
+
+    config_path, _, quotas_path = _paths()
+    config = load_config(config_path)
+    if quotas_path and Path(quotas_path).exists():
+        import json
+        with open(quotas_path, encoding="utf-8") as f:
+            config = brief.merge_quota_payload(config, json.load(f))
+    stage_map = str(form.get("stage_map") or "default")
+
+    with tempfile.TemporaryDirectory(prefix="pipeline_hygiene_upload_") as tmp:
+        tmp_path = Path(tmp) / filename
+        tmp_path.write_bytes(payload)
+        try:
+            rows, report = validate_csv(tmp_path, config, stage_map)
+            if report.total_rows > 0 and not rows:
+                raise AllRowsRejectedError(snapshot_date, report)
+        except AllRowsRejectedError as exc:
+            return _upload_status(f"Upload rejected: {exc}", warning=True,
+                                  report=exc.report)
+        except IngestError as exc:
+            return _upload_status(f"Upload rejected: {exc}", warning=True)
+
+    return _upload_status(
+        f"Uploaded snapshot {snapshot_date.isoformat()} validated: accepted "
+        f"{report.accepted}/{report.total_rows} rows, rejected "
+        f"{report.rejected}. Step 1 does not yet re-render uploaded CSVs; "
+        "the stored snapshot view remains unchanged.",
+        report=report if report.rejected else None)
+
+
 if __name__ == "__main__":
     import uvicorn
-    # Explicit localhost bind (read-only, offline posture); no non-local bind.
+    # Explicit localhost bind (read-only, offline posture).
     host = os.environ.get("PIPELINE_HYGIENE_HOST", "127.0.0.1")
+    local_hosts = {"127.0.0.1", "localhost", "::1"}
+    if host not in local_hosts and \
+            os.environ.get("PIPELINE_HYGIENE_ALLOW_NONLOCAL_HOST") != "1":
+        raise SystemExit("Refusing non-local host bind without "
+                         "PIPELINE_HYGIENE_ALLOW_NONLOCAL_HOST=1")
     port = int(os.environ.get("PIPELINE_HYGIENE_PORT", "5100"))
     uvicorn.run(app, host=host, port=port)

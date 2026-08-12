@@ -8,6 +8,7 @@ the shared brief.render (plan §1, §9, §12). The Task 0 spike already proved t
 charts actually draw offline in a real browser.
 """
 import re
+from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
@@ -49,12 +50,18 @@ def test_index_renders_offline_read_only(full_env):
     assert _external_origins(html) == [], "page must make no external requests"
     assert "/static/vendor/htmx.min.js" in html
     assert "Download desk brief (markdown)" in html
+    assert 'hx-swap="outerHTML"' in html
 
 
 def test_content_partial(full_env):
-    r = client.get("/content", params={"snapshot": "2026-08-10"})
+    r = client.get("/content", params={"snapshot": "2026-08-10",
+                                       "as_of": "2026-08-09"})
     assert r.status_code == 200
     assert "Risky commits" in r.text and "Owner scoreboard" in r.text
+    assert r.text.count('id="content"') == 1
+    assert "href=\"/download?stage_map=default&amp;snapshot=2026-08-10" \
+        in r.text
+    assert "as_of=2026-08-09" in r.text
 
 
 def test_owner_drilldown_partial(full_env):
@@ -90,3 +97,28 @@ def test_empty_store_shows_warning(tmp_path, monkeypatch):
     assert "Store is empty; ingest a snapshot or upload a CSV." in r.text
     # stopped page: no tabs
     assert "tab-btn" not in r.text
+
+
+def test_upload_validates_without_storing(tmp_path, monkeypatch):
+    env = build_full_multi(tmp_path)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    csv_path = Path(tmp_path) / "opps_2026-08-10.csv"
+    with csv_path.open("rb") as f:
+        r = client.post("/upload",
+                        data={"stage_map": "default"},
+                        files={"upload": ("opps_2026-08-10.csv", f,
+                                          "text/csv")})
+    assert r.status_code == 200
+    assert "id=\"upload-status\"" in r.text
+    assert "Uploaded snapshot 2026-08-10 validated: accepted" in r.text
+    assert "does not yet re-render uploaded CSVs" in r.text
+
+
+def test_upload_rejects_filename_without_snapshot_date(full_env):
+    r = client.post("/upload",
+                    data={"stage_map": "default"},
+                    files={"upload": ("opps.csv", b"opp_id\n", "text/csv")})
+    assert r.status_code == 200
+    assert "id=\"upload-status\"" in r.text
+    assert "No YYYY-MM-DD snapshot date found" in r.text

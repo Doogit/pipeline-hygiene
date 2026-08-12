@@ -7,6 +7,7 @@ embed.js renders (CSP-safe). No business logic here.
 """
 import json
 import re
+from urllib.parse import urlencode
 
 from fasthtml.common import (NotStr, Div, Span, P, H1, H2, H3, H4, Table, Thead,
                              Tbody, Tr, Th, Td, Details, Summary, Button, Form,
@@ -201,19 +202,37 @@ def render_tabs(page, cur):
         cls="tabs")
 
 
-def render_content(page):
+def _selection_query(sel):
+    pairs = []
+    for key in ("stage_map", "snapshot", "as_of"):
+        if sel and sel.get(key):
+            pairs.append((key, sel[key]))
+    for key, param in (("owners", "owner"), ("teams", "team"),
+                       ("stages", "stage"), ("sev", "sev")):
+        for value in (sel or {}).get(key) or []:
+            pairs.append((param, value))
+    return f"?{urlencode(pairs)}" if pairs else ""
+
+
+def render_content(page, sel=None):
     """The headline + tabs region (htmx-swappable target)."""
     cur = V._cur(page.controls.get("config") or {})
     top = [render_block(b, cur) for b in page.blocks]
     body = list(top)
     if page.tabs:
         body.append(render_tabs(page, cur))
-    return Div(*body, id="content", cls="content")
+        body.append(Div(A("Download desk brief (markdown)",
+                          href="/download" + _selection_query(sel),
+                          cls="download",
+                          title="Rendered from the selected snapshot; does not "
+                                "record a run."),
+                        cls="download-row"))
+    return Div(*body, id="content", cls="content", **{"aria_live": "polite"})
 
 
 # --- sidebar + page shell ---
 
-_HX = {"hx_get": "/content", "hx_target": "#content", "hx_swap": "innerHTML",
+_HX = {"hx_get": "/content", "hx_target": "#content", "hx_swap": "outerHTML",
        "hx_include": "closest form", "hx_indicator": "#load"}
 
 
@@ -289,12 +308,6 @@ def render_page(page, sel):
         Div(H1("pipeline-hygiene — forecast-call prep", cls="title"),
             Span("", id="load", cls="htmx-indicator loader"), cls="topbar"),
         Div(render_sidebar(page, sel),
-            Div(render_content(page),
-                Div(A("Download desk brief (markdown)", href="/download",
-                      cls="download",
-                      title="Rendered from the data shown here; does not "
-                            "record a run."),
-                    cls="download-row") if page.tabs else "",
-                cls="main"),
+            Div(render_content(page, sel), cls="main"),
             cls="layout"),
         cls="app")
