@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+/* Scan the FastHTML render/server modules for any utility classes used inline. */
+@source "./render.py";
+@source "./server.py";
+
+/* Component classes authored with Tailwind utilities via @apply, built offline
+   by the standalone tailwindcss CLI into app/static/app.css. Light theme;
+   step 1 reproduces the current content on a controllable substrate — the
+   visual redesign is step 2 (out of scope). */
+
+@layer components {
+  .app { @apply text-slate-800 text-sm; }
+  .topbar { @apply flex items-center gap-3 px-6 py-3 border-b border-slate-200 bg-white sticky top-0 z-10; }
+  .title { @apply text-lg font-semibold text-slate-900; }
+  .layout { @apply flex items-start gap-6 px-6 py-4 max-w-[1600px] mx-auto; }
+  .sidebar { @apply w-72 shrink-0 flex flex-col gap-3 sticky top-16 self-start; }
+  .main { @apply flex-1 min-w-0; }
+  .content { @apply flex flex-col gap-3; }
+
+  .field { @apply flex flex-col gap-1; }
+  .lbl { @apply text-xs font-medium text-slate-600; }
+  .field input[type="date"], .field select {
+    @apply border border-slate-300 rounded px-2 py-1 text-sm bg-white; }
+  .field input[type="file"] { @apply text-xs; }
+  .cb-list { @apply flex flex-col gap-1; }
+  .cb-filter { @apply border border-slate-300 rounded px-2 py-1 text-xs mb-1; }
+  .cb-scroll { @apply max-h-40 overflow-y-auto border border-slate-200 rounded p-1 flex flex-col; }
+  .cb { @apply flex items-center gap-1 text-xs py-0.5; }
+  .apply { @apply mt-1 bg-slate-800 text-white rounded px-3 py-1.5 text-sm font-medium hover:bg-slate-700 cursor-pointer; }
+
+  .h2 { @apply text-sm font-semibold text-slate-700 mt-2 border-b border-slate-200 pb-1; }
+  .h3 { @apply text-base font-semibold text-slate-900 mt-2; }
+  .h4 { @apply text-sm font-semibold text-slate-800; }
+  .caption { @apply text-xs text-slate-500 leading-snug; }
+  .md { @apply text-sm text-slate-700; }
+  .warn { @apply text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2; }
+  .divider { @apply border-slate-200 my-3; }
+
+  .metric-row { @apply grid grid-cols-2 md:grid-cols-5 gap-3; }
+  .metric-card { @apply border border-slate-200 rounded-lg p-3 bg-white; }
+  .metric-label { @apply text-xs text-slate-500; }
+  .metric-value { @apply text-xl font-semibold text-slate-900; }
+  .metric-delta { @apply text-xs text-slate-400 min-h-4; }
+  .delta-up { @apply text-emerald-600; }
+  .delta-down { @apply text-red-600; }
+
+  .chart-wrap { @apply border border-slate-200 rounded-lg p-3 bg-white; }
+  .chart { @apply w-full min-h-[60px]; }
+
+  .table-wrap { @apply overflow-x-auto border border-slate-200 rounded-lg bg-white; }
+  .ph-table { @apply w-full text-xs border-collapse; }
+  .ph-table th { @apply text-left font-semibold text-slate-600 px-2 py-1.5 border-b border-slate-200 whitespace-nowrap bg-slate-50; }
+  .ph-table td { @apply px-2 py-1 border-b border-slate-100 align-top; }
+  .ph-table td.num, .ph-table th.num { @apply text-right tabular-nums; }
+  .ph-table td.wide { @apply min-w-[16rem] whitespace-normal; }
+
+  .pop { @apply inline-block; }
+  .pop-btn { @apply text-xs text-blue-700 underline cursor-pointer bg-transparent; }
+  .pop-body { @apply border border-slate-300 rounded-lg p-3 shadow-lg max-w-md bg-white; }
+
+  .expander { @apply border border-slate-200 rounded-lg bg-white; }
+  .expander summary { @apply cursor-pointer px-3 py-2 font-medium text-slate-700 text-sm; }
+  .exp-body { @apply px-3 pb-3 flex flex-col gap-2; }
+  .drilldown { @apply border-l-2 border-slate-200 pl-3 mt-2; }
+
+  .download-row { @apply mt-4; }
+  .download { @apply inline-block bg-emerald-700 text-white rounded px-3 py-2 text-sm font-medium hover:bg-emerald-600 no-underline; }
+
+  .tabs { @apply mt-2; }
+  .tab-bar { @apply flex flex-wrap gap-1 border-b border-slate-200; }
+  .tab-btn { @apply px-3 py-1.5 text-sm text-slate-600 border-b-2 border-transparent cursor-pointer bg-transparent; }
+  .tab-btn[aria-selected="true"] { @apply text-slate-900 font-semibold border-slate-800; }
+  .tab-panel { @apply pt-3 flex-col gap-3; }
+  .tab-panel[data-active="1"] { @apply flex; }
+  .tab-panel[data-active="0"] { @apply hidden; }
+}
+
+/* Raw CSS (non-utility): score bars, sparklines, loader, popover reset. */
+.score-bar { position: relative; height: 16px; background: #eef2f6; border-radius: 3px; min-width: 60px; }
+.score-bar-fill { position: absolute; inset: 0 auto 0 0; background: #0072B2; border-radius: 3px; opacity: .85; }
+.score-bar-label { position: relative; font-size: 10px; padding-left: 4px; line-height: 16px; color: #0f172a; }
+.spark { display: block; }
+.pop-body { margin: 0; }
+.pop-body:popover-open { display: block; }
+.loader { width: 14px; height: 14px; border: 2px solid #cbd5e1; border-top-color: #0072B2; border-radius: 50%; opacity: 0; }
+.htmx-request .loader, .htmx-request.loader { opacity: 1; animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

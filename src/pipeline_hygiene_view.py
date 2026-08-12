@@ -916,6 +916,7 @@ def build_from_store(config_path, db_path, quotas_path=None, *,
     controls = {
         "config": config,
         "data": data,           # for the byte-identical brief.render(...) download
+        "rows": rows,           # for the owner drill-down (hx-get)
         "snapshot_dates": dates,
         "snapshot_date": snapshot_date,
         "as_of": as_of,
