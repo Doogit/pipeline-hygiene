@@ -199,6 +199,42 @@ def desk_score_series(store, config, up_to_snapshot, n=None):
     return series
 
 
+def group_trends(store, config, up_to_snapshot, n=None):
+    """Per-team and per-region coverage + at-risk trend over the last n stored
+    snapshots, each snapshot on its OWN win-rate basis. The VP reviews off the
+    printed brief, not the dashboard, so the direction of a team's coverage and
+    risk has to live here too. Snapshot-anchored and cache-free like
+    desk_score_series. Returns {"team": {key: [(date, coverage, at_risk)]},
+    "region": {...}}; {} when no owner metadata is configured."""
+    owner_meta = config.get("owner_meta") or {}
+    if not owner_meta:
+        return {}
+    if n is None:
+        n = config.get("trend_snapshots") or 8
+    fy_start = config["fiscal_year_start_month"]
+    dates = [d for d in store.snapshot_dates() if d <= up_to_snapshot][-n:]
+    out = {"team": {}, "region": {}}
+    for d in dates:
+        rows = store.rows_with_history(d)
+        results = evaluate_snapshot(rows, config, d)
+        outcomes = store.closed_outcomes(d)
+        multiple, _ = required_coverage_multiple(outcomes, config)
+        quarter = fiscal_quarter(d, fy_start)
+        won_by_owner = {}
+        for o in outcomes:
+            if o["stage"] == "closed_won" and o["close_date"] is not None \
+                    and fiscal_quarter(o["close_date"], fy_start) == quarter:
+                won_by_owner[o["owner"]] = (won_by_owner.get(o["owner"], 0.0)
+                                            + (o["amount"] or 0.0))
+        for dimension in ("team", "region"):
+            groups = group_rollups(rows, results, config, owner_meta,
+                                   dimension, multiple, won_by_owner)
+            for key, g in groups.items():
+                out[dimension].setdefault(key, []).append(
+                    (d, g.coverage_ratio, g.at_risk_dollars))
+    return out
+
+
 def pacing_data(waterfalls, config):
     """Pipeline-generation pacing from the per-pair waterfalls: created
     dollars/count per snapshot week, vs the optional
@@ -363,6 +399,10 @@ def build(store, snapshot_date, as_of, config, owner_filter=None,
     # (same reasoning as dropping the previous run's desk score).
     score_trend = (desk_score_series(store, config, snapshot_date)
                    if owner_filter is None else None)
+    # Per-team/region coverage+risk trend is desk-wide (dropped on a filtered
+    # brief, same as the desk score trend).
+    grp_trends = (group_trends(store, config, snapshot_date)
+                  if owner_filter is None else None)
     return build_from_rows(
         store.rows_with_history(snapshot_date), snapshot_date, as_of, config,
         validation=store.validation_report_dict(snapshot_date),
@@ -372,7 +412,7 @@ def build(store, snapshot_date, as_of, config, owner_filter=None,
         patterns=owner_patterns(store, as_of, config, snapshot_date),
         ledger=commit_ledger(store, as_of, config, snapshot_date),
         owner_mismatch=mismatch, waterfalls=waterfalls,
-        score_trend=score_trend,
+        score_trend=score_trend, group_trends=grp_trends,
         owner_filter=owner_filter, filter_label=filter_label)
 
 
@@ -380,6 +420,7 @@ def build_from_rows(rows, snapshot_date, as_of, config,
                     validation=None, prev_summary=None, outcomes=None,
                     prev_opens=None, patterns=None, ledger=None,
                     owner_mismatch=None, waterfalls=None, score_trend=None,
+                    group_trends=None,
                     owner_filter=None, filter_label=None):
     """Compute all brief data from in-memory rows (e.g. a validated upload).
     outcomes: stored closed outcomes (store.closed_outcomes) for the
@@ -462,6 +503,7 @@ def build_from_rows(rows, snapshot_date, as_of, config,
         "waterfall": waterfalls[-1] if waterfalls else None,
         "pacing": pacing_data(waterfalls, config),
         "score_trend": score_trend,
+        "group_trends": group_trends,
         "insufficient": insufficient,
         "since_last_run": delta,
         "risky_commits": risky_commits(rows, results, config),
@@ -1047,6 +1089,56 @@ def _group_table(lines, groups, label, config):
                      f"| {_money(g.at_risk_dollars, config)} | {flags} |")
 
 
+def _group_trend_lines(lines, series, label, config):
+    """Per-group coverage (oldest->newest) and at-risk (start->end) trend,
+    worst latest-coverage first, plus the widest coverage move — so 'is EMEA
+    improving?' has an answer on the printed brief, and a flat month reads as
+    the finding it is."""
+    def latest_cov(items):
+        return next((c for _, c, _ in reversed(items) if c is not None), None)
+
+    ranked = sorted(series.items(),
+                    key=lambda kv: (latest_cov(kv[1]) is None,
+                                    latest_cov(kv[1]) or 0.0, kv[0]))
+    n = len(next(iter(series.values())))
+    lines.append(f"Per {label.lower()}, coverage oldest->newest (1.00x is the "
+                 f"bar) and at-risk start->end, over {n} snapshots:")
+    widest = None
+    for key, items in ranked:
+        covs = " ".join("n/a" if c is None else f"{c:.2f}"
+                        for _, c, _ in items)
+        lines.append(f"- {key}: coverage {covs}; at-risk "
+                     f"{_money(items[0][2], config)} -> "
+                     f"{_money(items[-1][2], config)}")
+        c0 = next((c for _, c, _ in items if c is not None), None)
+        cN = latest_cov(items)
+        if c0 is not None and cN is not None \
+                and (widest is None or abs(cN - c0) > abs(widest[1])):
+            widest = (key, cN - c0)
+    if widest is not None:
+        lines.append(f"- Widest {label.lower()} coverage move: {widest[0]} "
+                     f"{widest[1]:+.2f} over the window.")
+
+
+def _group_trends_section(lines, data, config):
+    trends = data.get("group_trends")
+    if not trends:
+        return
+    dims = [(dim, label) for dim, label in (("team", "Team"),
+                                            ("region", "Region"))
+            if any(len(v) >= 2 for v in (trends.get(dim) or {}).values())]
+    if not dims:
+        return
+    lines.append("")
+    lines.append("### Coverage & at-risk trend")
+    lines.append("")
+    for dim, label in dims:
+        lines.append(f"**{label}s**")
+        lines.append("")
+        _group_trend_lines(lines, trends[dim], label, config)
+        lines.append("")
+
+
 def _team_region_tables(lines, data, config):
     lines.append("### Teams and regions")
     lines.append("")
@@ -1055,6 +1147,7 @@ def _team_region_tables(lines, data, config):
     _group_table(lines, data["teams"], "Team", config)
     lines.append("")
     _group_table(lines, data["regions"], "Region", config)
+    _group_trends_section(lines, data, config)
 
 
 def _forecast_integrity(lines, data, config):
@@ -1169,6 +1262,25 @@ def _commit_ledger(lines, data, config):
     lines.append(f"{resolved} of {len(entries)} ever-commit deal(s) resolved "
                  f"so far; rates render at {min_n}+ resolved — expect a full "
                  f"read after roughly a quarter of stored snapshots.")
+    lines.append("")
+    # Credibility today: two deterministic in-snapshot signals so a young store
+    # gives a number now instead of all-n/a while win-rates mature. Both are
+    # desk-level, coaching-not-comp.
+    ever = len(entries)
+    ever_pushed = sum(1 for e in entries
+                      if e.outcome == "pushed" or e.pushed_before_close)
+    commit_open = [r for r in data["rows"] if is_open(r)
+                   and r["forecast_category"] == "commit"]
+    commit_h5 = sum(1 for r in commit_open
+                    if any(v.rule_id == "H5"
+                           for v in data["results"][r["opp_id"]].violations))
+    lines.append(f"Credibility today: {ever_pushed} of {ever} ever-commit "
+                 f"deal(s) ({ever_pushed / ever:.0%}) moved their close date "
+                 f"after being called commit.")
+    if commit_open:
+        lines.append(f"Of {len(commit_open)} current commit-forecast open "
+                     f"opp(s), {commit_h5} sit on a pre-develop stage or lack "
+                     f"a valid next step (H5).")
     lines.append("")
 
     def table(label, rollups):
@@ -1298,9 +1410,10 @@ def digest_markdown(data, owner, config):
     # the seller is never scored on a number withheld from their private view.
     lines.append("## Your row in the shared desk brief")
     lines.append("")
-    lines.append("Everything else in this digest is private to you; these are "
-                 "the only figures about you that appear in the desk-wide "
-                 "brief (unranked here — coaching input, not a leaderboard).")
+    lines.append("These figures also appear, attributed to you by name, in the "
+                 "desk-wide Owners and Top-exceptions tables your manager and "
+                 "peers may see — shown here so you see exactly what they see. "
+                 "Everything else in this digest is private to you.")
     lines.append("")
     coverage = ("n/a" if stats.coverage_ratio is None
                 else f"{stats.coverage_ratio:.2f}x"
@@ -1311,6 +1424,19 @@ def digest_markdown(data, owner, config):
                  f"coverage {coverage}; gap to cover "
                  f"{_gap_to_cover(stats, config)}")
     lines.append(f"- Violations: {stats.violation_count}")
+    # When the whole desk is under-covered, say so in the digest too, so a
+    # flagged coverage row does not read as a personal failing in isolation
+    # (the desk brief already carries this note; the seller never sees it).
+    with_cov = [s for s in data["owners"].values()
+                if s.coverage_ratio is not None]
+    flagged_cov = [s for s in with_cov if s.coverage_flagged]
+    share_min = config.get("low_coverage_desk_note_share")
+    share_min = 0.75 if share_min is None else share_min
+    if stats.coverage_flagged and with_cov \
+            and len(flagged_cov) / len(with_cov) > share_min:
+        lines.append(f"- Context: {len(flagged_cov)} of {len(with_cov)} owners "
+                     f"are under 1.00x this week — desk-wide under-coverage, "
+                     f"not a personal finding.")
     lines.append("")
 
     lines.append("## Top risks (dollar-weighted)")
@@ -1350,19 +1476,23 @@ def digest_markdown(data, owner, config):
                      f"(> threshold + {esc['escalate_days']}d), review "
                      f"(> threshold + {esc['review_days']}d).")
 
-    # One coaching ask per DISTINCT open flag, so every flagged deal has a next
-    # action — a single dominant-exposure ask left most flags named but
-    # advice-free, which reads as a scorecard rather than coaching.
-    rules_present = sorted(
-        {rule for row in flagged for rule in results[row["opp_id"]].rule_ids()},
-        key=lambda r: int(r[1:]))
+    # One coaching ask per DISTINCT open flag, BOUND to the specific deals it
+    # applies to (opp IDs, dollar-ranked), so the seller never has to
+    # cross-reference the Top risks list to know which deals each ask touches.
+    rule_to_opps = {}
+    for row in flagged:
+        for rule in results[row["opp_id"]].rule_ids():
+            rule_to_opps.setdefault(rule, []).append(row["opp_id"])
+    rules_present = sorted(rule_to_opps, key=lambda r: int(r[1:]))
     if rules_present:
         lines.append("")
         lines.append("## What to do this week")
         lines.append("")
-        lines.append("One coaching question per open flag on your deals:")
+        lines.append("One coaching question per open flag, with the deals it "
+                     "applies to:")
         for rule in rules_present:
-            lines.append(f"- {rule} ({RULE_LABELS[rule]}): "
+            opps = ", ".join(rule_to_opps[rule])
+            lines.append(f"- {rule} ({RULE_LABELS[rule]}) — {opps}: "
                          f"{COACHING_ASKS[rule]}")
 
     lines.append("")
@@ -1531,6 +1661,28 @@ def render_commit_scrub(data, config):
                  f"{quarter} or earlier (overdue included): "
                  f"{_money(sum(r['amount'] or 0.0 for r in commit_rows), config)} "
                  f"across {len(commit_rows)} deal(s).")
+    # Reconcile to the brief headline's "Forecast call" line (same universe,
+    # same at-risk-within math) so the sheet the manager works from carries the
+    # exact number she reads to the VP, split by bucket with the at-risk slice
+    # of each named — no off-sheet arithmetic under time pressure.
+    results = data["results"]
+
+    def _bucket(cat):
+        rr = [r for r in rows if r["forecast_category"] == cat]
+        return (len(rr), sum(r["amount"] or 0.0 for r in rr),
+                sum(r["amount"] or 0.0 for r in rr
+                    if results[r["opp_id"]].has_high()),
+                sum(1 for r in rr if results[r["opp_id"]].has_high()))
+    c_n, c_tot, c_risk, c_risk_n = _bucket("commit")
+    b_n, b_tot, b_risk, b_risk_n = _bucket("best_case")
+    lines.append(f"- Forecast call: commit {_money(c_tot, config)} ({c_n}) + "
+                 f"best_case {_money(b_tot, config)} ({b_n}) = "
+                 f"{_money(total, config)} ({len(rows)}).")
+    lines.append(f"- At-risk within (high-severity flag): commit "
+                 f"{_money(c_risk, config)} across {c_risk_n} deal(s); "
+                 f"best_case {_money(b_risk, config)} across {b_risk_n} "
+                 f"deal(s). Rows counting toward it carry a high-severity flag "
+                 f"in the Rules column.")
     lines.append("")
     if not rows:
         return "\n".join(lines)
@@ -1670,7 +1822,8 @@ def main(argv=None):
     p.add_argument("--config",
                    default=os.environ.get("PIPELINE_HYGIENE_CONFIG",
                                           "config.yaml"))
-    p.add_argument("--out-dir", default="out")
+    p.add_argument("--out-dir",
+                   default=os.environ.get("PIPELINE_HYGIENE_OUT", "out"))
     p.add_argument("--snapshot-date", type=date.fromisoformat, default=None,
                    help="defaults to the latest stored snapshot at or before --as-of")
     p.add_argument("--quotas", default=os.environ.get("PIPELINE_HYGIENE_QUOTAS"),

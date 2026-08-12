@@ -26,6 +26,8 @@ stage_map:
   default: {prospect: prospect, qualify: qualify, develop: develop, propose: propose, commit: commit, closed_won: closed_won, closed_lost: closed_lost}
   # example alternate vocabulary a Dynamics/MSX export might carry:
   dynamics_default: {Qualify: qualify, Develop: develop, Propose: propose, Close: commit, Won: closed_won, Lost: closed_lost}
+  # HubSpot default deal-pipeline stages (edit if your pipeline is customized):
+  hubspot: {Appointment Scheduled: prospect, Qualified To Buy: qualify, Presentation Scheduled: develop, Decision Maker Bought-In: propose, Contract Sent: commit, Closed Won: closed_won, Closed Lost: closed_lost}
 
 # Optional keys — schema-checked when present, safe to omit (defaults in parens):
 # display_currency_symbol: "€"                              # money symbol everywhere ($)

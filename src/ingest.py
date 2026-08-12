@@ -8,6 +8,7 @@ silently mis-parses produces false violations and dies of distrust.
 import argparse
 import csv
 import math
+import os
 import re
 import sys
 import warnings
@@ -411,8 +412,14 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m src.ingest",
                                 description="Validate and load a snapshot CSV")
     p.add_argument("csv_path")
-    p.add_argument("--db", default="data/pipeline.db")
-    p.add_argument("--config", default="config.yaml")
+    # Honor the same env vars as brief and the dashboard, so an isolated eval
+    # (PIPELINE_HYGIENE_DB) does not silently ingest into the shared store.
+    p.add_argument("--db",
+                   default=os.environ.get("PIPELINE_HYGIENE_DB",
+                                          "data/pipeline.db"))
+    p.add_argument("--config",
+                   default=os.environ.get("PIPELINE_HYGIENE_CONFIG",
+                                          "config.yaml"))
     p.add_argument("--stage-map", default="default")
     p.add_argument("--snapshot-date", type=date.fromisoformat, default=None,
                    help="defaults to the YYYY-MM-DD in the filename")

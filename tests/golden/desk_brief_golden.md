@@ -229,6 +229,9 @@ Of opps ever forecast commit in stored history: outcome to date. Pushed = still 
 
 0 of 41 ever-commit deal(s) resolved so far; rates render at 5+ resolved — expect a full read after roughly a quarter of stored snapshots.
 
+Credibility today: 0 of 41 ever-commit deal(s) (0%) moved their close date after being called commit.
+Of 41 current commit-forecast open opp(s), 30 sit on a pre-develop stage or lack a valid next step (H5).
+
 | Owner | Ever commit | Won | Lost | Pushed | Still open | Won/resolved | Of which pushed first |
 |---|---|---|---|---|---|---|---|
 | Avery Calloway | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
