@@ -15,6 +15,7 @@ manifest: violations that vanish because a deal closed are reported under
 """
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import date
@@ -48,6 +49,16 @@ COACHING_PROMPTS = {
     "H7": "Who beyond the single contact has confirmed budget and sign-off?",
     "H11": "Can you re-confirm the buyer's actual budget timeline before "
            "re-committing this deal?",
+}
+
+# The line each less-obvious rule crosses, for the digest's rule reference.
+# Most rules already print their value and threshold in the engine detail
+# string (H1 "> 30d for qualify", H2 "60d in the past", H6 "norm 45d"); H3 and
+# H5 do not, so the seller cannot tell "barely flagged" from "deep in the red"
+# without this.
+RULE_TRIP = {
+    "H3": "2+ close-date changes (high severity at 3+)",
+    "H5": "commit forecast on a pre-develop stage, or with no valid next step",
 }
 
 # Every rule gets a "what to do about it" ask for the private digest's coaching
@@ -489,6 +500,27 @@ def _headline(lines, data, config):
         lines.append(f"- Open pipeline: {_money(open_pipeline, config)}")
         lines.append(f"- At-risk dollars (distinct opps with a high-severity "
                      f"violation): {_money(desk.at_risk_dollars, config)}")
+        # Forecast-call number: the committed dollars a manager defends to the
+        # VP, with the at-risk share of each broken out. Deterministic
+        # arithmetic over the current snapshot — NOT a probability-weighted
+        # forecast (the tool inspects, it does not predict).
+        open_rows = [r for r in data["rows"] if is_open(r)]
+        results = data["results"]
+
+        def _cat(cat):
+            rows = [r for r in open_rows if r["forecast_category"] == cat]
+            total = sum(r["amount"] or 0.0 for r in rows)
+            at_risk = sum(r["amount"] or 0.0 for r in rows
+                          if results[r["opp_id"]].has_high())
+            return len(rows), total, at_risk
+
+        c_n, c_total, c_risk = _cat("commit")
+        b_n, b_total, b_risk = _cat("best_case")
+        lines.append(
+            f"- Forecast call: commit {_money(c_total, config)} across {c_n} "
+            f"deal(s) (at-risk within {_money(c_risk, config)}); best_case "
+            f"{_money(b_total, config)} across {b_n} deal(s) (at-risk within "
+            f"{_money(b_risk, config)})")
     counts = desk.violation_counts_by_severity
     lines.append(f"- Violations: {counts['high']} high, {counts['medium']} medium, "
                  f"{counts['low']} low")
@@ -523,6 +555,16 @@ def _headline(lines, data, config):
         lines.append(f"- Warning: {mismatch_summary(data['owner_mismatch'])}")
 
 
+def _risky_commit_row(lines, i, entry, config, with_owner):
+    row = entry["row"]
+    owner = f"| {row['owner']} " if with_owner else ""
+    lines.append(f"| {i} | {row['opp_id']} | {row['account']} "
+                 f"{owner}| {row['stage']} | {_money(row['amount'], config)} "
+                 f"| {row['forecast_category']} "
+                 f"| {' '.join(entry['risky_rules'])} "
+                 f"| {entry['prompt']} |")
+
+
 def _risky_commits(lines, data, config):
     lines.append("## Risky commits")
     lines.append("")
@@ -532,22 +574,38 @@ def _risky_commits(lines, data, config):
                      f"({', '.join(RISKY_RULES)}).")
         return
     total = sum(e["row"]["amount"] or 0.0 for e in entries)
+    # On a filtered (team/owner) brief the call is run rep-by-rep, so group by
+    # owner instead of one interleaved dollar-ranked list — a frontline manager
+    # walks her people, not a merged desk list.
+    filtered = bool(data.get("filter_label"))
     lines.append(f"{len(entries)} commit/best_case opps carry a risk flag — "
                  f"{_money(total, config)} (distinct opps), dollar-ranked"
-                 + (", top 10 shown" if len(entries) > 10 else "")
+                 + (", grouped by owner" if filtered
+                    else (", top 10 shown" if len(entries) > 10 else ""))
                  + ". Coaching prompts, not gotchas.")
     lines.append("")
+    if filtered:
+        by_owner = {}
+        for e in entries:
+            by_owner.setdefault(e["row"]["owner"], []).append(e)
+        for owner in sorted(by_owner):
+            owned = by_owner[owner]
+            sub = sum(e["row"]["amount"] or 0.0 for e in owned)
+            lines.append(f"### {owner} — {len(owned)} risky, "
+                         f"{_money(sub, config)}")
+            lines.append("")
+            lines.append("| # | Opp | Account | Stage | Amount | Forecast "
+                         "| Flags | Ask the seller |")
+            lines.append("|---|---|---|---|---|---|---|---|")
+            for i, entry in enumerate(owned, start=1):
+                _risky_commit_row(lines, i, entry, config, with_owner=False)
+            lines.append("")
+        return
     lines.append("| # | Opp | Account | Owner | Stage | Amount | Forecast "
                  "| Flags | Ask the seller |")
     lines.append("|---|---|---|---|---|---|---|---|---|")
     for i, entry in enumerate(entries[:10], start=1):
-        row = entry["row"]
-        lines.append(f"| {i} | {row['opp_id']} | {row['account']} "
-                     f"| {row['owner']} "
-                     f"| {row['stage']} | {_money(row['amount'], config)} "
-                     f"| {row['forecast_category']} "
-                     f"| {' '.join(entry['risky_rules'])} "
-                     f"| {entry['prompt']} |")
+        _risky_commit_row(lines, i, entry, config, with_owner=True)
 
 
 def _trajectory(lines, data, config):
@@ -914,17 +972,18 @@ def _gap_to_cover(stats, config):
                   config)
 
 
-def desk_coverage_note(owners, config):
-    """When most quota'd owners are under 1.00x, low coverage is a desk
-    condition, not an individual finding — say so (the flag and its basis
-    do not change). None when under the threshold share."""
+def desk_coverage_note(stats_map, config, unit="quota'd owners"):
+    """When most rows (owners, or teams/regions) are under 1.00x, low coverage
+    is a desk condition, not an individual finding — say so (the flag and its
+    basis do not change). None when under the threshold share. unit names the
+    rows so the note fits whichever table it sits above."""
     share_min = config.get("low_coverage_desk_note_share")
     share_min = 0.75 if share_min is None else share_min
-    with_cov = [s for s in owners.values() if s.coverage_ratio is not None]
+    with_cov = [s for s in stats_map.values() if s.coverage_ratio is not None]
     flagged = [s for s in with_cov if s.coverage_flagged]
     if not with_cov or len(flagged) / len(with_cov) <= share_min:
         return None
-    return (f"Note: {len(flagged)} of {len(with_cov)} quota'd owners are "
+    return (f"Note: {len(flagged)} of {len(with_cov)} {unit} are "
             f"under 1.00x — desk-wide under-coverage, not individual "
             f"laggards; ordering carries the signal. The flag and its "
             f"basis are unchanged.")
@@ -966,6 +1025,10 @@ def _group_table(lines, groups, label, config):
         lines.append("No team/region metadata configured "
                      "(pass --quotas data/seed_manifest.json).")
         return
+    note = desk_coverage_note(groups, config, unit=f"{label.lower()}s")
+    if note:
+        lines.append(note)
+        lines.append("")
     lines.append(f"| {label} | Owners | Open | Mean | Pipeline | Quota "
                  "| Coverage | Gap to cover | Violations | At-risk $ | Flags |")
     lines.append("|---|---|---|---|---|---|---|---|---|---|---|")
@@ -1230,6 +1293,26 @@ def digest_markdown(data, owner, config):
                      f"patterns as anecdotal.")
         lines.append("")
 
+    # The seller's own row from the shared desk brief, verbatim: the figures a
+    # manager sees ranked against peers are exactly the figures shown here, so
+    # the seller is never scored on a number withheld from their private view.
+    lines.append("## Your row in the shared desk brief")
+    lines.append("")
+    lines.append("Everything else in this digest is private to you; these are "
+                 "the only figures about you that appear in the desk-wide "
+                 "brief (unranked here — coaching input, not a leaderboard).")
+    lines.append("")
+    coverage = ("n/a" if stats.coverage_ratio is None
+                else f"{stats.coverage_ratio:.2f}x"
+                + (" (low_coverage)" if stats.coverage_flagged else ""))
+    lines.append(f"- Score: {stats.mean_score:.1f} mean / "
+                 f"{stats.median_score:.1f} median")
+    lines.append(f"- Open pipeline {_money(stats.open_pipeline, config)}; "
+                 f"coverage {coverage}; gap to cover "
+                 f"{_gap_to_cover(stats, config)}")
+    lines.append(f"- Violations: {stats.violation_count}")
+    lines.append("")
+
     lines.append("## Top risks (dollar-weighted)")
     lines.append("")
     flagged = [r for r in open_rows if results[r["opp_id"]].violations]
@@ -1266,6 +1349,21 @@ def digest_markdown(data, owner, config):
                      f"staleness threshold: flag (over threshold), escalate "
                      f"(> threshold + {esc['escalate_days']}d), review "
                      f"(> threshold + {esc['review_days']}d).")
+
+    # One coaching ask per DISTINCT open flag, so every flagged deal has a next
+    # action — a single dominant-exposure ask left most flags named but
+    # advice-free, which reads as a scorecard rather than coaching.
+    rules_present = sorted(
+        {rule for row in flagged for rule in results[row["opp_id"]].rule_ids()},
+        key=lambda r: int(r[1:]))
+    if rules_present:
+        lines.append("")
+        lines.append("## What to do this week")
+        lines.append("")
+        lines.append("One coaching question per open flag on your deals:")
+        for rule in rules_present:
+            lines.append(f"- {rule} ({RULE_LABELS[rule]}): "
+                         f"{COACHING_ASKS[rule]}")
 
     lines.append("")
     lines.append("## Week over week")
@@ -1338,6 +1436,20 @@ def digest_markdown(data, owner, config):
                      f"{deals[focus]} deal(s).")
         if focus in COACHING_ASKS:
             lines.append(f"Ask: {COACHING_ASKS[focus]}")
+
+    # Foot reference: only the rules on this seller's deals, with the line each
+    # crosses — so "why exactly" is fully checkable without the desk brief's
+    # legend (score weights omitted; they read as a comp input).
+    if rules_present:
+        lines.append("")
+        lines.append("## Rule reference")
+        lines.append("")
+        lines.append("Only the rules on your deals, and the line each one "
+                     "crosses:")
+        for rule in rules_present:
+            trip = RULE_TRIP.get(rule)
+            lines.append(f"- {rule} {RULE_LABELS[rule]}"
+                         + (f" — {trip}" if trip else ""))
     lines.append("")
     return "\n".join(lines)
 
@@ -1549,12 +1661,19 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m src.brief",
                                 description="Generate the dated desk brief")
     p.add_argument("--as-of", type=date.fromisoformat, default=None)
-    p.add_argument("--db", default="data/pipeline.db")
-    p.add_argument("--config", default="config.yaml")
+    # Honor the same env vars as ingest and the dashboard, so a caller who
+    # isolates the store with PIPELINE_HYGIENE_DB does not silently get a brief
+    # off the default DB (a persona ran a plausible, entirely-wrong brief).
+    p.add_argument("--db",
+                   default=os.environ.get("PIPELINE_HYGIENE_DB",
+                                          "data/pipeline.db"))
+    p.add_argument("--config",
+                   default=os.environ.get("PIPELINE_HYGIENE_CONFIG",
+                                          "config.yaml"))
     p.add_argument("--out-dir", default="out")
     p.add_argument("--snapshot-date", type=date.fromisoformat, default=None,
                    help="defaults to the latest stored snapshot at or before --as-of")
-    p.add_argument("--quotas", default=None,
+    p.add_argument("--quotas", default=os.environ.get("PIPELINE_HYGIENE_QUOTAS"),
                    help="JSON file whose 'quotas' mapping (e.g. data/seed_manifest.json) "
                         "is merged into config at run time; its 'owners' block, when "
                         "present, also supplies per-owner team/region for the rollups")
@@ -1589,6 +1708,9 @@ def main(argv=None):
             payload = json.load(f)
         config = merge_quota_payload(config, payload)
 
+    # Echo the store actually read, so "cron called success on the wrong DB"
+    # is visible rather than silent (the number looks plausible either way).
+    print(f"reading snapshot store {args.db}", file=sys.stderr)
     store = SnapshotStore(args.db, config)
     snapshot_date = args.snapshot_date
     if snapshot_date is None:

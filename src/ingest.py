@@ -332,7 +332,9 @@ def validate_csv(csv_path, config, stage_map_name="default"):
     if currencies and expected_ccy and currencies[0] != expected_ccy:
         report.warnings.append(
             f"uniform currency {currencies[0]} differs from expected_currency "
-            f"{expected_ccy}")
+            f"{expected_ccy} (to render this currency set expected_currency: "
+            f"{currencies[0]} and display_currency_symbol in config.yaml — "
+            f"otherwise money prints with the default $)")
     return accepted, report
 
 
@@ -389,6 +391,10 @@ def init_doctor(csv_path, out=None):
               "config.yaml, edit the FIXME lines, then run: "
               "python -m src.ingest your.csv --stage-map your_map):",
               file=out)
+        print("    # canonical stages: prospect (early/unqualified), qualify "
+              "(need confirmed), develop (active evaluation), propose "
+              "(proposal/quote out), commit (verbal yes), closed_won, "
+              "closed_lost", file=out)
         print("    your_map:", file=out)
         options = ", ".join(sorted(CANONICAL_STAGES))
         for label in sorted(stage_counts):
@@ -422,8 +428,9 @@ def main(argv=None):
 
     snapshot_date = args.snapshot_date or snapshot_date_from_filename(args.csv_path)
     if snapshot_date is None:
-        print("error: no --snapshot-date given and none found in filename",
-              file=sys.stderr)
+        print(f"error: no date in filename {Path(args.csv_path).name!r}; pass "
+              f"--snapshot-date YYYY-MM-DD (or name the file like "
+              f"opps_2026-08-10.csv)", file=sys.stderr)
         return 2
     try:
         config = load_config(args.config)

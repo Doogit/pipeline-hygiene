@@ -29,8 +29,9 @@ from src import brief
 from src.ingest import AllRowsRejectedError, IngestError, load_config, \
     snapshot_date_from_filename, validate_csv
 from src.patterns import commit_ledger, ledger_rollups, owner_patterns
-from src.rules import RULE_LABELS, is_open
-from src.scoring import opp_score
+from src.rules import RULE_LABELS, evaluate_snapshot, is_open
+from src.scoring import (fiscal_quarter, group_rollups, opp_score,
+                         required_coverage_multiple)
 from src.snapshots import SnapshotStore
 
 CONFIG_PATH = os.environ.get("PIPELINE_HYGIENE_CONFIG", "config.yaml")
@@ -282,6 +283,35 @@ def _ledger_section(entries, key_fn, label):
     else:
         st.dataframe(_ledger_df(entries, key_fn, label), width="stretch",
                      hide_index=True)
+
+def _group_coverage_series(dates, dimension):
+    """Coverage ratio per group per stored snapshot, each on that snapshot's
+    OWN win-rate basis — the trend a VP needs ('is EMEA improving?'), which
+    the single-snapshot Teams table cannot show. Pure recompute over stored
+    CSVs; nothing is written."""
+    owner_meta = config.get("owner_meta") or {}
+    fy_start = config["fiscal_year_start_month"]
+    records = []
+    for d in dates:
+        snap = store.rows_with_history(d)
+        results = evaluate_snapshot(snap, config, d)
+        outcomes = store.closed_outcomes(d)
+        multiple, _ = required_coverage_multiple(outcomes, config)
+        quarter = fiscal_quarter(d, fy_start)
+        won_by_owner = {}
+        for o in outcomes:
+            if o["stage"] == "closed_won" and o["close_date"] is not None \
+                    and fiscal_quarter(o["close_date"], fy_start) == quarter:
+                won_by_owner[o["owner"]] = (won_by_owner.get(o["owner"], 0.0)
+                                            + (o["amount"] or 0.0))
+        groups = group_rollups(snap, results, config, owner_meta, dimension,
+                               multiple, won_by_owner)
+        for g in groups.values():
+            if g.coverage_ratio is not None:
+                records.append({"snapshot": d.isoformat(), dimension: g.key,
+                                "coverage": round(g.coverage_ratio, 3)})
+    return records
+
 
 (tab_call, tab_slip, tab_traj, tab_flow, tab_owners, tab_teams,
  tab_appendix) = st.tabs(
@@ -702,6 +732,35 @@ with tab_teams:
             st.markdown(f"**{label}**")
             st.dataframe(_group_df(groups), width="stretch", hide_index=True,
                          column_config=_GROUP_COLS)
+            group_note = brief.desk_coverage_note(
+                groups, config, unit=label.lower())
+            if group_note:
+                st.caption(group_note)
+
+        if store is not None and len(snapshot_dates_all) >= 2:
+            st.divider()
+            st.subheader("Coverage trend by team / region")
+            st.caption("Coverage per stored snapshot, each on its own "
+                       "win-rate basis; 1.00x is the bar. A team improving "
+                       "reads as a rising line — the trend the single-snapshot "
+                       "tables above cannot show.")
+            bar = alt.Chart(pd.DataFrame({"y": [1.0]})).mark_rule(
+                strokeDash=[4, 4], color="#888").encode(y="y:Q")
+            for dim in ("team", "region"):
+                recs = _group_coverage_series(snapshot_dates_all, dim)
+                if not recs:
+                    continue
+                df = pd.DataFrame(recs)
+                line = alt.Chart(df).mark_line(point=True, strokeWidth=2).encode(
+                    x=alt.X("snapshot:N", title=None),
+                    y=alt.Y("coverage:Q", title="coverage (x)"),
+                    color=alt.Color(f"{dim}:N",
+                                    legend=alt.Legend(title=dim.capitalize())),
+                    tooltip=["snapshot", dim,
+                             alt.Tooltip("coverage:Q", format=".2f")])
+                st.altair_chart((line + bar).properties(
+                    height=260, title=f"Coverage over snapshots, by {dim}"),
+                    width="stretch")
 
         st.divider()
         st.subheader("Commit accuracy by team and region")

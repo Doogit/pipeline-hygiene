@@ -100,6 +100,42 @@ python -m src.ingest your_export.csv --stage-map your_map
 python -m src.brief --as-of 2026-08-10 --quotas your_quotas.json --digests
 ```
 
+Point `--db`, `--config`, and `--quotas` at your files, or set
+`PIPELINE_HYGIENE_DB` / `PIPELINE_HYGIENE_CONFIG` / `PIPELINE_HYGIENE_QUOTAS`
+(ingest, brief, and the dashboard all honor them). The brief prints
+`reading snapshot store <path>` to stderr so a scheduled run can't silently
+brief the wrong database.
+
+## For your boss (FAQ)
+
+For an evaluator deciding between this and a commercial suite:
+
+- **Cost of operation.** Runs locally on Python 3.10+; no API keys, no LLM
+  calls, no external services, no per-seat license. Dependencies are pyyaml,
+  pandas, streamlit, altair (pytest/hypothesis are dev-only). A snapshot
+  ingests and briefs in seconds on a laptop.
+- **Auditability.** Every hygiene rule (H1–H11) is a deterministic pure
+  function with a versioned threshold in `config.yaml`; there is no model and
+  no randomness in the engine. The coverage number prints its own basis
+  (`trailing win rate 28/43 closed won (65.1%) -> required multiple 1.54x`),
+  the pipeline waterfall reconciles to the dollar, and a golden-file test pins
+  the brief byte-for-byte. A skeptic can reproduce every figure by hand.
+- **Extensibility.** Add a rule as a pure function in `src/rules.py` plus a
+  weight in `config.yaml`; map any CRM's stage vocabulary with `stage_map`;
+  get team/region rollups by adding an `owners` block to the quotas JSON. No
+  schema migration, no vendor lock-in — it's plain CSV in, Markdown/SQLite out.
+- **What it deliberately does NOT do** (by design, not omission):
+  - No CRM write-back and no contacting sellers — it is read-only over CSV
+    snapshots (*agents inspect, people sell*). The forecast-call checkboxes
+    are paper, on purpose.
+  - No real-time sync — it reasons over batch snapshots, which is what makes
+    the since-last-run and slippage history possible.
+  - No opaque AI/ML deal-risk score — the deterministic, auditable rules are
+    the intended *complement* to CRM-vendor risk AI, not a copy of it.
+  - One currency per file (mixed currency is a fatal ingest error), no
+    activity capture, no built-in SSO/RBAC (bind the dashboard to localhost
+    and distribute the private digests per seller).
+
 ## Persona pass
 
 `.claude/skills/persona-pass` runs a usability simulation: it role-plays each
