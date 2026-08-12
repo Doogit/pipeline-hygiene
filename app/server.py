@@ -112,6 +112,11 @@ def index(request):
     return Title("pipeline-hygiene"), R.render_page(page, sel)
 
 
+@app.get("/healthz")
+def healthz():
+    return Response("ok", media_type="text/plain")
+
+
 @app.get("/content")
 def content(request):
     sel = _selections(request)

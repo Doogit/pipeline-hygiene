@@ -14,6 +14,7 @@ from src.ingest import load_config
 
 REPO = Path(__file__).resolve().parent.parent
 DOCKERFILE = REPO / "Dockerfile"
+PACKAGE_WORKFLOW = REPO / ".github" / "workflows" / "package.yml"
 
 
 def _dockerfile_text() -> str:
@@ -82,6 +83,14 @@ def test_dashboard_entrypoint_present():
         "Dockerfile CMD must launch the FastHTML app (python -m app.server)"
     assert cmd and "streamlit" not in cmd.group(0), \
         "Dockerfile CMD still references retired Streamlit"
+
+
+def test_package_workflow_probes_fasthtml_health_endpoint():
+    workflow = PACKAGE_WORKFLOW.read_text(encoding="utf-8")
+    assert "/healthz" in workflow, \
+        "container smoke test must probe the FastHTML health endpoint"
+    assert "/_stcore/health" not in workflow, \
+        "container smoke test still probes retired Streamlit health endpoint"
 
 
 def test_packaging_modules_importable():
