@@ -212,8 +212,9 @@ f_teams = st.sidebar.multiselect("Team", teams_all) if teams_all else []
 f_stages = st.sidebar.multiselect("Stage", stages_all)
 f_sev = st.sidebar.multiselect("Severity", ["high", "medium", "low"])
 st.sidebar.caption("Filters apply to the Risky commits, Slippage, Owners "
-                   "and Appendix tables; headline metrics and team/region "
-                   "rollups stay desk-wide. Severity filter: an opp appears "
+                   "and Appendix tables; headline metrics, the Flow tab and "
+                   "team/region rollups stay desk-wide. Severity filter: an "
+                   "opp appears "
                    "under **each** severity it carries, so one opp can "
                    "match several selections; empty filters mean no "
                    "restriction.")
@@ -459,9 +460,13 @@ with tab_flow:
                      "= ending open"]
         _WF_KEYS = ["beginning", "created", "increased", "decreased",
                     "won", "lost", "removed", "ending"]
+        # Display-reconciled integers (brief.waterfall_display_dollars):
+        # the caption below promises the bridge reconciles exactly, and
+        # independently rounded tooltips broke it by $1.
+        wf_disp = brief.waterfall_display_dollars(latest)
         wf_df = pd.DataFrame([
             {"bucket": label, "opps": latest[key]["n"],
-             "dollars": latest[key]["dollars"],
+             "dollars": wf_disp[key],
              "kind": ("level" if key in ("beginning", "ending")
                       else "in" if label.startswith("+") else "out")}
             for label, key in zip(_WF_ORDER, _WF_KEYS)])

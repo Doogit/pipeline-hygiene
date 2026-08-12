@@ -24,20 +24,41 @@ out/            generated desk briefs (Task 5)
 config.yaml     runtime thresholds, stage_map, rule weights
 ```
 
+## Install
+
+```
+pip install -r requirements.txt
+```
+
+Python 3.10+. Runtime needs pyyaml, pandas, streamlit and altair;
+pytest/hypothesis are dev-only. No services, no API keys, no LLM calls.
+
 ## Current Usage
 
 ```
 python -m src.seed --rows 400 --as-of 2026-08-10        # single snapshot + ground-truth manifest
 python -m src.seed --series 4 --as-of 2026-08-10        # weekly snapshots T0..T3 + delta manifest
+python -m src.ingest --init your_export.csv             # "doctor": inspect a CSV, print a stage_map
+                                                        # skeleton (FIXME per unmatched stage); exits
+                                                        # nonzero only on missing required columns
 python -m src.ingest data/opps_2026-08-10.csv           # validate + load into data/pipeline.db
 python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json
                                                         # write out/desk_brief_2026-08-10.md
+                                                        # (series mode writes data/delta_manifest.json
+                                                        # instead — it carries the same quotas/owners
+                                                        # blocks; pass whichever file your seed run wrote)
 python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json --digests
                                                         # ...plus out/digests/<as_of>/<owner>.md
 python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json --team "Team EMEA-1"
                                                         # filtered brief for one team (repeatable
                                                         # --team/--owner/--region, case-insensitive;
                                                         # writes a suffixed file, never records a run)
+python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json --commit-scrub
+                                                        # ONLY the pre-forecast-call scrub sheet
+                                                        # (out/commit_scrub_<as_of>.md): every open
+                                                        # commit/best_case opp + checklist columns;
+                                                        # no brief, never records a run; composes
+                                                        # with --owner/--team/--region
 streamlit run app/dashboard.py                          # read-only dashboard
 pytest -q                                               # full test suite
 ```
@@ -61,6 +82,12 @@ contact_count, product_line`
   adding a block under `stage_map:` in `config.yaml` and passing its name:
   `python -m src.ingest your_export.csv --stage-map your_map`. An unknown stage
   is rejected per-row with the offending label named — it is never guessed.
+- Don't write the stage_map by hand: `python -m src.ingest --init
+  your_export.csv` inspects the file and prints a ready-to-paste `stage_map`
+  skeleton — stages it can match are pre-filled, unmatched ones get
+  `"Label": FIXME   # one of: <canonical>` lines. It exits nonzero only when
+  required columns are missing (so a cron can tell "fix the export" from
+  "fix the map").
 - Set `expected_currency` in `config.yaml`; a uniform but unexpected currency
   warns, mixed currency in one file is fatal.
 
@@ -89,7 +116,10 @@ streamlit run app/dashboard.py
 
 The dashboard is a read-only Streamlit app whose tabs mirror the brief
 structure — it never writes to the store or to source data, and viewing or
-downloading a brief from it does not record a run. Every view shares the
+downloading a brief from it does not record a run. The committed
+`.streamlit/config.toml` binds it to 127.0.0.1 (Streamlit's own default is
+0.0.0.0, which would serve the private digest data to the network) —
+override deliberately if you mean to serve it. Every view shares the
 same headline: an `st.metric` row with week-over-week delta arrows wired to
 since-last-run (desk score, open pipeline, at-risk dollars — at-risk uses
 `delta_color="inverse"` so rising risk reads red), the violation counts as
@@ -122,15 +152,30 @@ later-drift, max push, H11 badges, the disqualification-review marker at
 ### Trajectory
 
 Altair charts across stored snapshots: coverage (open vs required pipeline
-at 1 / trailing win rate, with the basis printed underneath),
-created-vs-closed weekly flow bars, and the desk score trend from recorded
-brief runs. Needs at least 2 stored snapshots; with fewer it degrades to a
-clear caption instead of a one-point trend. Below the charts: commit
-accuracy by committed-for quarter (the fiscal quarter of the close date
-when the deal was first called commit — immune to later pushes, so a
-slipped commit stays counted against the quarter it was promised for).
+at 1 / trailing win rate, with the basis printed underneath) and the desk
+score trend — snapshot-anchored (the engine re-run per stored snapshot, no
+holes from snapshots without recorded runs). Needs at least 2 stored
+snapshots; with fewer it degrades to a clear caption instead of a
+one-point trend. Below the charts: commit accuracy by committed-for
+quarter (the fiscal quarter of the close date when the deal was first
+called commit — immune to later pushes, so a slipped commit stays counted
+against the quarter it was promised for). The created-vs-closed flow bars
+moved to the Flow tab.
 
 ![Trajectory tab](docs/screenshots/tab-trajectory.png)
+
+### Flow
+
+Where the pipeline dollars went between the last two snapshots, and
+whether enough new pipeline is being generated. The open-pipeline
+waterfall (beginning + created + increased − decreased − won − lost −
+removed = ending — reconciles exactly; close-date pushes move no dollars
+and render as an annotation, never a bucket), pipeline-generation pacing
+per snapshot week against the optional `pipeline_gen_weekly_target` line
+(no target configured → no line guessed), and created-vs-closed bars per
+snapshot week. The same waterfall renders as a table on brief page 1.
+
+![Flow tab](docs/screenshots/tab-flow.png)
 
 ### Owners
 
@@ -343,8 +388,9 @@ never by running the rules engine, so the comparison is non-circular.
 - Flag streaks count consecutive RUNS (from the `runs` table), not
   snapshots: the current evaluation plus immediately preceding recorded
   runs carrying the same (opp, rule); a cleared run resets the streak.
-  Re-running the brief on the same snapshot therefore extends streaks —
-  runs are the accountability cadence. Annotated as "flagged N runs" (from
+  Re-running the brief on the same snapshot REPLACES that snapshot's
+  recorded run (record_run is idempotent per snapshot), so streaks never
+  inflate from re-renders. Annotated as "flagged N runs" (from
   N >= 2) in the brief exceptions table and the dashboard.
 - `python -m src.brief --digests` writes one PRIVATE coaching digest per
   owner with open opps to `out/digests/<as_of>/<owner_slug>.md`: top 3-5
@@ -399,8 +445,8 @@ never by running the rules engine, so the comparison is non-circular.
   always empty. `--digests` under a filter writes digests for the
   selection only (content identical to unfiltered digests).
 - Dashboard tabs mirror the brief structure (Forecast call landing,
-  Slippage, Trajectory, Owners, Appendix) rather than inventing a second
-  information architecture; each tab is designed to fit one screen. Charts
+  Slippage, Trajectory, Flow, Owners, Teams, Appendix) rather than
+  inventing a second information architecture; each tab is designed to fit one screen. Charts
   are Streamlit built-ins + bundled Altair only, with explicit pixel sizes
   and right-side legends: container-sized charts collapse when rendered
   inside an initially hidden tab, and `alt.Legend(orient="bottom")`
@@ -418,6 +464,36 @@ never by running the rules engine, so the comparison is non-circular.
 - Dashboard screenshots in `docs/screenshots/` were captured with the
   locally installed Playwright driving the headless app on 127.0.0.1 —
   a verification tool only, not a project dependency.
+- Every config key added after the frozen test config is OPTIONAL
+  (schema-checked only when present; defaults applied at point of use, so
+  the frozen `tests/config_test.yaml` and existing deployments are
+  untouched): `display_currency_symbol` (default `$`, threaded through
+  brief money, H7 detail, dashboard), `pipeline_gen_weekly_target`
+  (default none — no pacing target line), `trend_snapshots` (default 8,
+  points in the brief's headline desk-score trend),
+  `delta_detail_max_per_rule` (default 20 — a mass delta collapses a
+  rule's per-opp since-last-run detail to one summary line),
+  `low_coverage_desk_note_share` (default 0.75 — when at least this share
+  of quota'd owners is under 1.00x coverage, the brief adds a desk-level
+  note so the flag column reads as a desk problem, not sixty individual
+  failures), and `staleness_escalation` (absent by default — see next).
+- Staleness escalation (optional): `staleness_escalation: {escalate_days:
+  X, review_days: Y}` with X < Y (validated fail-fast), both counted
+  BEYOND the per-stage H1 threshold. When present, every H1 detail string
+  is annotated `; tier flag|escalate|review` (strict `>` boundaries, same
+  convention as H1 itself: exactly threshold+X is still `flag`) and the
+  brief appendix gains a "Staleness escalation" section grouping stale
+  opps by tier, most urgent first, dollar-ranked. Absent -> zero behavior
+  change, byte-identical brief.
+- `--commit-scrub` writes ONLY `out/commit_scrub_<as_of>.md` (no brief):
+  every open commit/best_case opp — flagged or not; the call walks the
+  whole committed list — dollar-ranked, with committed-for quarter from
+  the forecast ledger, observed pushes, flag streak, rule badges, and
+  three literal `[ ]` checklist cells (close date / next step / budget
+  confirmed) plus days left in the fiscal quarter. It never goes through
+  the brief pipeline: no run is recorded and the brief filename is
+  untouched; `--owner/--team/--region` compose (suffixed filename). No
+  cadence advice — the sheet is the cadence.
 
 ## Handoff
 

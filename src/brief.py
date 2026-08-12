@@ -579,11 +579,38 @@ def _trajectory(lines, data, config):
                  f"quarter {_money(coverage['won_this_quarter'], config)}) x "
                  f"{coverage['required_multiple']:.2f}")
     lines.append(f"  - Basis: {coverage['basis']}")
+    # Print the later share as printed-total minus printed-in-quarter so the
+    # two halves sum exactly to the printed open pipeline (independently
+    # rounded halves were $1 short in a persona napkin check).
+    later_display = (round(trajectory["open_pipeline"])
+                     - round(coverage["in_quarter_open"]))
     lines.append(f"  - Of open pipeline: "
-                 f"{_money(coverage['in_quarter_open'], config)} closes in "
+                 f"{_money(round(coverage['in_quarter_open']), config)} closes in "
                  f"{coverage['quarter']} or earlier (overdue included), "
-                 f"{_money(coverage['later_open'], config)} later "
+                 f"{_money(later_display, config)} later "
                  f"(informational — the ratio above is unchanged)")
+
+
+_WF_SIGNS = {"created": 1, "increased": 1, "decreased": -1, "won": -1,
+             "lost": -1, "removed": -1}
+
+
+def waterfall_display_dollars(wf):
+    """Integer display dollars per waterfall bucket, adjusted so the PRINTED
+    bridge reconciles exactly. Amounts carry cents; rounding each bucket
+    independently broke the identity by $1 in a persona hand-check — on the
+    one table whose caption promises exact reconciliation. Beginning/ending
+    print as plain rounds; any residual (at most a few dollars) folds into
+    the largest flow bucket, invisible at whole-dollar scale."""
+    display = {name: round(wf[name]["dollars"]) for name in _WF_SIGNS}
+    display["beginning"] = round(wf["beginning"]["dollars"])
+    display["ending"] = round(wf["ending"]["dollars"])
+    residual = (display["ending"] - display["beginning"]
+                - sum(s * display[n] for n, s in _WF_SIGNS.items()))
+    if residual:
+        biggest = max(_WF_SIGNS, key=lambda n: (display[n], n))
+        display[biggest] += _WF_SIGNS[biggest] * residual
+    return display
 
 
 def _waterfall_table(lines, data, config):
@@ -599,15 +626,15 @@ def _waterfall_table(lines, data, config):
     lines.append("")
     lines.append("| Bucket | Opps | Dollars |")
     lines.append("|---|---|---|")
+    display = waterfall_display_dollars(wf)
     for sign, name in (("", "beginning"), ("+ ", "created"),
                        ("+ ", "increased"), ("- ", "decreased"),
                        ("- ", "won"), ("- ", "lost"), ("- ", "removed"),
                        ("= ", "ending")):
-        bucket = wf[name]
         label = {"beginning": "beginning open", "ending": "ending open"} \
             .get(name, name)
-        lines.append(f"| {sign}{label} | {bucket['n']} "
-                     f"| {_money(bucket['dollars'], config)} |")
+        lines.append(f"| {sign}{label} | {wf[name]['n']} "
+                     f"| {_money(display[name], config)} |")
     lines.append("")
     pushed = wf["pushed"]
     lines.append(f"  - Close-date pushes moved no dollars: {pushed['n']} "
@@ -957,7 +984,7 @@ def _forecast_integrity(lines, data, config):
                      f"{_money(row['amount'], config)}: {violation.detail}")
 
 
-def _forecast_patterns(lines, data):
+def _forecast_patterns(lines, data, config):
     lines.append("#### Forecast integrity patterns")
     lines.append("")
     lines.append("Coaching signal, not a comp input.")
@@ -977,13 +1004,22 @@ def _forecast_patterns(lines, data):
     def pct(value):
         return "n/a" if value is None else f"{value:.0%}"
 
+    min_n = config["min_opps_for_owner_score"]
     for p in under:
         # Lead with the evidence actually present; only cite the won-share
         # basis when there are observed wins (printing "n/a (n=0)" beside a
-        # name reads as an accusation with no evidence).
-        won_clause = (f"wins never called commit/best_case "
-                      f"{pct(p.undercall_won_share)} (n={p.n_won}); "
-                      if p.n_won else "")
+        # name reads as an accusation with no evidence), and only cite the
+        # PERCENTAGE at the same resolved-n floor the ledger uses — a bare
+        # "100% (n=1)" is the number that gets screenshot into a
+        # leaderboard (same persona finding as the ledger rate).
+        if not p.n_won:
+            won_clause = ""
+        elif p.n_won >= min_n:
+            won_clause = (f"wins never called commit/best_case "
+                          f"{pct(p.undercall_won_share)} (n={p.n_won}); ")
+        else:
+            won_clause = (f"wins never called commit/best_case "
+                          f"(small_n, n={p.n_won}); ")
         lines.append(f"- Undercall pattern: {p.owner} — {won_clause}open "
                      f"pipeline {pct(p.omitted_share)} omitted, "
                      f"{pct(p.farout_share)} far-out (n={p.n_open})")
@@ -1035,17 +1071,33 @@ def _commit_ledger(lines, data, config):
         lines.append("No opp in stored history has ever been forecast "
                      "commit.")
         return
+    # The ledger matures slowly by design; say so, and give the desk-level
+    # answer, instead of letting a month-old store read as "n/a everywhere"
+    # (the VP persona left the review with no number and no ETA).
+    resolved = sum(1 for e in entries if e.outcome in ("won", "lost"))
+    lines.append(f"{resolved} of {len(entries)} ever-commit deal(s) resolved "
+                 f"so far; rates render at {min_n}+ resolved — expect a full "
+                 f"read after roughly a quarter of stored snapshots.")
+    lines.append("")
 
     def table(label, rollups):
         lines.append(f"| {label} | Ever commit | Won | Lost | Pushed "
                      "| Still open | Won/resolved | Of which pushed first |")
         lines.append("|---|---|---|---|---|---|---|---|")
+        total = {"n": 0, "won": 0, "lost": 0, "pushed": 0, "open": 0,
+                 "resolved_pushed_first": 0}
         for key in sorted(rollups, key=lambda k: (k is None, k or "")):
             g = rollups[key]
+            for stat in total:
+                total[stat] += g[stat]
             lines.append(f"| {'unknown' if key is None else key} | {g['n']} "
                          f"| {g['won']} | {g['lost']} | {g['pushed']} "
                          f"| {g['open']} | {ledger_rate(g, min_n)} "
                          f"| {g['resolved_pushed_first']} |")
+        lines.append(f"| All | {total['n']} | {total['won']} "
+                     f"| {total['lost']} | {total['pushed']} "
+                     f"| {total['open']} | {ledger_rate(total, min_n)} "
+                     f"| {total['resolved_pushed_first']} |")
 
     table("Owner", ledger_rollups(entries, lambda e: e.owner))
     owner_meta = config.get("owner_meta") or {}
@@ -1113,7 +1165,7 @@ def render(data, config):
     lines.append("")
     _forecast_integrity(lines, data, config)
     lines.append("")
-    _forecast_patterns(lines, data)
+    _forecast_patterns(lines, data, config)
     lines.append("")
     _commit_ledger(lines, data, config)
     lines.append("")
@@ -1156,7 +1208,8 @@ def digest_markdown(data, owner, config):
     if not flagged:
         lines.append("No flagged deals this week.")
     flagged.sort(key=lambda r: (-(r["amount"] or 0.0), r["opp_id"]))
-    for row in flagged[:5]:
+
+    def risk_line(row):
         result = results[row["opp_id"]]
         streak = opp_streak(streaks, result)
         note = f" — flagged {streak} runs" if streak >= 2 else ""
@@ -1164,8 +1217,27 @@ def digest_markdown(data, owner, config):
         # own detail strings), so "why" is a checkable fact, not a bare code.
         evidence = "; ".join(f"{v.rule_id} ({RULE_LABELS[v.rule_id]}: "
                              f"{v.detail})" for v in result.violations)
-        lines.append(f"- {row['opp_id']} {row['account']} ({row['stage']}, "
-                     f"{_money(row['amount'], config)}): {evidence}{note}")
+        return (f"- {row['opp_id']} {row['account']} ({row['stage']}, "
+                f"{_money(row['amount'], config)}): {evidence}{note}")
+
+    for row in flagged[:5]:
+        lines.append(risk_line(row))
+    # EVERY flagged deal is enumerable from the digest alone — a capped list
+    # left the owner unable to see (or clear) flags the desk brief counts
+    # against them, and made the coaching-focus dollars uncheckable.
+    if len(flagged) > 5:
+        lines.append("")
+        lines.append(f"Also flagged ({len(flagged) - 5} more):")
+        for row in flagged[5:]:
+            lines.append(risk_line(row))
+    esc = config.get("staleness_escalation")
+    if esc and any(v.rule_id == "H1" for r in flagged
+                   for v in results[r["opp_id"]].violations):
+        lines.append("")
+        lines.append(f"Staleness tiers, counted beyond your stage's "
+                     f"staleness threshold: flag (over threshold), escalate "
+                     f"(> threshold + {esc['escalate_days']}d), review "
+                     f"(> threshold + {esc['review_days']}d).")
 
     lines.append("")
     lines.append("## Week over week")
@@ -1290,16 +1362,20 @@ def _scrub_rows(data):
 
 def render_commit_scrub(data, config):
     """Pre-forecast-call scrub sheet: every open commit/best_case opp with
-    its ledger context and blank confirmation checkboxes. No advice copy —
-    the checklist is the cadence."""
+    its ledger context, the coaching question of its dominant risk flag,
+    and blank confirmation checkboxes — grouped by owner with subtotals
+    (the call runs rep-by-rep). Self-contained for print: notes and the
+    rule legend are on the sheet. No advice copy — the checklist is the
+    cadence."""
     as_of = data["as_of"]
     fy_start = config["fiscal_year_start_month"]
+    quarter = fiscal_quarter(as_of, fy_start)
     lines = [f"# Commit scrub — {as_of.isoformat()}",
              "",
              f"Snapshot {data['snapshot_date'].isoformat()}, evaluated as "
              f"of {as_of.isoformat()}. "
              f"{days_left_in_quarter(as_of, fy_start)} day(s) left in "
-             f"{fiscal_quarter(as_of, fy_start)}.",
+             f"{quarter}.",
              ""]
     if data.get("filter_label"):
         lines.append(f"FILTERED — {data['filter_label']}. Covers only this "
@@ -1307,33 +1383,65 @@ def render_commit_scrub(data, config):
         lines.append("")
     rows = _scrub_rows(data)
     total = sum(r["amount"] or 0.0 for r in rows)
+    quarter_end = fiscal_quarter_end(as_of, fy_start)
+    commit_rows = [r for r in rows if r["forecast_category"] == "commit"
+                   and r["close_date"] <= quarter_end]
     lines.append(f"{len(rows)} open commit/best_case opp(s), "
-                 f"{_money(total, config)}.")
+                 f"{_money(total, config)}. Commit-forecast closing "
+                 f"{quarter} or earlier (overdue included): "
+                 f"{_money(sum(r['amount'] or 0.0 for r in commit_rows), config)} "
+                 f"across {len(commit_rows)} deal(s).")
     lines.append("")
     if not rows:
         return "\n".join(lines)
     ledger_by_id = {e.opp_id: e for e in (data.get("ledger") or [])}
-    lines.append("| Opp | Account | Owner | Stage | Forecast | Amount "
-                 "| Close date | Committed-for | Pushes | Streak | Rules "
-                 "| Close date confirmed | Next step confirmed "
-                 "| Budget confirmed |")
-    lines.append("|---|---|---|---|---|---|---|---|---|---|---"
-                 "|---|---|---|")
+    weights = config["rule_weights"]
+
+    def ask(result):
+        risky = [v for v in result.violations if v.rule_id in RISKY_RULES]
+        if not risky:
+            return "-"
+        dominant = min(risky, key=lambda v: (_SEV_RANK[v.severity],
+                                             -weights[v.rule_id],
+                                             int(v.rule_id[1:])))
+        return COACHING_PROMPTS[dominant.rule_id]
+
+    by_owner = {}
     for row in rows:
-        result = data["results"][row["opp_id"]]
-        badges = " ".join(v.rule_id for v in result.violations) or "-"
-        streak = opp_streak(data["streaks"], result)
-        streak_cell = f"flagged {streak} runs" if streak >= 2 else "-"
-        entry = ledger_by_id.get(row["opp_id"])
-        committed = (entry.committed_quarter or "-") if entry else "-"
-        pushes = row.get("push_count")
-        lines.append(f"| {row['opp_id']} | {row['account']} "
-                     f"| {row['owner']} | {row['stage']} "
-                     f"| {row['forecast_category']} "
-                     f"| {_money(row['amount'], config)} "
-                     f"| {row['close_date'].isoformat()} | {committed} "
-                     f"| {'-' if pushes is None else pushes} "
-                     f"| {streak_cell} | {badges} | [ ] | [ ] | [ ] |")
+        by_owner.setdefault(row["owner"], []).append(row)
+    for owner in sorted(by_owner):
+        owned = by_owner[owner]
+        lines.append(f"## {owner} — {len(owned)} opp(s), "
+                     f"{_money(sum(r['amount'] or 0.0 for r in owned), config)}")
+        lines.append("")
+        lines.append("| Opp | Account | Stage | Forecast | Amount "
+                     "| Close date | Committed-for | Pushes | Streak "
+                     "| Rules | Ask | Close date confirmed "
+                     "| Next step confirmed | Budget confirmed |")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|---"
+                     "|---|---|---|")
+        for row in owned:
+            result = data["results"][row["opp_id"]]
+            badges = " ".join(v.rule_id for v in result.violations) or "-"
+            streak = opp_streak(data["streaks"], result)
+            streak_cell = f"flagged {streak} runs" if streak >= 2 else "-"
+            entry = ledger_by_id.get(row["opp_id"])
+            committed = (entry.committed_quarter or "-") if entry else "-"
+            pushes = row.get("push_count")
+            lines.append(f"| {row['opp_id']} | {row['account']} "
+                         f"| {row['stage']} | {row['forecast_category']} "
+                         f"| {_money(row['amount'], config)} "
+                         f"| {row['close_date'].isoformat()} | {committed} "
+                         f"| {'-' if pushes is None else pushes} "
+                         f"| {streak_cell} | {badges} | {ask(result)} "
+                         f"| [ ] | [ ] | [ ] |")
+        lines.append("")
+    lines.append("Committed-for \"-\" = never forecast commit in stored "
+                 "history (a best_case-only deal has no commit anchor). "
+                 "\"Ask\" = the coaching prompt of the deal's dominant risk "
+                 "flag; \"-\" when unflagged.")
+    lines.append("")
+    _rule_legend(lines, config)
     lines.append("")
     return "\n".join(lines)
 

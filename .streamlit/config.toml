@@ -1,0 +1,8 @@
+# The dashboard reads pipeline data and renders PRIVATE per-owner material;
+# bind loopback by default (Streamlit's default is 0.0.0.0). Override
+# deliberately if you mean to serve it.
+[server]
+address = "127.0.0.1"
+
+[browser]
+gatherUsageStats = false

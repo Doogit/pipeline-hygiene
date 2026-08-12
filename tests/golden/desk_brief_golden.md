@@ -222,6 +222,8 @@ Coaching signal, not a comp input.
 
 Of opps ever forecast commit in stored history: outcome to date. Pushed = still open with a close-date move after the first commit snapshot; committed-for quarter = fiscal quarter of the close date when first called commit (immune to later pushes). Won/resolved counts closed opps only, shown as won/closed; the percentage appears once 5+ have resolved (small-n rates mislead). Of which pushed first = resolved (won/lost) commits that pushed after the commit and before closing.
 
+0 of 41 ever-commit deal(s) resolved so far; rates render at 5+ resolved — expect a full read after roughly a quarter of stored snapshots.
+
 | Owner | Ever commit | Won | Lost | Pushed | Still open | Won/resolved | Of which pushed first |
 |---|---|---|---|---|---|---|---|
 | Avery Calloway | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
@@ -243,6 +245,7 @@ Of opps ever forecast commit in stored history: outcome to date. Pushed = still 
 | Sage Oakhurst | 3 | 0 | 0 | 0 | 3 | n/a | 0 |
 | Vesper Calloway | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
 | Vesper Westerley | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
+| All | 41 | 0 | 0 | 0 | 41 | n/a | 0 |
 
 | Team | Ever commit | Won | Lost | Pushed | Still open | Won/resolved | Of which pushed first |
 |---|---|---|---|---|---|---|---|
@@ -255,6 +258,7 @@ Of opps ever forecast commit in stored history: outcome to date. Pushed = still 
 | Team NA-West-1 | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
 | Team NA-West-2 | 5 | 0 | 0 | 0 | 5 | n/a | 0 |
 | Team NA-West-3 | 5 | 0 | 0 | 0 | 5 | n/a | 0 |
+| All | 41 | 0 | 0 | 0 | 41 | n/a | 0 |
 
 | Region | Ever commit | Won | Lost | Pushed | Still open | Won/resolved | Of which pushed first |
 |---|---|---|---|---|---|---|---|
@@ -262,6 +266,7 @@ Of opps ever forecast commit in stored history: outcome to date. Pushed = still 
 | EMEA | 5 | 0 | 0 | 0 | 5 | n/a | 0 |
 | NA-East | 8 | 0 | 0 | 0 | 8 | n/a | 0 |
 | NA-West | 11 | 0 | 0 | 0 | 11 | n/a | 0 |
+| All | 41 | 0 | 0 | 0 | 41 | n/a | 0 |
 
 | Committed-for quarter | Ever commit | Won | Lost | Pushed | Still open | Won/resolved | Of which pushed first |
 |---|---|---|---|---|---|---|---|
@@ -269,6 +274,7 @@ Of opps ever forecast commit in stored history: outcome to date. Pushed = still 
 | FY2027-Q2 | 13 | 0 | 0 | 0 | 13 | n/a | 0 |
 | FY2027-Q3 | 2 | 0 | 0 | 0 | 2 | n/a | 0 |
 | FY2028-Q1 | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
+| All | 41 | 0 | 0 | 0 | 41 | n/a | 0 |
 
 ### Since last run (detail)
 

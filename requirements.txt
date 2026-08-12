@@ -1,0 +1,8 @@
+# Runtime
+pyyaml>=6.0
+pandas>=2.0
+streamlit>=1.40
+altair>=5.0
+# Dev / tests
+pytest>=8.0
+hypothesis>=6.100

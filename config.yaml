@@ -26,3 +26,11 @@ stage_map:
   default: {prospect: prospect, qualify: qualify, develop: develop, propose: propose, commit: commit, closed_won: closed_won, closed_lost: closed_lost}
   # example alternate vocabulary a Dynamics/MSX export might carry:
   dynamics_default: {Qualify: qualify, Develop: develop, Propose: propose, Close: commit, Won: closed_won, Lost: closed_lost}
+
+# Optional keys — schema-checked when present, safe to omit (defaults in parens):
+# display_currency_symbol: "€"                              # money symbol everywhere ($)
+# pipeline_gen_weekly_target: 500000                        # Flow pacing target line (none — no line guessed)
+# trend_snapshots: 8                                        # points in the headline desk-score trend (8)
+# delta_detail_max_per_rule: 20                             # collapse a rule's since-last-run detail past this many opps (20)
+# low_coverage_desk_note_share: 0.75                        # desk-wide under-coverage note when >= this share of quota'd owners is under 1.00x (0.75)
+# staleness_escalation: {escalate_days: 7, review_days: 21} # H1 tiers flag/escalate/review, days BEYOND the per-stage threshold; escalate_days < review_days (off)
