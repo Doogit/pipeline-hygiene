@@ -41,14 +41,37 @@ def has_valid_next_step(row, as_of):
         and row["next_step_date"] >= as_of
 
 
+def staleness_tier(row, config, as_of):
+    """Escalation tier for an H1-stale open row under the OPTIONAL
+    staleness_escalation config block ({escalate_days: X, review_days: Y},
+    X < Y, both days BEYOND the per-stage H1 threshold). None when the block
+    is absent or the row is not stale. Boundaries follow H1's strict >
+    convention: exactly threshold+X is still 'flag'."""
+    esc = config.get("staleness_escalation")
+    if not esc:
+        return None
+    threshold = config["staleness_days"][row["stage"]]
+    days_idle = (as_of - row["last_activity_date"]).days
+    if days_idle <= threshold:
+        return None
+    if days_idle > threshold + esc["review_days"]:
+        return "review"
+    if days_idle > threshold + esc["escalate_days"]:
+        return "escalate"
+    return "flag"
+
+
 def h1_stale_by_stage(row, config, as_of):
     threshold = config["staleness_days"][row["stage"]]
     days_idle = (as_of - row["last_activity_date"]).days
     if days_idle > threshold:
         severity = HIGH if row["stage"] in ("commit", "propose") else MEDIUM
-        return Violation("H1", severity,
-                         f"no activity for {days_idle}d (> {threshold}d for "
-                         f"{row['stage']})")
+        detail = (f"no activity for {days_idle}d (> {threshold}d for "
+                  f"{row['stage']})")
+        tier = staleness_tier(row, config, as_of)
+        if tier is not None:
+            detail += f"; tier {tier}"
+        return Violation("H1", severity, detail)
     return None
 
 
@@ -111,8 +134,10 @@ def h7_single_threaded_big_deal(row, config, as_of):
     amount = row["amount"]
     if amount is not None and amount >= config["big_deal_threshold"] \
             and row["contact_count"] < 2:
+        symbol = config.get("display_currency_symbol") or "$"
         return Violation("H7", MEDIUM,
-                         f"${amount:,.0f} deal with {row['contact_count']} contact(s)")
+                         f"{symbol}{amount:,.0f} deal with "
+                         f"{row['contact_count']} contact(s)")
     return None
 
 

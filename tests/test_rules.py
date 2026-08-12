@@ -60,6 +60,26 @@ def test_h1_boundaries(config):
     assert violation.rule_id == "H1" and violation.severity == MEDIUM
 
 
+def test_h1_escalation_tier_boundaries(config):
+    # develop threshold 21; escalate beyond 21+7=28, review beyond 21+21=42.
+    # Boundaries follow H1's strict >: exactly threshold+X stays one tier down.
+    cfg = dict(config, staleness_escalation={"escalate_days": 7,
+                                             "review_days": 21})
+
+    def h1_at(days, c):
+        row = clean_row(last_activity_date=AS_OF - timedelta(days=days))
+        return h1_stale_by_stage(row, c, AS_OF)
+
+    assert h1_at(21, cfg) is None
+    assert h1_at(22, cfg).detail.endswith("; tier flag")
+    assert h1_at(28, cfg).detail.endswith("; tier flag")
+    assert h1_at(29, cfg).detail.endswith("; tier escalate")
+    assert h1_at(42, cfg).detail.endswith("; tier escalate")
+    assert h1_at(43, cfg).detail.endswith("; tier review")
+    # absent config block: detail carries no tier annotation
+    assert "tier" not in h1_at(43, config).detail
+
+
 def test_h1_severity_high_for_commit_and_propose(config):
     for stage, threshold in (("commit", 7), ("propose", 14)):
         row = clean_row(stage=stage,

@@ -186,6 +186,36 @@ def test_all_rejected_is_fatal_and_not_stored(tmp_path, config, capsys):
     assert "line 3 OPP-0002: unknown stage" in err
 
 
+def test_init_doctor_reports_and_prefills_stage_map(tmp_path, config, capsys):
+    p = tmp_path / "export.csv"
+    columns = CSV_COLUMNS + ["crm_url"]
+    _write_fixture(p, [
+        _row(stage="Qualify"), _row(opp_id="OPP-0002", stage="Qualify"),
+        _row(opp_id="OPP-0003", stage="Negotiation/Review"),
+    ], columns=columns)
+    code = ingest_main([str(p), "--init"])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "Required columns: 15/15 present" in out
+    assert "Extra columns (ignored at ingest): crm_url" in out
+    assert "Qualify: 2" in out and "Negotiation/Review: 1" in out
+    # case-insensitive canonical match pre-filled; the rest FIXME
+    assert '"Qualify": qualify' in out
+    assert '"Negotiation/Review": FIXME   # one of: closed_lost' in out
+
+
+def test_init_doctor_missing_columns_exits_nonzero(tmp_path, config, capsys):
+    p = tmp_path / "export.csv"
+    columns = [c for c in CSV_COLUMNS if c not in ("close_date", "owner")]
+    _write_fixture(p, [{k: v for k, v in GOOD_ROW.items()
+                        if k in columns}], columns=columns)
+    code = ingest_main([str(p), "--init"])
+    assert code != 0
+    out = capsys.readouterr().out
+    assert "MISSING required columns: owner, close_date" in out \
+        or "MISSING required columns: close_date, owner" in out
+
+
 def test_since_last_run_anchors_to_prior_snapshot(tmp_path, config):
     """Re-running a brief on the same snapshot diffs against the previous
     snapshot's run (not itself) and never accumulates duplicate runs."""

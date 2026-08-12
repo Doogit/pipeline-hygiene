@@ -117,24 +117,59 @@ def test_ledger_anchors_to_evaluated_snapshot_not_later_history(tmp_path,
 
 
 def test_ledger_rollups_counts_and_none_key():
-    def entry(opp_id, owner, quarter, outcome):
+    def entry(opp_id, owner, quarter, outcome, pushed_first=False):
         return CommitLedgerEntry(opp_id=opp_id, owner=owner,
                                  first_commit_snapshot=AS_OF,
-                                 committed_quarter=quarter, outcome=outcome)
+                                 committed_quarter=quarter, outcome=outcome,
+                                 pushed_before_close=pushed_first)
     entries = [
         entry("O1", "A", "FY2027-Q1", "won"),
-        entry("O2", "A", "FY2027-Q1", "lost"),
-        entry("O3", "A", "FY2027-Q2", "pushed"),
+        entry("O2", "A", "FY2027-Q1", "lost", pushed_first=True),
+        entry("O3", "A", "FY2027-Q2", "pushed", pushed_first=True),
         entry("O4", "B", None, "open"),
     ]
     by_owner = ledger_rollups(entries, lambda e: e.owner)
+    # O3 is still open: its push counts under the pushed outcome, never
+    # under resolved_pushed_first
     assert by_owner["A"] == {"n": 3, "won": 1, "lost": 1, "pushed": 1,
-                            "open": 0}
+                            "open": 0, "resolved_pushed_first": 1}
     assert by_owner["B"] == {"n": 1, "won": 0, "lost": 0, "pushed": 0,
-                            "open": 1}
+                            "open": 1, "resolved_pushed_first": 0}
     by_quarter = ledger_rollups(entries, lambda e: e.committed_quarter)
     assert by_quarter[None]["open"] == 1
     assert by_quarter["FY2027-Q1"]["n"] == 2
+
+
+def test_pushed_before_close(tmp_path, config):
+    """A commit that pushes and then resolves is won/lost (outcomes stay
+    mutually exclusive) with pushed_before_close carrying the depth; a
+    clean resolve carries False."""
+    d1, d2, d3 = (AS_OF - timedelta(days=14), AS_OF - timedelta(days=7),
+                  AS_OF)
+    store = SnapshotStore(":memory:", config)
+    _ingest(store, tmp_path, d1, [
+        _row("OPP-PL", "Ellis Farrow", d1, forecast_category="commit"),
+        _row("OPP-CW", "Ellis Farrow", d1, forecast_category="commit"),
+    ])
+    _ingest(store, tmp_path, d2, [
+        _row("OPP-PL", "Ellis Farrow", d2, forecast_category="commit",
+             close_date=date(2026, 10, 15), close_date_changes=1),
+        _row("OPP-CW", "Ellis Farrow", d2, forecast_category="commit"),
+    ])
+    _ingest(store, tmp_path, d3, [
+        _row("OPP-PL", "Ellis Farrow", d3, stage="closed_lost",
+             forecast_category="commit", close_date=date(2026, 10, 15),
+             close_date_changes=1),
+        _row("OPP-CW", "Ellis Farrow", d3, stage="closed_won",
+             forecast_category="commit"),
+    ])
+    entries = {e.opp_id: e for e in commit_ledger(store, AS_OF, config)}
+    assert entries["OPP-PL"].outcome == "lost"
+    assert entries["OPP-PL"].pushed_before_close is True
+    assert entries["OPP-CW"].outcome == "won"
+    assert entries["OPP-CW"].pushed_before_close is False
+    rollup = ledger_rollups(entries.values(), lambda e: e.owner)
+    assert rollup["Ellis Farrow"]["resolved_pushed_first"] == 1
 
 
 def test_ledger_rate_small_n_guard():

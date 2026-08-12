@@ -133,8 +133,19 @@ def test_digest_top_risks_capped_and_dollar_ranked(tmp_path, config):
     content = brief.digest_markdown(data, owner, cfg)
     section = content.split("## Top risks (dollar-weighted)")[1] \
                      .split("## ")[0]
-    risks = [l for l in section.splitlines() if l.startswith("- ")]
-    assert 0 < len(risks) <= 5
+    # Primary list is capped at 5; "Also flagged" carries the rest so the
+    # digest enumerates EVERY flagged deal (persona fix — a capped list hid
+    # deals the desk brief still counted against the owner).
+    primary, _, overflow = section.partition("Also flagged")
+    primary_risks = [l for l in primary.splitlines() if l.startswith("- ")]
+    assert 0 < len(primary_risks) <= 5
+    all_risks = [l for l in section.splitlines()
+                 if l.startswith("- OPP-")]
+    n_flagged = sum(1 for r in data["rows"]
+                    if r["owner"] == owner and r["opp_id"] in results
+                    and results[r["opp_id"]].violations
+                    and r["stage"] not in ("closed_won", "closed_lost"))
+    assert len(all_risks) == n_flagged
     amounts = [float(re.search(r"\$([\d,]+)", l).group(1).replace(",", ""))
-               for l in risks]
+               for l in all_risks]
     assert amounts == sorted(amounts, reverse=True)

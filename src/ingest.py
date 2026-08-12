@@ -10,6 +10,7 @@ import csv
 import math
 import re
 import sys
+import warnings
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -34,6 +35,12 @@ REQUIRED_DATE_FIELDS = ("created_date", "close_date", "last_activity_date")
 
 class IngestError(Exception):
     """Fatal ingest problem: missing columns, unreadable file, mixed currency."""
+
+
+class ConfigError(Exception):
+    """Fatal config problem: missing or wrong-typed key. Failing at load time
+    names the exact key path; failing at point of use would surface as a
+    KeyError deep inside a rule."""
 
 
 class AllRowsRejectedError(IngestError):
@@ -88,9 +95,116 @@ def rejection_detail_lines(report, limit=10):
         yield f"    ... and {report.rejected - limit} more"
 
 
+# Declared config schema: key -> type, or a nested {subkey -> type} mapping
+# whose subkeys are all required. A number means int or float. Keys in
+# _OPTIONAL_CONFIG are type-checked only when present (every key added after
+# the frozen test config must live there — a new required key would kill the
+# frozen suite).
+_NUMBER = (int, float)
+_OPEN_STAGES = ("prospect", "qualify", "develop", "propose", "commit")
+
+_REQUIRED_CONFIG = {
+    "staleness_days": {stage: _NUMBER for stage in _OPEN_STAGES},
+    "aging_norm_days": {stage: _NUMBER for stage in _OPEN_STAGES},
+    "big_deal_threshold": _NUMBER,
+    "close_date_horizon_days": int,
+    "fiscal_year_start_month": int,
+    "coverage_ratio_min": _NUMBER,
+    "rule_weights": {f"H{n}": _NUMBER for n in range(1, 12)},
+    "push_alarm_days": _NUMBER,
+    "cumulative_push_alarm_days": _NUMBER,
+    "disqualify_review_pushes": int,
+    "min_closed_for_win_rate": int,
+    "patterns": {"overcall_share_min": _NUMBER,
+                 "undercall_won_share_min": _NUMBER,
+                 "undercall_omitted_share_min": _NUMBER,
+                 "undercall_farout_share_min": _NUMBER},
+    "healthy_score_threshold": _NUMBER,
+    "min_opps_for_owner_score": int,
+    "next_step_quality": {"min_chars": int, "filler_phrases": list,
+                          "action_verbs": list},
+    "stage_map": dict,
+}
+_OPTIONAL_CONFIG = {
+    "expected_currency": str,
+    "quotas": dict,
+    "owner_meta": dict,
+    "display_currency_symbol": str,
+    "pipeline_gen_weekly_target": _NUMBER,
+    "trend_snapshots": int,
+    "delta_detail_max_per_rule": int,
+    "low_coverage_desk_note_share": _NUMBER,
+    "staleness_escalation": {"escalate_days": int, "review_days": int},
+}
+
+
+def _check_type(path, value, expected):
+    if isinstance(expected, dict):
+        if not isinstance(value, dict):
+            raise ConfigError(f"config key {path!r} must be a mapping, "
+                              f"got {type(value).__name__}")
+        for subkey, subexpected in expected.items():
+            if subkey not in value:
+                raise ConfigError(f"missing config key {path}.{subkey}")
+            _check_type(f"{path}.{subkey}", value[subkey], subexpected)
+        return
+    if isinstance(value, bool) and expected in (_NUMBER, int):
+        raise ConfigError(f"config key {path!r} must be a number, got bool")
+    if not isinstance(value, expected):
+        expected_name = ("number" if expected is _NUMBER
+                         else expected.__name__)
+        raise ConfigError(f"config key {path!r} must be {expected_name}, "
+                          f"got {type(value).__name__}")
+
+
+def _require_positive(config, key):
+    if key in config and config[key] is not None and config[key] <= 0:
+        raise ConfigError(f"config key {key!r} must be > 0")
+
+
+def _require_unit_interval(config, key):
+    if key in config and config[key] is not None \
+            and not 0 <= config[key] <= 1:
+        raise ConfigError(f"config key {key!r} must be between 0 and 1")
+
+
+def validate_config(config):
+    """Fail fast on a missing or wrong-typed config key (ConfigError naming
+    the exact key path); warn once on unknown top-level keys (a typo'd
+    threshold silently reverting to a default is the failure mode this
+    exists for). Returns the config unchanged."""
+    if not isinstance(config, dict):
+        raise ConfigError("config must be a YAML mapping, got "
+                          f"{type(config).__name__}")
+    for key, expected in _REQUIRED_CONFIG.items():
+        if key not in config:
+            raise ConfigError(f"missing config key {key}")
+        _check_type(key, config[key], expected)
+    for key, expected in _OPTIONAL_CONFIG.items():
+        if key in config and config[key] is not None:
+            _check_type(key, config[key], expected)
+    esc = config.get("staleness_escalation")
+    _require_positive(config, "pipeline_gen_weekly_target")
+    _require_positive(config, "trend_snapshots")
+    _require_positive(config, "delta_detail_max_per_rule")
+    _require_unit_interval(config, "low_coverage_desk_note_share")
+    if esc and esc["escalate_days"] >= esc["review_days"]:
+        raise ConfigError("config key 'staleness_escalation' requires "
+                          "escalate_days < review_days")
+    if esc and (esc["escalate_days"] <= 0 or esc["review_days"] <= 0):
+        raise ConfigError("config key 'staleness_escalation' requires "
+                          "positive day values")
+    unknown = sorted(set(config) - set(_REQUIRED_CONFIG)
+                     - set(_OPTIONAL_CONFIG))
+    if unknown:
+        warnings.warn(f"unknown config keys ignored: {', '.join(unknown)}",
+                      stacklevel=2)
+    return config
+
+
 def load_config(path="config.yaml"):
     with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        return validate_config(yaml.safe_load(f))
 
 
 def _parse_date(value, allow_empty):
@@ -227,6 +341,66 @@ def snapshot_date_from_filename(csv_path):
     return date.fromisoformat(m.group(1)) if m else None
 
 
+def init_doctor(csv_path, out=None):
+    """python -m src.ingest --init your.csv: pre-ingest column/stage report.
+
+    Reports required columns present/missing, extra columns (ignored), the
+    distinct stage labels with row counts, and a ready-to-paste stage_map
+    YAML block (case-insensitive exact matches to canonical stages
+    pre-filled, everything else FIXME). Deliberately nothing else — a real
+    ingest already reports currency/date problems with row-level detail.
+    Returns nonzero only when required columns are missing."""
+    out = out if out is not None else sys.stdout
+    csv_path = Path(csv_path)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        header = reader.fieldnames or []
+        stage_counts = {}
+        for raw in reader:
+            label = (raw.get("stage") or "").strip()
+            stage_counts[label] = stage_counts.get(label, 0) + 1
+
+    missing = [c for c in REQUIRED_COLUMNS if c not in header]
+    present = [c for c in REQUIRED_COLUMNS if c in header]
+    optional = [c for c in OPTIONAL_COLUMNS if c in header]
+    extra = [c for c in header
+             if c not in REQUIRED_COLUMNS and c not in OPTIONAL_COLUMNS]
+
+    print(f"init doctor: {csv_path.name}", file=out)
+    print(f"- Required columns: {len(present)}/{len(REQUIRED_COLUMNS)} "
+          f"present", file=out)
+    if missing:
+        print(f"- MISSING required columns: {', '.join(missing)}", file=out)
+    if optional:
+        print(f"- Optional history columns present: {', '.join(optional)}",
+              file=out)
+    if extra:
+        print(f"- Extra columns (ignored at ingest): {', '.join(extra)}",
+              file=out)
+
+    if "stage" in header:
+        print(f"- Stage labels ({sum(stage_counts.values())} rows):",
+              file=out)
+        ranked = sorted(stage_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        for label, n in ranked:
+            print(f"    {label or '(empty)'}: {n}", file=out)
+        by_fold = {s.casefold(): s for s in sorted(CANONICAL_STAGES)}
+        print("- Ready-to-paste stage_map (add under stage_map: in "
+              "config.yaml, edit the FIXME lines, then run: "
+              "python -m src.ingest your.csv --stage-map your_map):",
+              file=out)
+        print("    your_map:", file=out)
+        options = ", ".join(sorted(CANONICAL_STAGES))
+        for label in sorted(stage_counts):
+            match = by_fold.get(label.casefold())
+            if match is not None:
+                print(f'      "{label}": {match}', file=out)
+            else:
+                print(f'      "{label}": FIXME   # one of: {options}',
+                      file=out)
+    return 1 if missing else 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m src.ingest",
                                 description="Validate and load a snapshot CSV")
@@ -236,7 +410,15 @@ def main(argv=None):
     p.add_argument("--stage-map", default="default")
     p.add_argument("--snapshot-date", type=date.fromisoformat, default=None,
                    help="defaults to the YYYY-MM-DD in the filename")
+    p.add_argument("--init", action="store_true",
+                   help="doctor mode: report columns and stage labels and "
+                        "emit a ready-to-paste stage_map block; ingests "
+                        "nothing (nonzero exit only on missing required "
+                        "columns)")
     args = p.parse_args(argv)
+
+    if args.init:
+        return init_doctor(args.csv_path)
 
     snapshot_date = args.snapshot_date or snapshot_date_from_filename(args.csv_path)
     if snapshot_date is None:

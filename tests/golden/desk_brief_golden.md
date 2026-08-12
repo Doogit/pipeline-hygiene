@@ -35,9 +35,11 @@ Snapshot 2026-08-10 (opps_2026-08-10.csv), evaluated as of 2026-08-10.
 ## Trajectory
 
 - Flow since last run: no previous run recorded.
+- Pipeline waterfall: needs a previous stored snapshot.
 - Coverage (FY2027-Q1): open pipeline $43,165,232 vs required $78,988,984 -> 0.55x
   - Remaining quota $49,368,115 (quota $50,620,000 - won this quarter $1,251,885) x 1.60
   - Basis: trailing win rate 20/32 closed won (62.5%) -> required multiple 32/20 = 1.60x
+  - Of open pipeline: $24,920,680 closes in FY2027-Q1 or earlier (overdue included), $18,244,552 later (informational — the ratio above is unchanged)
 
 ## Since last run
 
@@ -79,68 +81,70 @@ Drill-down detail. The forecast call runs off page 1.
 
 Coverage = open pipeline vs required pipeline (remaining quota net of wins this quarter x the required multiple); low_coverage means under 1.00x. Basis: trailing win rate 20/32 closed won (62.5%) -> required multiple 32/20 = 1.60x.
 
-| Owner | Open | Mean | Median | Violations | Pipeline | Coverage | Flags |
-|---|---|---|---|---|---|---|---|
-| Avery Calloway | 7 | 96.4 | 100.0 | 3 | $974,716 | 0.63 | low_coverage |
-| Avery Ristori | 7 | 79.3 | 80.0 | 7 | $304,706 | 0.54 | low_coverage |
-| Blair Denholm | 7 | 96.4 | 100.0 | 3 | $1,001,323 | 0.58 | low_coverage |
-| Blair Hollowell | 7 | 93.6 | 90.0 | 5 | $652,409 | 1.27 | - |
-| Blair Oakhurst | 6 | 79.2 | 85.0 | 8 | $928,671 | 0.49 | low_coverage |
-| Casey Grantley | 7 | 82.1 | 80.0 | 7 | $1,003,680 | 0.42 | low_coverage |
-| Corin Farrow | 7 | 76.4 | 75.0 | 7 | $525,426 | 0.97 | low_coverage |
-| Corin Kirkwood | 6 | 78.3 | 80.0 | 8 | $216,385 | 0.26 | low_coverage |
-| Darby Ashford | 4 | 95.0 | 95.0 | 2 | $411,065 | 0.55 | small_n, low_coverage |
-| Darby Bramwell | 7 | 80.0 | 80.0 | 7 | $259,134 | 0.23 | low_coverage |
-| Darby Kirkwood | 4 | 93.8 | 92.5 | 3 | $350,411 | 0.50 | small_n, low_coverage |
-| Ellis Lindqvist | 6 | 98.3 | 100.0 | 2 | $894,408 | 0.39 | low_coverage |
-| Finley Underhill | 6 | 95.0 | 97.5 | 4 | $926,281 | 0.50 | low_coverage |
-| Frankie Denholm | 6 | 80.0 | 80.0 | 6 | $238,472 | 0.24 | low_coverage |
-| Greer Ristori | 7 | 64.3 | 80.0 | 15 | $259,817 | 0.25 | low_coverage |
-| Greer Westerley | 6 | 95.0 | 95.0 | 3 | $287,629 | 0.37 | low_coverage |
-| Harper Bramwell | 7 | 96.4 | 100.0 | 3 | $418,899 | 0.39 | low_coverage |
-| Harper Grantley | 7 | 98.6 | 100.0 | 1 | $520,181 | 0.71 | low_coverage |
-| Harper Ivesdale | 7 | 93.6 | 90.0 | 5 | $1,086,440 | 0.55 | low_coverage |
-| Hollis Marchetti | 6 | 95.0 | 95.0 | 4 | $747,588 | 0.44 | low_coverage |
-| Hollis Southgate | 7 | 100.0 | 100.0 | 0 | $348,567 | 0.46 | low_coverage |
-| Hollis Underhill | 5 | 77.0 | 75.0 | 5 | $1,026,601 | 0.47 | low_coverage |
-| Jordan Vantrease | 6 | 98.3 | 100.0 | 2 | $502,341 | 0.26 | low_coverage |
-| Kendall Grantley | 7 | 90.0 | 100.0 | 5 | $419,688 | 0.71 | low_coverage |
-| Kendall Lindqvist | 7 | 61.4 | 55.0 | 17 | $1,547,927 | 0.67 | low_coverage |
-| Logan Denholm | 7 | 89.3 | 90.0 | 8 | $1,224,251 | 0.71 | low_coverage |
-| Logan Ivesdale | 7 | 73.6 | 75.0 | 10 | $1,514,511 | 0.91 | low_coverage |
-| Marlow Bramwell | 6 | 76.7 | 75.0 | 6 | $277,378 | 0.38 | low_coverage |
-| Morgan Calloway | 7 | 72.1 | 65.0 | 12 | $1,640,432 | 0.88 | low_coverage |
-| Noor Underhill | 6 | 98.3 | 100.0 | 1 | $1,160,545 | 0.59 | low_coverage |
-| Parker Thistlewood | 7 | 95.7 | 95.0 | 4 | $639,290 | 1.05 | - |
-| Quinn Lindqvist | 6 | 95.0 | 97.5 | 3 | $271,970 | 0.25 | low_coverage |
-| Quinn Oakhurst | 5 | 79.0 | 80.0 | 6 | $1,619,303 | 0.89 | low_coverage |
-| Quinn Ristori | 6 | 81.7 | 77.5 | 6 | $483,595 | 0.64 | low_coverage |
-| Reese Denholm | 5 | 99.0 | 100.0 | 1 | $1,934,450 | 1.19 | - |
-| Reese Northcote | 6 | 95.0 | 97.5 | 3 | $1,134,784 | 0.67 | low_coverage |
-| Riley Grantley | 4 | 92.5 | 92.5 | 4 | $447,632 | 0.51 | small_n, low_coverage |
-| Riley Hollowell | 6 | 100.0 | 100.0 | 0 | $579,993 | 0.39 | low_coverage |
-| Riley Ristori | 6 | 70.8 | 72.5 | 10 | $237,282 | 0.30 | low_coverage |
-| Riley Southgate | 7 | 96.4 | 100.0 | 3 | $449,870 | 0.64 | low_coverage |
-| Rowan Hollowell | 6 | 97.5 | 100.0 | 2 | $282,086 | 0.44 | low_coverage |
-| Rowan Westerley | 6 | 82.5 | 82.5 | 6 | $284,921 | 0.37 | low_coverage |
-| Sage Bramwell | 6 | 85.8 | 90.0 | 7 | $301,458 | 0.48 | low_coverage |
-| Sage Eastvale | 6 | 93.3 | 92.5 | 5 | $641,007 | 0.43 | low_coverage |
-| Sage Jasperson | 6 | 95.8 | 97.5 | 3 | $249,003 | 0.23 | low_coverage |
-| Sage Oakhurst | 7 | 82.9 | 90.0 | 7 | $370,885 | 0.59 | low_coverage |
-| Sage Vantrease | 6 | 95.0 | 97.5 | 4 | $229,458 | 0.25 | low_coverage |
-| Skyler Grantley | 6 | 98.3 | 100.0 | 2 | $277,339 | 0.28 | low_coverage |
-| Skyler Ivesdale | 5 | 71.0 | 65.0 | 9 | $1,043,428 | 0.44 | low_coverage |
-| Tatum Ivesdale | 6 | 73.3 | 82.5 | 10 | $2,036,470 | 0.92 | low_coverage |
-| Tatum Lindqvist | 6 | 74.2 | 72.5 | 9 | $276,057 | 0.43 | low_coverage |
-| Tatum Underhill | 5 | 99.0 | 100.0 | 1 | $1,114,017 | 0.48 | low_coverage |
-| Vesper Calloway | 6 | 99.2 | 100.0 | 1 | $1,023,585 | 0.57 | low_coverage |
-| Vesper Westerley | 6 | 98.3 | 100.0 | 1 | $264,890 | 0.26 | low_coverage |
-| Wren Ivesdale | 5 | 91.0 | 90.0 | 6 | $105,862 | 0.17 | low_coverage |
-| Wren Yardley | 6 | 95.8 | 97.5 | 3 | $1,139,067 | 0.53 | low_coverage |
-| Zion Calloway | 7 | 70.7 | 65.0 | 12 | $1,391,052 | 0.88 | low_coverage |
-| Zion Northcote | 7 | 95.7 | 100.0 | 2 | $262,964 | 0.34 | low_coverage |
-| Zion Ristori | 6 | 99.2 | 100.0 | 1 | $938,628 | 0.42 | low_coverage |
-| Zion Vantrease | 4 | 91.2 | 90.0 | 4 | $1,465,002 | 0.74 | small_n, low_coverage |
+Note: 57 of 60 quota'd owners are under 1.00x — desk-wide under-coverage, not individual laggards; ordering carries the signal. The flag and its basis are unchanged.
+
+| Owner | Open | Mean | Median | Violations | Pipeline | Coverage | Gap to cover | Flags |
+|---|---|---|---|---|---|---|---|---|
+| Avery Calloway | 7 | 96.4 | 100.0 | 3 | $974,716 | 0.63 | $561,284 | low_coverage |
+| Avery Ristori | 7 | 79.3 | 80.0 | 7 | $304,706 | 0.54 | $255,294 | low_coverage |
+| Blair Denholm | 7 | 96.4 | 100.0 | 3 | $1,001,323 | 0.58 | $710,677 | low_coverage |
+| Blair Hollowell | 7 | 93.6 | 90.0 | 5 | $652,409 | 1.27 | $0 | - |
+| Blair Oakhurst | 6 | 79.2 | 85.0 | 8 | $928,671 | 0.49 | $959,329 | low_coverage |
+| Casey Grantley | 7 | 82.1 | 80.0 | 7 | $1,003,680 | 0.42 | $1,396,320 | low_coverage |
+| Corin Farrow | 7 | 76.4 | 75.0 | 7 | $525,426 | 0.97 | $18,574 | low_coverage |
+| Corin Kirkwood | 6 | 78.3 | 80.0 | 8 | $216,385 | 0.26 | $615,615 | low_coverage |
+| Darby Ashford | 4 | 95.0 | 95.0 | 2 | $411,065 | 0.55 | $340,935 | small_n, low_coverage |
+| Darby Bramwell | 7 | 80.0 | 80.0 | 7 | $259,134 | 0.23 | $860,866 | low_coverage |
+| Darby Kirkwood | 4 | 93.8 | 92.5 | 3 | $350,411 | 0.50 | $352,351 | small_n, low_coverage |
+| Ellis Lindqvist | 6 | 98.3 | 100.0 | 2 | $894,408 | 0.39 | $1,377,592 | low_coverage |
+| Finley Underhill | 6 | 95.0 | 97.5 | 4 | $926,281 | 0.50 | $913,719 | low_coverage |
+| Frankie Denholm | 6 | 80.0 | 80.0 | 6 | $238,472 | 0.24 | $758,494 | low_coverage |
+| Greer Ristori | 7 | 64.3 | 80.0 | 15 | $259,817 | 0.25 | $764,183 | low_coverage |
+| Greer Westerley | 6 | 95.0 | 95.0 | 3 | $287,629 | 0.37 | $480,371 | low_coverage |
+| Harper Bramwell | 7 | 96.4 | 100.0 | 3 | $418,899 | 0.39 | $669,101 | low_coverage |
+| Harper Grantley | 7 | 98.6 | 100.0 | 1 | $520,181 | 0.71 | $215,819 | low_coverage |
+| Harper Ivesdale | 7 | 93.6 | 90.0 | 5 | $1,086,440 | 0.55 | $897,560 | low_coverage |
+| Hollis Marchetti | 6 | 95.0 | 95.0 | 4 | $747,588 | 0.44 | $932,412 | low_coverage |
+| Hollis Southgate | 7 | 100.0 | 100.0 | 0 | $348,567 | 0.46 | $403,433 | low_coverage |
+| Hollis Underhill | 5 | 77.0 | 75.0 | 5 | $1,026,601 | 0.47 | $1,165,399 | low_coverage |
+| Jordan Vantrease | 6 | 98.3 | 100.0 | 2 | $502,341 | 0.26 | $1,408,761 | low_coverage |
+| Kendall Grantley | 7 | 90.0 | 100.0 | 5 | $419,688 | 0.71 | $172,312 | low_coverage |
+| Kendall Lindqvist | 7 | 61.4 | 55.0 | 17 | $1,547,927 | 0.67 | $756,073 | low_coverage |
+| Logan Denholm | 7 | 89.3 | 90.0 | 8 | $1,224,251 | 0.71 | $503,749 | low_coverage |
+| Logan Ivesdale | 7 | 73.6 | 75.0 | 10 | $1,514,511 | 0.91 | $149,489 | low_coverage |
+| Marlow Bramwell | 6 | 76.7 | 75.0 | 6 | $277,378 | 0.38 | $458,622 | low_coverage |
+| Morgan Calloway | 7 | 72.1 | 65.0 | 12 | $1,640,432 | 0.88 | $231,568 | low_coverage |
+| Noor Underhill | 6 | 98.3 | 100.0 | 1 | $1,160,545 | 0.59 | $807,455 | low_coverage |
+| Parker Thistlewood | 7 | 95.7 | 95.0 | 4 | $639,290 | 1.05 | $0 | - |
+| Quinn Lindqvist | 6 | 95.0 | 97.5 | 3 | $271,970 | 0.25 | $832,030 | low_coverage |
+| Quinn Oakhurst | 5 | 79.0 | 80.0 | 6 | $1,619,303 | 0.89 | $197,186 | low_coverage |
+| Quinn Ristori | 6 | 81.7 | 77.5 | 6 | $483,595 | 0.64 | $268,405 | low_coverage |
+| Reese Denholm | 5 | 99.0 | 100.0 | 1 | $1,934,450 | 1.19 | $0 | - |
+| Reese Northcote | 6 | 95.0 | 97.5 | 3 | $1,134,784 | 0.67 | $561,216 | low_coverage |
+| Riley Grantley | 4 | 92.5 | 92.5 | 4 | $447,632 | 0.51 | $427,054 | small_n, low_coverage |
+| Riley Hollowell | 6 | 100.0 | 100.0 | 0 | $579,993 | 0.39 | $924,007 | low_coverage |
+| Riley Ristori | 6 | 70.8 | 72.5 | 10 | $237,282 | 0.30 | $546,718 | low_coverage |
+| Riley Southgate | 7 | 96.4 | 100.0 | 3 | $449,870 | 0.64 | $254,130 | low_coverage |
+| Rowan Hollowell | 6 | 97.5 | 100.0 | 2 | $282,086 | 0.44 | $357,914 | low_coverage |
+| Rowan Westerley | 6 | 82.5 | 82.5 | 6 | $284,921 | 0.37 | $492,158 | low_coverage |
+| Sage Bramwell | 6 | 85.8 | 90.0 | 7 | $301,458 | 0.48 | $322,542 | low_coverage |
+| Sage Eastvale | 6 | 93.3 | 92.5 | 5 | $641,007 | 0.43 | $862,993 | low_coverage |
+| Sage Jasperson | 6 | 95.8 | 97.5 | 3 | $249,003 | 0.23 | $822,997 | low_coverage |
+| Sage Oakhurst | 7 | 82.9 | 90.0 | 7 | $370,885 | 0.59 | $253,115 | low_coverage |
+| Sage Vantrease | 6 | 95.0 | 97.5 | 4 | $229,458 | 0.25 | $672,291 | low_coverage |
+| Skyler Grantley | 6 | 98.3 | 100.0 | 2 | $277,339 | 0.28 | $698,661 | low_coverage |
+| Skyler Ivesdale | 5 | 71.0 | 65.0 | 9 | $1,043,428 | 0.44 | $1,340,572 | low_coverage |
+| Tatum Ivesdale | 6 | 73.3 | 82.5 | 10 | $2,036,470 | 0.92 | $171,530 | low_coverage |
+| Tatum Lindqvist | 6 | 74.2 | 72.5 | 9 | $276,057 | 0.43 | $363,943 | low_coverage |
+| Tatum Underhill | 5 | 99.0 | 100.0 | 1 | $1,114,017 | 0.48 | $1,221,983 | low_coverage |
+| Vesper Calloway | 6 | 99.2 | 100.0 | 1 | $1,023,585 | 0.57 | $784,415 | low_coverage |
+| Vesper Westerley | 6 | 98.3 | 100.0 | 1 | $264,890 | 0.26 | $759,110 | low_coverage |
+| Wren Ivesdale | 5 | 91.0 | 90.0 | 6 | $105,862 | 0.17 | $502,138 | low_coverage |
+| Wren Yardley | 6 | 95.8 | 97.5 | 3 | $1,139,067 | 0.53 | $1,004,933 | low_coverage |
+| Zion Calloway | 7 | 70.7 | 65.0 | 12 | $1,391,052 | 0.88 | $192,948 | low_coverage |
+| Zion Northcote | 7 | 95.7 | 100.0 | 2 | $262,964 | 0.34 | $521,036 | low_coverage |
+| Zion Ristori | 6 | 99.2 | 100.0 | 1 | $938,628 | 0.42 | $1,301,372 | low_coverage |
+| Zion Vantrease | 4 | 91.2 | 90.0 | 4 | $1,465,002 | 0.74 | $515,615 | small_n, low_coverage |
 
 ### Teams and regions
 
@@ -148,26 +152,26 @@ Coverage = open pipeline vs required pipeline (remaining quota net of wins this 
 
 ### Teams
 
-| Team | Owners | Open | Mean | Pipeline | Quota | Coverage | Violations | At-risk $ | Flags |
-|---|---|---|---|---|---|---|---|---|---|
-| Team NA-West-1 | 7 | 43 | 87.8 | $1,960,229 | $3,850,000 | 0.32 | 39 | $474,661 | low_coverage |
-| Team NA-West-3 | 6 | 35 | 91.9 | $1,953,430 | $3,100,000 | 0.40 | 22 | $611,592 | low_coverage |
-| Team APAC-1 | 6 | 40 | 89.1 | $1,941,528 | $2,810,000 | 0.43 | 27 | $577,104 | low_coverage |
-| Team APAC-2 | 6 | 39 | 83.3 | $2,303,964 | $3,020,000 | 0.48 | 38 | $798,718 | low_coverage |
-| Team NA-East-2 | 7 | 41 | 88.3 | $7,332,434 | $8,930,000 | 0.52 | 37 | $1,699,809 | low_coverage |
-| Team NA-West-2 | 7 | 41 | 89.0 | $2,765,578 | $3,210,000 | 0.56 | 31 | $798,201 | low_coverage |
-| Team NA-East-1 | 7 | 46 | 87.3 | $8,124,669 | $8,460,000 | 0.60 | 38 | $2,241,169 | low_coverage |
-| Team EMEA-2 | 7 | 43 | 91.5 | $7,872,833 | $7,930,000 | 0.62 | 34 | $610,186 | low_coverage |
-| Team EMEA-1 | 7 | 40 | 84.8 | $8,910,566 | $9,310,000 | 0.66 | 38 | $4,269,631 | low_coverage |
+| Team | Owners | Open | Mean | Pipeline | Quota | Coverage | Gap to cover | Violations | At-risk $ | Flags |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Team NA-West-1 | 7 | 43 | 87.8 | $1,960,229 | $3,850,000 | 0.32 | $4,199,771 | 39 | $474,661 | low_coverage |
+| Team NA-West-3 | 6 | 35 | 91.9 | $1,953,430 | $3,100,000 | 0.40 | $2,884,319 | 22 | $611,592 | low_coverage |
+| Team APAC-1 | 6 | 40 | 89.1 | $1,941,528 | $2,810,000 | 0.43 | $2,554,472 | 27 | $577,104 | low_coverage |
+| Team APAC-2 | 6 | 39 | 83.3 | $2,303,964 | $3,020,000 | 0.48 | $2,453,002 | 38 | $798,718 | low_coverage |
+| Team NA-East-2 | 7 | 41 | 88.3 | $7,332,434 | $8,930,000 | 0.52 | $6,639,284 | 37 | $1,699,809 | low_coverage |
+| Team NA-West-2 | 7 | 41 | 89.0 | $2,765,578 | $3,210,000 | 0.56 | $2,196,949 | 31 | $798,201 | low_coverage |
+| Team NA-East-1 | 7 | 46 | 87.3 | $8,124,669 | $8,460,000 | 0.60 | $5,411,331 | 38 | $2,241,169 | low_coverage |
+| Team EMEA-2 | 7 | 43 | 91.5 | $7,872,833 | $7,930,000 | 0.62 | $4,815,167 | 34 | $610,186 | low_coverage |
+| Team EMEA-1 | 7 | 40 | 84.8 | $8,910,566 | $9,310,000 | 0.66 | $4,669,458 | 38 | $4,269,631 | low_coverage |
 
 ### Regions
 
-| Region | Owners | Open | Mean | Pipeline | Quota | Coverage | Violations | At-risk $ | Flags |
-|---|---|---|---|---|---|---|---|---|---|
-| NA-West | 20 | 119 | 89.4 | $6,679,237 | $10,160,000 | 0.42 | 92 | $1,884,455 | low_coverage |
-| APAC | 12 | 79 | 86.3 | $4,245,492 | $5,830,000 | 0.46 | 65 | $1,375,822 | low_coverage |
-| NA-East | 14 | 87 | 87.8 | $15,457,103 | $17,390,000 | 0.56 | 75 | $3,940,978 | low_coverage |
-| EMEA | 14 | 83 | 88.3 | $16,783,399 | $17,240,000 | 0.64 | 72 | $4,879,817 | low_coverage |
+| Region | Owners | Open | Mean | Pipeline | Quota | Coverage | Gap to cover | Violations | At-risk $ | Flags |
+|---|---|---|---|---|---|---|---|---|---|---|
+| NA-West | 20 | 119 | 89.4 | $6,679,237 | $10,160,000 | 0.42 | $9,281,039 | 92 | $1,884,455 | low_coverage |
+| APAC | 12 | 79 | 86.3 | $4,245,492 | $5,830,000 | 0.46 | $5,007,473 | 65 | $1,375,822 | low_coverage |
+| NA-East | 14 | 87 | 87.8 | $15,457,103 | $17,390,000 | 0.56 | $12,050,615 | 75 | $3,940,978 | low_coverage |
+| EMEA | 14 | 83 | 88.3 | $16,783,399 | $17,240,000 | 0.64 | $9,484,625 | 72 | $4,879,817 | low_coverage |
 
 ### Forecast integrity (H5)
 
@@ -216,55 +220,61 @@ Coaching signal, not a comp input.
 
 Coaching signal, not a comp input.
 
-Of opps ever forecast commit in stored history: outcome to date. Pushed = still open with a close-date move after the first commit snapshot; committed-for quarter = fiscal quarter of the close date when first called commit (immune to later pushes). Won/resolved counts closed opps only, shown as won/closed; the percentage appears once 5+ have resolved (small-n rates mislead).
+Of opps ever forecast commit in stored history: outcome to date. Pushed = still open with a close-date move after the first commit snapshot; committed-for quarter = fiscal quarter of the close date when first called commit (immune to later pushes). Won/resolved counts closed opps only, shown as won/closed; the percentage appears once 5+ have resolved (small-n rates mislead). Of which pushed first = resolved (won/lost) commits that pushed after the commit and before closing.
 
-| Owner | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
-|---|---|---|---|---|---|---|
-| Avery Calloway | 1 | 0 | 0 | 0 | 1 | n/a |
-| Avery Ristori | 4 | 0 | 0 | 0 | 4 | n/a |
-| Casey Grantley | 2 | 0 | 0 | 0 | 2 | n/a |
-| Corin Farrow | 5 | 0 | 0 | 0 | 5 | n/a |
-| Darby Bramwell | 2 | 0 | 0 | 0 | 2 | n/a |
-| Frankie Denholm | 2 | 0 | 0 | 0 | 2 | n/a |
-| Harper Bramwell | 2 | 0 | 0 | 0 | 2 | n/a |
-| Harper Ivesdale | 1 | 0 | 0 | 0 | 1 | n/a |
-| Hollis Underhill | 3 | 0 | 0 | 0 | 3 | n/a |
-| Kendall Lindqvist | 1 | 0 | 0 | 0 | 1 | n/a |
-| Logan Ivesdale | 3 | 0 | 0 | 0 | 3 | n/a |
-| Marlow Bramwell | 4 | 0 | 0 | 0 | 4 | n/a |
-| Quinn Lindqvist | 1 | 0 | 0 | 0 | 1 | n/a |
-| Quinn Ristori | 3 | 0 | 0 | 0 | 3 | n/a |
-| Reese Northcote | 1 | 0 | 0 | 0 | 1 | n/a |
-| Sage Bramwell | 1 | 0 | 0 | 0 | 1 | n/a |
-| Sage Oakhurst | 3 | 0 | 0 | 0 | 3 | n/a |
-| Vesper Calloway | 1 | 0 | 0 | 0 | 1 | n/a |
-| Vesper Westerley | 1 | 0 | 0 | 0 | 1 | n/a |
+0 of 41 ever-commit deal(s) resolved so far; rates render at 5+ resolved — expect a full read after roughly a quarter of stored snapshots.
 
-| Team | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
-|---|---|---|---|---|---|---|
-| Team APAC-1 | 9 | 0 | 0 | 0 | 9 | n/a |
-| Team APAC-2 | 8 | 0 | 0 | 0 | 8 | n/a |
-| Team EMEA-1 | 3 | 0 | 0 | 0 | 3 | n/a |
-| Team EMEA-2 | 2 | 0 | 0 | 0 | 2 | n/a |
-| Team NA-East-1 | 6 | 0 | 0 | 0 | 6 | n/a |
-| Team NA-East-2 | 2 | 0 | 0 | 0 | 2 | n/a |
-| Team NA-West-1 | 1 | 0 | 0 | 0 | 1 | n/a |
-| Team NA-West-2 | 5 | 0 | 0 | 0 | 5 | n/a |
-| Team NA-West-3 | 5 | 0 | 0 | 0 | 5 | n/a |
+| Owner | Ever commit | Won | Lost | Pushed | Still open | Won/resolved | Of which pushed first |
+|---|---|---|---|---|---|---|---|
+| Avery Calloway | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
+| Avery Ristori | 4 | 0 | 0 | 0 | 4 | n/a | 0 |
+| Casey Grantley | 2 | 0 | 0 | 0 | 2 | n/a | 0 |
+| Corin Farrow | 5 | 0 | 0 | 0 | 5 | n/a | 0 |
+| Darby Bramwell | 2 | 0 | 0 | 0 | 2 | n/a | 0 |
+| Frankie Denholm | 2 | 0 | 0 | 0 | 2 | n/a | 0 |
+| Harper Bramwell | 2 | 0 | 0 | 0 | 2 | n/a | 0 |
+| Harper Ivesdale | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
+| Hollis Underhill | 3 | 0 | 0 | 0 | 3 | n/a | 0 |
+| Kendall Lindqvist | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
+| Logan Ivesdale | 3 | 0 | 0 | 0 | 3 | n/a | 0 |
+| Marlow Bramwell | 4 | 0 | 0 | 0 | 4 | n/a | 0 |
+| Quinn Lindqvist | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
+| Quinn Ristori | 3 | 0 | 0 | 0 | 3 | n/a | 0 |
+| Reese Northcote | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
+| Sage Bramwell | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
+| Sage Oakhurst | 3 | 0 | 0 | 0 | 3 | n/a | 0 |
+| Vesper Calloway | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
+| Vesper Westerley | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
+| All | 41 | 0 | 0 | 0 | 41 | n/a | 0 |
 
-| Region | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
-|---|---|---|---|---|---|---|
-| APAC | 17 | 0 | 0 | 0 | 17 | n/a |
-| EMEA | 5 | 0 | 0 | 0 | 5 | n/a |
-| NA-East | 8 | 0 | 0 | 0 | 8 | n/a |
-| NA-West | 11 | 0 | 0 | 0 | 11 | n/a |
+| Team | Ever commit | Won | Lost | Pushed | Still open | Won/resolved | Of which pushed first |
+|---|---|---|---|---|---|---|---|
+| Team APAC-1 | 9 | 0 | 0 | 0 | 9 | n/a | 0 |
+| Team APAC-2 | 8 | 0 | 0 | 0 | 8 | n/a | 0 |
+| Team EMEA-1 | 3 | 0 | 0 | 0 | 3 | n/a | 0 |
+| Team EMEA-2 | 2 | 0 | 0 | 0 | 2 | n/a | 0 |
+| Team NA-East-1 | 6 | 0 | 0 | 0 | 6 | n/a | 0 |
+| Team NA-East-2 | 2 | 0 | 0 | 0 | 2 | n/a | 0 |
+| Team NA-West-1 | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
+| Team NA-West-2 | 5 | 0 | 0 | 0 | 5 | n/a | 0 |
+| Team NA-West-3 | 5 | 0 | 0 | 0 | 5 | n/a | 0 |
+| All | 41 | 0 | 0 | 0 | 41 | n/a | 0 |
 
-| Committed-for quarter | Ever commit | Won | Lost | Pushed | Still open | Won/resolved |
-|---|---|---|---|---|---|---|
-| FY2027-Q1 | 25 | 0 | 0 | 0 | 25 | n/a |
-| FY2027-Q2 | 13 | 0 | 0 | 0 | 13 | n/a |
-| FY2027-Q3 | 2 | 0 | 0 | 0 | 2 | n/a |
-| FY2028-Q1 | 1 | 0 | 0 | 0 | 1 | n/a |
+| Region | Ever commit | Won | Lost | Pushed | Still open | Won/resolved | Of which pushed first |
+|---|---|---|---|---|---|---|---|
+| APAC | 17 | 0 | 0 | 0 | 17 | n/a | 0 |
+| EMEA | 5 | 0 | 0 | 0 | 5 | n/a | 0 |
+| NA-East | 8 | 0 | 0 | 0 | 8 | n/a | 0 |
+| NA-West | 11 | 0 | 0 | 0 | 11 | n/a | 0 |
+| All | 41 | 0 | 0 | 0 | 41 | n/a | 0 |
+
+| Committed-for quarter | Ever commit | Won | Lost | Pushed | Still open | Won/resolved | Of which pushed first |
+|---|---|---|---|---|---|---|---|
+| FY2027-Q1 | 25 | 0 | 0 | 0 | 25 | n/a | 0 |
+| FY2027-Q2 | 13 | 0 | 0 | 0 | 13 | n/a | 0 |
+| FY2027-Q3 | 2 | 0 | 0 | 0 | 2 | n/a | 0 |
+| FY2028-Q1 | 1 | 0 | 0 | 0 | 1 | n/a | 0 |
+| All | 41 | 0 | 0 | 0 | 41 | n/a | 0 |
 
 ### Since last run (detail)
 

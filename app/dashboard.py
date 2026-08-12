@@ -52,6 +52,7 @@ if Path(QUOTAS_PATH).exists():
         payload = json.load(f)
     config = brief.merge_quota_payload(config, payload)
     st.sidebar.caption(f"Quotas and team/region merged from `{QUOTAS_PATH}`.")
+CURRENCY = brief.currency_symbol(config)
 
 # --- data source ---
 
@@ -129,6 +130,14 @@ results, desk = data["results"], data["desk"]
 rows_by_id = {r["opp_id"]: r for r in rows}
 delta = data["since_last_run"]
 
+# One waterfall per consecutive stored snapshot pair <= the selected
+# snapshot: the single source of the created/won/lost flow numbers (the Flow
+# tab renders them; nothing else recomputes its own "created").
+snapshot_dates_all = ([d for d in store.snapshot_dates()
+                       if d <= snapshot_date] if store else [])
+waterfalls = [store.waterfall(a, b)
+              for a, b in zip(snapshot_dates_all, snapshot_dates_all[1:])]
+
 # --- headline metrics with since-last-run deltas ---
 
 open_pipeline = sum(r["amount"] or 0.0 for r in rows if is_open(r))
@@ -152,11 +161,11 @@ cols[1].metric(
 cols[2].metric(f"Healthy (score >= {config['healthy_score_threshold']})",
                "n/a" if desk.pct_healthy is None else f"{desk.pct_healthy:.1f}%")
 cols[3].metric(
-    "Open pipeline", f"${open_pipeline:,.0f}",
+    "Open pipeline", f"{CURRENCY}{open_pipeline:,.0f}",
     delta=(None if prev_open_pipeline is None
            else f"{open_pipeline - prev_open_pipeline:+,.0f}"))
 cols[4].metric(
-    "At-risk dollars", f"${desk.at_risk_dollars:,.0f}",
+    "At-risk dollars", f"{CURRENCY}{desk.at_risk_dollars:,.0f}",
     delta=(None if prev_desk is None
            else f"{desk.at_risk_dollars - prev_desk['at_risk_dollars']:+,.0f}"),
     delta_color="inverse",
@@ -203,8 +212,9 @@ f_teams = st.sidebar.multiselect("Team", teams_all) if teams_all else []
 f_stages = st.sidebar.multiselect("Stage", stages_all)
 f_sev = st.sidebar.multiselect("Severity", ["high", "medium", "low"])
 st.sidebar.caption("Filters apply to the Risky commits, Slippage, Owners "
-                   "and Appendix tables; headline metrics and team/region "
-                   "rollups stay desk-wide. Severity filter: an opp appears "
+                   "and Appendix tables; headline metrics, the Flow tab and "
+                   "team/region rollups stay desk-wide. Severity filter: an "
+                   "opp appears "
                    "under **each** severity it carries, so one opp can "
                    "match several selections; empty filters mean no "
                    "restriction.")
@@ -224,7 +234,7 @@ def _matches(row, result):
     return True
 
 
-_MONEY_COL = st.column_config.NumberColumn(format="$%d")
+_MONEY_COL = st.column_config.NumberColumn(format=f"{CURRENCY}%d")
 _SCORE_COL = st.column_config.ProgressColumn(format="%d", min_value=0,
                                              max_value=100)
 
@@ -233,6 +243,8 @@ LEDGER_CAPTION = ("Of opps ever forecast commit in stored history: outcome "
                   "the first commit snapshot. Won/resolved counts closed "
                   "opps only, shown as won/closed; the percentage appears "
                   "once {min_n}+ have resolved (small-n rates mislead). "
+                  "Of which pushed first = resolved commits that pushed "
+                  "after the commit and before closing. "
                   "Coaching signal, not a comp input.")
 
 
@@ -247,6 +259,7 @@ def _ledger_df(entries, key_fn, label):
             "ever commit": g["n"], "won": g["won"], "lost": g["lost"],
             "pushed": g["pushed"], "still open": g["open"],
             "won/resolved": brief.ledger_rate(g, min_n),
+            "of which pushed first": g["resolved_pushed_first"],
         })
     return pd.DataFrame(records)
 
@@ -263,8 +276,10 @@ def _ledger_section(entries, key_fn, label):
         st.dataframe(_ledger_df(entries, key_fn, label), width="stretch",
                      hide_index=True)
 
-tab_call, tab_slip, tab_traj, tab_owners, tab_teams, tab_appendix = st.tabs(
-    ["Forecast call", "Slippage", "Trajectory", "Owners", "Teams", "Appendix"])
+(tab_call, tab_slip, tab_traj, tab_flow, tab_owners, tab_teams,
+ tab_appendix) = st.tabs(
+    ["Forecast call", "Slippage", "Trajectory", "Flow", "Owners", "Teams",
+     "Appendix"])
 
 # --- Forecast call (landing view; stands alone for a Monday meeting) ---
 
@@ -280,7 +295,7 @@ with tab_call:
         filtered_note = (" matching the filters"
                          if f_owner_set or f_stages or f_sev else "")
         st.markdown(f"**{len(entries)}** commit/best_case opps carry a risk "
-                    f"flag{filtered_note} — **${total:,.0f}** (distinct "
+                    f"flag{filtered_note} — **{CURRENCY}{total:,.0f}** (distinct "
                     f"opps), dollar-ranked. Coaching prompts, not gotchas.")
         risky_df = pd.DataFrame([{
             "opp_id": e["row"]["opp_id"], "account": e["row"]["account"],
@@ -332,7 +347,7 @@ with tab_slip:
         else:
             slipping.sort(key=lambda r: (-(r["amount"] or 0.0), r["opp_id"]))
             total = sum(r["amount"] or 0.0 for r in slipping)
-            st.markdown(f"**${total:,.0f}** slipping across "
+            st.markdown(f"**{CURRENCY}{total:,.0f}** slipping across "
                         f"**{len(slipping)}** distinct opps.")
             slip_records = []
             for r in slipping:
@@ -369,8 +384,7 @@ with tab_slip:
 
 with tab_traj:
     st.subheader("Trajectory")
-    snapshot_dates = ([d for d in store.snapshot_dates() if d <= snapshot_date]
-                      if store else [])
+    snapshot_dates = snapshot_dates_all
     if store is None or len(snapshot_dates) < 2:
         st.caption("Trajectory charts need at least 2 stored snapshots; "
                    "showing nothing rather than a one-point trend.")
@@ -391,12 +405,12 @@ with tab_traj:
         st.altair_chart(
             alt.Chart(cov_df.dropna()).mark_line(point=True).encode(
                 x=alt.X("snapshot:N", title=None),
-                y=alt.Y("dollars:Q", title="$"),
+                y=alt.Y("dollars:Q", title=CURRENCY),
                 color=alt.Color("series:N",
                                 scale=alt.Scale(range=["#0072B2", "#D55E00"]),
                                 legend=alt.Legend(title=None)),
                 tooltip=["snapshot", "series",
-                         alt.Tooltip("dollars:Q", format="$,.0f")])
+                         alt.Tooltip("dollars:Q", format=",.0f")])
             .properties(height=220, width=950,
                         title="Coverage: open vs required pipeline "
                               "(1 / trailing win rate)"))
@@ -404,65 +418,24 @@ with tab_traj:
         if basis:
             st.caption(f"Coverage basis: {basis}")
 
-        # created-vs-closed weekly flow
-        flow_records = []
-        for prev_d, cur_d in zip(snapshot_dates, snapshot_dates[1:]):
-            prev_ids = {r["opp_id"] for r in snap_rows[prev_d]}
-            prev_open = {r["opp_id"] for r in snap_rows[prev_d] if is_open(r)}
-            cur = snap_rows[cur_d]
-            week = cur_d.isoformat()
-            created = [r for r in cur if r["opp_id"] not in prev_ids]
-            closed = [r for r in cur
-                      if r["opp_id"] in prev_open and not is_open(r)]
-            flow_records.append({"week": week, "flow": "created",
-                                 "dollars": sum(r["amount"] or 0.0
-                                                for r in created),
-                                 "count": len(created)})
-            for stage, label in (("closed_won", "won"),
-                                 ("closed_lost", "lost")):
-                subset = [r for r in closed if r["stage"] == stage]
-                flow_records.append({"week": week, "flow": label,
-                                     "dollars": sum(r["amount"] or 0.0
-                                                    for r in subset),
-                                     "count": len(subset)})
+    # desk score trend, snapshot-anchored: the engine re-run per stored
+    # snapshot (no holes from snapshots without recorded runs)
+    trend = (brief.desk_score_series(store, config, snapshot_date)
+             if store is not None else [])
+    trend = [(d, s) for d, s in trend if s is not None]
+    if len(trend) >= 2:
         st.altair_chart(
-            alt.Chart(pd.DataFrame(flow_records)).mark_bar().encode(
-                x=alt.X("week:N", title=None),
-                y=alt.Y("dollars:Q", title="$"),
-                color=alt.Color("flow:N",
-                                scale=alt.Scale(domain=list(FLOW_COLORS),
-                                                range=list(FLOW_COLORS.values())),
-                                legend=alt.Legend(title=None)),
-                xOffset="flow:N",
-                tooltip=["week", "flow", "count",
-                         alt.Tooltip("dollars:Q", format="$,.0f")])
-            .properties(height=220, width=950,
-                        title="Created vs closed per snapshot week"))
-
-    # desk score trend from the runs table
-    run_scores = []
-    if store is not None:
-        for i, summary in enumerate(
-                json.loads(r[0]) for r in store.conn.execute(
-                    "SELECT summary_json FROM runs ORDER BY run_id")
-                if r[0]):
-            score = summary.get("desk", {}).get("weighted_mean_score")
-            if score is not None:
-                run_scores.append({"run": i + 1,
-                                   "as_of": summary.get("as_of"),
-                                   "desk score": score})
-    if len(run_scores) >= 2:
-        st.altair_chart(
-            alt.Chart(pd.DataFrame(run_scores)).mark_line(point=True).encode(
-                x=alt.X("run:O", title="run"),
+            alt.Chart(pd.DataFrame(
+                [{"snapshot": d.isoformat(), "desk score": s}
+                 for d, s in trend])).mark_line(point=True).encode(
+                x=alt.X("snapshot:N", title=None),
                 y=alt.Y("desk score:Q",
                         scale=alt.Scale(domain=[0, 100])),
-                tooltip=["run", "as_of", "desk score"])
+                tooltip=["snapshot", "desk score"])
             .properties(height=180, width=950,
-                        title="Desk score trend (recorded brief runs)"))
+                        title="Desk score trend (snapshot-anchored)"))
     else:
-        st.caption("Desk score trend appears after 2+ recorded brief runs "
-                   "(python -m src.brief).")
+        st.caption("Desk score trend appears after 2+ stored snapshots.")
 
     st.subheader("Commit accuracy by committed-for quarter")
     st.caption("Committed-for quarter = fiscal quarter of the close date "
@@ -470,6 +443,102 @@ with tab_traj:
                "pushes, so a slipped commit stays counted against the "
                "quarter it was promised for.")
     _ledger_section(ledger, lambda e: e.committed_quarter, "quarter")
+
+# --- Flow (pipeline waterfall + generation pacing + created vs closed) ---
+
+with tab_flow:
+    st.subheader("Pipeline flow")
+    if not waterfalls:
+        st.caption("Flow needs at least 2 stored snapshots; showing nothing "
+                   "rather than a one-point bridge.")
+    else:
+        latest = waterfalls[-1]
+        st.markdown(f"**Waterfall {latest['prev_date'].isoformat()} → "
+                    f"{latest['cur_date'].isoformat()}**")
+        _WF_ORDER = ["beginning open", "+ created", "+ increased",
+                     "- decreased", "- won", "- lost", "- removed",
+                     "= ending open"]
+        _WF_KEYS = ["beginning", "created", "increased", "decreased",
+                    "won", "lost", "removed", "ending"]
+        # Display-reconciled integers (brief.waterfall_display_dollars):
+        # the caption below promises the bridge reconciles exactly, and
+        # independently rounded tooltips broke it by $1.
+        wf_disp = brief.waterfall_display_dollars(latest)
+        wf_df = pd.DataFrame([
+            {"bucket": label, "opps": latest[key]["n"],
+             "dollars": wf_disp[key],
+             "kind": ("level" if key in ("beginning", "ending")
+                      else "in" if label.startswith("+") else "out")}
+            for label, key in zip(_WF_ORDER, _WF_KEYS)])
+        st.altair_chart(
+            alt.Chart(wf_df).mark_bar().encode(
+                x=alt.X("bucket:N", sort=_WF_ORDER, title=None),
+                y=alt.Y("dollars:Q", title=CURRENCY),
+                color=alt.Color(
+                    "kind:N",
+                    scale=alt.Scale(domain=["level", "in", "out"],
+                                    range=["#0072B2", "#009E73", "#D55E00"]),
+                    legend=alt.Legend(orient="right", title=None)),
+                tooltip=["bucket", "opps",
+                         alt.Tooltip("dollars:Q", format=",.0f")])
+            .properties(height=240, width=950,
+                        title="Open-pipeline waterfall (latest snapshot "
+                              "pair)"))
+        pushed = latest["pushed"]
+        st.caption(f"Reconciles exactly: beginning + created + increased − "
+                   f"decreased − won − lost − removed = ending. Close-date "
+                   f"pushes moved no dollars: {pushed['n']} open opp(s) "
+                   f"({CURRENCY}{pushed['dollars']:,.0f}) pushed later — "
+                   f"an annotation, never a bucket.")
+
+        # pipeline-generation pacing
+        pacing = brief.pacing_data(waterfalls, config)
+        pace_df = pd.DataFrame([{"week": w["week"].isoformat(),
+                                 "created": w["dollars"], "opps": w["n"]}
+                                for w in pacing["weekly"]])
+        pace_chart = alt.Chart(pace_df).mark_bar(
+            size=26, color=FLOW_COLORS["created"]).encode(
+            x=alt.X("week:N", title=None),
+            y=alt.Y("created:Q", title=CURRENCY),
+            tooltip=["week", "opps",
+                     alt.Tooltip("created:Q", format=",.0f")])
+        if pacing["target"]:
+            rule = alt.Chart(pd.DataFrame(
+                [{"target": pacing["target"]}])).mark_rule(
+                color="#D55E00", strokeDash=[6, 3]).encode(y="target:Q")
+            pace_chart = pace_chart + rule
+            pace_note = (f" Weekly target {CURRENCY}"
+                         f"{pacing['target']:,.0f} (dashed).")
+        else:
+            pace_note = (" No pipeline_gen_weekly_target configured — no "
+                         "target line is guessed.")
+        st.altair_chart(pace_chart.properties(
+            height=200, width=950,
+            title="Pipeline generation: created per snapshot week"))
+        st.caption(f"Mean {CURRENCY}{pacing['mean_dollars']:,.0f}/week over "
+                   f"{len(pacing['weekly'])} snapshot pair(s).{pace_note}")
+
+        # created vs closed, from the same waterfall buckets
+        flow_records = []
+        for w in waterfalls:
+            week = w["cur_date"].isoformat()
+            for label in ("created", "won", "lost"):
+                flow_records.append({"week": week, "flow": label,
+                                     "dollars": w[label]["dollars"],
+                                     "count": w[label]["n"]})
+        st.altair_chart(
+            alt.Chart(pd.DataFrame(flow_records)).mark_bar().encode(
+                x=alt.X("week:N", title=None),
+                y=alt.Y("dollars:Q", title=CURRENCY),
+                color=alt.Color("flow:N",
+                                scale=alt.Scale(domain=list(FLOW_COLORS),
+                                                range=list(FLOW_COLORS.values())),
+                                legend=alt.Legend(title=None)),
+                xOffset="flow:N",
+                tooltip=["week", "flow", "count",
+                         alt.Tooltip("dollars:Q", format=",.0f")])
+            .properties(height=220, width=950,
+                        title="Created vs closed per snapshot week"))
 
 # --- Owners ---
 
@@ -486,6 +555,8 @@ with tab_owners:
             "pipeline": stats.open_pipeline,
             "coverage": None if stats.coverage_ratio is None
             else round(stats.coverage_ratio, 2),
+            "gap to cover": None if stats.required_pipeline is None
+            else max(stats.required_pipeline - stats.open_pipeline, 0.0),
             "flags": ", ".join(f for f, on in
                                (("small_n", stats.small_n),
                                 ("low_coverage", stats.coverage_flagged))
@@ -496,14 +567,18 @@ with tab_owners:
             pd.DataFrame(owner_records), width="stretch", hide_index=True,
             column_config={
                 "mean": _SCORE_COL, "median": _SCORE_COL,
-                "pipeline": _MONEY_COL,
+                "pipeline": _MONEY_COL, "gap to cover": _MONEY_COL,
                 "coverage": st.column_config.NumberColumn(format="%.2fx"),
             })
     st.caption(f"small_n = fewer than {config['min_opps_for_owner_score']} "
                f"open opps, treat the score as anecdotal. Coverage = open "
                f"pipeline vs required pipeline (remaining quota net of wins "
                f"this quarter x the required multiple); low_coverage means "
-               f"under 1.00x. Basis: {data['coverage_basis']}.")
+               f"under 1.00x; gap to cover = required minus open pipeline "
+               f"on the same basis. Basis: {data['coverage_basis']}.")
+    desk_note = brief.desk_coverage_note(data["owners"], config)
+    if desk_note:
+        st.caption(desk_note)
 
     st.subheader("Forecast integrity patterns")
     st.caption("Coaching signal, not a comp input.")
@@ -559,6 +634,8 @@ with tab_teams:
                 "quota": g.quota,
                 "coverage": None if g.coverage_ratio is None
                 else round(g.coverage_ratio, 2),
+                "gap to cover": None if g.required_pipeline is None
+                else max(g.required_pipeline - g.open_pipeline, 0.0),
                 "violations": g.violation_count,
                 "at-risk": g.at_risk_dollars,
                 "flags": "low_coverage" if g.coverage_flagged else "",
@@ -566,7 +643,7 @@ with tab_teams:
 
         _GROUP_COLS = {
             "mean": _SCORE_COL, "pipeline": _MONEY_COL, "quota": _MONEY_COL,
-            "at-risk": _MONEY_COL,
+            "at-risk": _MONEY_COL, "gap to cover": _MONEY_COL,
             "coverage": st.column_config.NumberColumn(format="%.2fx"),
         }
         for label, groups in (("Teams", data["teams"]),
@@ -635,6 +712,11 @@ with tab_appendix:
             })
 
     with st.expander("Validation report"):
+        if store is not None:
+            mismatch = brief.quota_owner_mismatch(
+                config.get("quotas") or {}, store.owners(snapshot_date))
+            if mismatch:
+                st.warning(brief.mismatch_summary(mismatch))
         if validation is None:
             st.write("No validation report stored for this snapshot.")
         else:

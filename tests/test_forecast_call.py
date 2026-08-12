@@ -135,7 +135,7 @@ def test_trajectory_win_rate_basis_and_flow(tmp_path, config):
     # flow mirrors the scripted delta between the last two snapshots
     scripted = manifest["deltas"][-1]
     flow = data["trajectory"]["flow"]
-    assert flow["created_n"] == 0
+    assert flow["created_n"] == len(scripted["added"])
     n_won = sum(1 for i in scripted["closed"].values()
                 if i["stage"] == "closed_won")
     n_lost = len(scripted["closed"]) - n_won

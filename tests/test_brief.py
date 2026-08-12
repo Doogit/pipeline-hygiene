@@ -105,7 +105,10 @@ def test_series_since_last_run_matches_delta_manifest(tmp_path, config):
         assert delta["cleared_violations"] == \
             {o: sorted(v) for o, v in scripted["cleared"].items()}
         assert delta["closed"] == scripted["closed"]
-        assert delta["added"] == [] and delta["removed"] == []
+        # created cohort: the run diff's "added" list is oracled by the
+        # delta manifest's field-by-field "added" record
+        assert delta["added"] == sorted(scripted["added"])
+        assert delta["removed"] == []
         assert delta["prev_snapshot_date"] == dates[i - 1].isoformat()
 
 
@@ -134,6 +137,50 @@ def test_brief_reports_insufficient_history(tmp_path, config):
     markdown = brief.render(data, config)
     assert (f"- Insufficient history: H3 on {n_open} opps, H6 on {n_open} opps "
             f"(reported, not counted as violations)") in markdown
+
+
+def test_staleness_escalation_section(tmp_path, config):
+    from src.rules import is_open, staleness_tier
+    store, cfg, _ = _seeded_store(tmp_path, config)
+    # absent config block: no section (golden test proves byte-identity)
+    base = brief.render(brief.build(store, AS_OF, AS_OF, cfg), cfg)
+    assert "Staleness escalation" not in base
+    assert "; tier " not in base
+
+    esc = dict(cfg, staleness_escalation={"escalate_days": 7,
+                                          "review_days": 21})
+    data = brief.build(store, AS_OF, AS_OF, esc)
+    markdown = brief.render(data, esc)
+    assert "### Staleness escalation" in markdown
+    # section groups match the rule engine's tiers over open rows
+    expected = {"review": 0, "escalate": 0, "flag": 0}
+    for row in data["rows"]:
+        if is_open(row):
+            tier = staleness_tier(row, esc, AS_OF)
+            if tier is not None:
+                expected[tier] += 1
+    assert sum(expected.values()) > 0
+    for tier, n in expected.items():
+        assert f"- {tier}: {n} opp(s)" in markdown
+
+
+def test_quota_owner_mismatch_warning(tmp_path, config):
+    store, cfg, _ = _seeded_store(tmp_path, config)
+    # matched sets: no warning
+    data = brief.build(store, AS_OF, AS_OF, cfg)
+    assert data["owner_mismatch"] is None
+    assert "Quota/owner mismatch" not in brief.render(data, cfg)
+    # a typo'd quota owner and a snapshot owner with no quota both surface
+    bad = dict(cfg)
+    quotas = dict(cfg["quotas"])
+    dropped = sorted(quotas)[0]
+    del quotas[dropped]
+    quotas["Nonexistent Seller"] = 500000
+    bad["quotas"] = quotas
+    markdown = brief.render(brief.build(store, AS_OF, AS_OF, bad), bad)
+    assert ("- Warning: Quota/owner mismatch — 1 quota owner(s) not in this "
+            "snapshot: Nonexistent Seller; 1 snapshot owner(s) without a "
+            "quota: " + dropped) in markdown
 
 
 def test_brief_surfaces_validation_rejects(tmp_path, config):

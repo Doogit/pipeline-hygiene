@@ -10,6 +10,7 @@
   high-severity violation. Never summed per violation.
 """
 from dataclasses import dataclass
+from datetime import date, timedelta
 from statistics import mean, median
 
 from .rules import HIGH, is_open
@@ -29,6 +30,24 @@ def fiscal_quarter(d, fy_start_month):
     return f"FY{fy_year}-Q{quarter}"
 
 
+def fiscal_quarter_end(d, fy_start_month):
+    """Last calendar day of d's fiscal quarter."""
+    months_into_quarter = (d.month - fy_start_month) % 12 % 3
+    year, month = d.year, d.month - months_into_quarter
+    if month < 1:
+        year, month = year - 1, month + 12
+    month += 3
+    if month > 12:
+        year, month = year + 1, month - 12
+    return date(year, month, 1) - timedelta(days=1)
+
+
+def days_left_in_quarter(as_of, fy_start_month):
+    """Calendar days from as_of (exclusive) to the last day of its fiscal
+    quarter (inclusive); 0 on the quarter's final day."""
+    return (fiscal_quarter_end(as_of, fy_start_month) - as_of).days
+
+
 @dataclass(frozen=True)
 class OwnerStats:
     owner: str
@@ -39,6 +58,7 @@ class OwnerStats:
     open_pipeline: float
     coverage_ratio: float          # pipeline vs required (see _coverage_vs_required)
     coverage_flagged: bool         # exactly coverage_ratio < 1.0
+    required_pipeline: float       # the flag's own denominator; None w/o quota
     small_n: bool
 
 
@@ -57,6 +77,7 @@ class GroupStats:
     quota: float                   # summed roster quota (0.0 when unknown)
     coverage_ratio: float          # pipeline vs required (see _coverage_vs_required)
     coverage_flagged: bool         # exactly coverage_ratio < 1.0
+    required_pipeline: float       # the flag's own denominator; None w/o quota
     at_risk_dollars: float
 
 
@@ -113,18 +134,20 @@ def required_coverage_multiple(outcomes, config):
 def _coverage_vs_required(pipeline, quota, won_this_quarter, multiple):
     """Coverage on the flag's own basis: open pipeline / required, where
     required = remaining quota (net of what is already won this quarter) x the
-    required multiple. Returns (ratio, flagged) with flagged exactly
+    required multiple. Returns (ratio, flagged, required) with flagged exactly
     ratio < 1.0, so the shown number and the low_coverage flag can never
     disagree (the persona pass caught a raw pipeline/quota column reading
-    1.18 beside a low_coverage flag computed on this basis). No quota, or
-    quota fully retired this quarter, -> (None, False)."""
+    1.18 beside a low_coverage flag computed on this basis). The required
+    dollars are returned so callers can render the gap to cover
+    (max(required - pipeline, 0)) on the same basis. No quota, or quota
+    fully retired this quarter, -> (None, False, None)."""
     if not quota:
-        return None, False
+        return None, False, None
     required = max(quota - won_this_quarter, 0.0) * multiple
     if required <= 0:
-        return None, False
+        return None, False, None
     ratio = pipeline / required
-    return ratio, ratio < 1.0
+    return ratio, ratio < 1.0, required
 
 
 def owner_rollups(rows, results, config, multiple=None, won_by_owner=None):
@@ -143,7 +166,7 @@ def owner_rollups(rows, results, config, multiple=None, won_by_owner=None):
         owned = by_owner[owner]
         scores = [opp_score(results[r["opp_id"]], config) for r in owned]
         pipeline = sum(r["amount"] or 0.0 for r in owned)
-        coverage, flagged = _coverage_vs_required(
+        coverage, flagged, required = _coverage_vs_required(
             pipeline, quotas.get(owner) or 0.0,
             won_by_owner.get(owner, 0.0), threshold)
         stats[owner] = OwnerStats(
@@ -155,6 +178,7 @@ def owner_rollups(rows, results, config, multiple=None, won_by_owner=None):
             open_pipeline=pipeline,
             coverage_ratio=coverage,
             coverage_flagged=flagged,
+            required_pipeline=required,
             small_n=len(owned) < config["min_opps_for_owner_score"],
         )
     return stats
@@ -198,7 +222,7 @@ def group_rollups(rows, results, config, owner_meta, dimension,
         scores = [opp_score(results[r["opp_id"]], config) for r in owned]
         pipeline = sum(r["amount"] or 0.0 for r in owned)
         quota = quota_by_group.get(group, 0.0)
-        coverage, flagged = _coverage_vs_required(
+        coverage, flagged, required = _coverage_vs_required(
             pipeline, quota, won_by_group.get(group, 0.0), threshold)
         stats[group] = GroupStats(
             key=group,
@@ -213,6 +237,7 @@ def group_rollups(rows, results, config, owner_meta, dimension,
             quota=quota,
             coverage_ratio=coverage,
             coverage_flagged=flagged,
+            required_pipeline=required,
             at_risk_dollars=at_risk_dollars(owned, results),
         )
     return stats

@@ -187,6 +187,94 @@ class SnapshotStore:
             prev_close = close
         return stats
 
+    def waterfall(self, prev_date, cur_date, owners=None):
+        """Open-pipeline bridge between two stored snapshots.
+
+        Buckets ({"n", "dollars"} each): beginning (open in prev), created
+        (open in cur, not open in prev), increased/decreased (amount drift on
+        opps open in prev and present in cur), won/lost (prev-open ->
+        cur-closed TRANSITIONS only — closed rows persisting in later
+        snapshots are never recounted), removed (open in prev, absent from
+        cur, at the prev amount), ending (open in cur). None amounts count
+        as 0.0.
+
+        Contract: each opp is classified once, with precedence
+        won/lost > removed > increased/decreased. A close contributes at the
+        closing (cur) amount; when the amount also changed in the closing
+        pair, that drift is carried in increased/decreased dollars (and n)
+        so the bridge reconciles exactly:
+
+            beginning + created + increased - decreased
+                      - won - lost - removed == ending
+
+        Close-date pushes move no dollars: they are reported as the
+        "pushed" annotation (count + current dollars of open opps whose
+        close_date moved later), never as a bridge bucket; a push in the
+        same pair as a close folds into the won/lost bucket (the close is
+        the fact that matters).
+
+        owners: optional set restricting both snapshots to those owners
+        (the filtered brief's selection semantics for free)."""
+        def keep(row):
+            return owners is None or row["owner"] in owners
+        prev = {r["opp_id"]: r for r in self.load_rows(prev_date) if keep(r)}
+        cur = {r["opp_id"]: r for r in self.load_rows(cur_date) if keep(r)}
+
+        def amt(row):
+            return row["amount"] or 0.0
+
+        def is_open(row):
+            return row["stage"] not in ("closed_won", "closed_lost")
+
+        buckets = {name: {"n": 0, "dollars": 0.0}
+                   for name in ("beginning", "created", "increased",
+                                "decreased", "won", "lost", "removed",
+                                "ending")}
+        pushed = {"n": 0, "dollars": 0.0}
+
+        def add(name, dollars):
+            buckets[name]["n"] += 1
+            buckets[name]["dollars"] += dollars
+
+        def drift(prow, crow):
+            d = amt(crow) - amt(prow)
+            if d > 0:
+                add("increased", d)
+            elif d < 0:
+                add("decreased", -d)
+
+        for opp_id in sorted(prev):
+            prow = prev[opp_id]
+            if not is_open(prow):
+                continue
+            add("beginning", amt(prow))
+            crow = cur.get(opp_id)
+            if crow is None:
+                add("removed", amt(prow))
+            elif not is_open(crow):
+                add("won" if crow["stage"] == "closed_won" else "lost",
+                    amt(crow))
+                drift(prow, crow)
+            else:
+                drift(prow, crow)
+                if prow["close_date"] is not None \
+                        and crow["close_date"] is not None \
+                        and crow["close_date"] > prow["close_date"]:
+                    pushed["n"] += 1
+                    pushed["dollars"] += amt(crow)
+
+        for opp_id in sorted(cur):
+            crow = cur[opp_id]
+            if not is_open(crow):
+                continue
+            add("ending", amt(crow))
+            prow = prev.get(opp_id)
+            if prow is None or not is_open(prow):
+                add("created", amt(crow))
+
+        return {"prev_date": prev_date, "cur_date": cur_date,
+                **buckets, "pushed": pushed}
+
     def closed_outcomes(self, snapshot_date):
         """Stored closed outcomes at-or-before snapshot_date: one record per
         opp whose LAST observed row is closed, with the fields the trajectory

@@ -84,10 +84,10 @@ def test_dashboard_series_tabs_charts_and_filters(tmp_path, config,
     # headline metrics, with since-last-run deltas wired
     assert len(app.metric) == 5
     assert any(m.delta is not None for m in app.metric)
-    # all six tabs render
+    # all seven tabs render
     assert [t.label for t in app.tabs] == \
-        ["Forecast call", "Slippage", "Trajectory", "Owners", "Teams",
-         "Appendix"]
+        ["Forecast call", "Slippage", "Trajectory", "Flow", "Owners",
+         "Teams", "Appendix"]
     # charts: severity mix + coverage line + flow bars + score trend
     assert len(app.get("vega_lite_chart")) >= 4
     # tables: risky commits, slippage, owners, teams, regions, full exceptions

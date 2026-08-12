@@ -68,12 +68,15 @@ def _histories(store, snapshot_date):
     return histories
 
 
-def _pushed_after(history, first_snap):
+def _pushed_after(history, first_snap, before_snap=None):
     """Any later close-date move in a consecutive-snapshot pair strictly
-    after first_snap (the shared push test for overcall and the ledger)."""
+    after first_snap (the shared push test for overcall and the ledger).
+    before_snap bounds the window at-or-before that snapshot — the
+    "pushed before close" variant for resolved ledger outcomes."""
     return any(
         prev_close is not None and cur_close is not None
         and cur_close > prev_close and cur_snap > first_snap
+        and (before_snap is None or cur_snap <= before_snap)
         for (_, _, _, _, prev_close), (cur_snap, _, _, _, cur_close)
         in zip(history, history[1:]))
 
@@ -192,6 +195,9 @@ class CommitLedgerEntry:
     committed_quarter: str         # fiscal quarter of the close_date at the
                                    # first commit snapshot; None when blank
     outcome: str                   # won | lost | pushed | open
+    pushed_before_close: bool = False   # a post-commit push at-or-before the
+                                        # closing snapshot (for won/lost; for
+                                        # open opps it equals outcome=="pushed")
 
 
 def commit_ledger(store, as_of, config, snapshot_date=None):
@@ -215,30 +221,38 @@ def commit_ledger(store, as_of, config, snapshot_date=None):
             continue
         commit_snap, commit_close = commit
         _, owner, last_stage, _, _ = history[-1]
-        if last_stage == "closed_won":
-            outcome = "won"
-        elif last_stage == "closed_lost":
-            outcome = "lost"
+        if last_stage in ("closed_won", "closed_lost"):
+            outcome = "won" if last_stage == "closed_won" else "lost"
+            close_snap = next(snap for snap, _o, stage, _f, _c in history
+                              if stage in ("closed_won", "closed_lost"))
+            pushed_first = _pushed_after(history, commit_snap,
+                                         before_snap=close_snap)
         else:
-            outcome = ("pushed" if _pushed_after(history, commit_snap)
-                       else "open")
+            pushed_first = _pushed_after(history, commit_snap)
+            outcome = "pushed" if pushed_first else "open"
         entries.append(CommitLedgerEntry(
             opp_id=opp_id, owner=owner,
             first_commit_snapshot=date.fromisoformat(commit_snap),
             committed_quarter=(
                 fiscal_quarter(date.fromisoformat(commit_close), fy_start)
                 if commit_close else None),
-            outcome=outcome))
+            outcome=outcome,
+            pushed_before_close=pushed_first))
     return entries
 
 
 def ledger_rollups(entries, key_fn):
     """Aggregate ledger entries into {key_fn(entry): outcome counts}. Pure;
-    callers derive shares from the counts (rendering owns the formatting)."""
+    callers derive shares from the counts (rendering owns the formatting).
+    resolved_pushed_first counts won/lost entries that pushed after the
+    commit and before closing — the "of which pushed first" depth."""
     groups = {}
     for entry in entries:
         g = groups.setdefault(key_fn(entry), {"n": 0, "won": 0, "lost": 0,
-                                              "pushed": 0, "open": 0})
+                                              "pushed": 0, "open": 0,
+                                              "resolved_pushed_first": 0})
         g["n"] += 1
         g[entry.outcome] += 1
+        if entry.outcome in ("won", "lost") and entry.pushed_before_close:
+            g["resolved_pushed_first"] += 1
     return groups
