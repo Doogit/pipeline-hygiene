@@ -53,7 +53,7 @@ def test_quotas_manifest_referenced_by_dockerfile_is_valid():
 
 
 def test_dockerfile_and_deploy_agree_on_port():
-    # WEBSITES_PORT (deploy script) must match the port Streamlit binds
+    # WEBSITES_PORT (deploy script) must match the port the app binds
     # (Dockerfile), or App Service routes to a dead port.
     df = _dockerfile_text()
     port = re.search(r"ENV PORT=(\d+)", df)
@@ -75,7 +75,13 @@ def test_deploy_enables_acr_arm_audience_auth_for_managed_identity_pull():
 
 
 def test_dashboard_entrypoint_present():
-    assert (REPO / "app" / "dashboard.py").exists(), "dashboard entrypoint moved — update Dockerfile CMD"
+    # The FastHTML server is the image entrypoint (Streamlit retired, Task 5).
+    assert (REPO / "app" / "server.py").exists(), "server entrypoint moved — update Dockerfile CMD"
+    cmd = re.search(r'CMD\b.*', _dockerfile_text())
+    assert cmd and "app.server" in cmd.group(0), \
+        "Dockerfile CMD must launch the FastHTML app (python -m app.server)"
+    assert cmd and "streamlit" not in cmd.group(0), \
+        "Dockerfile CMD still references retired Streamlit"
 
 
 def test_packaging_modules_importable():
