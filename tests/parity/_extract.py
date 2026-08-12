@@ -47,7 +47,9 @@ def _clean(value):
         return {str(k): _clean(v) for k, v in value.items()}
     if hasattr(value, "isoformat"):
         return value.isoformat()
-    if hasattr(value, "item"):  # numpy scalar
+    if hasattr(value, "tolist"):  # numpy array/scalar, pandas Series
+        return _clean(value.tolist())
+    if hasattr(value, "item"):  # numpy scalar fallback
         try:
             return _clean(value.item())
         except Exception:
