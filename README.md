@@ -16,18 +16,15 @@ stays in sync with them (CI rebuilds it whenever the screenshots change).
 
 ## Security & secure-by-design
 
-This tool handles sales-pipeline data, so it is built to keep that data local, inert, and hard to exfiltrate. The security posture is a design property, not a bolt-on:
+This tool handles sales-pipeline data, so it keeps that data local, inert, and hard to exfiltrate by design:
 
-- **Read-only over the data.** The tool never writes back to a CRM, never contacts sellers, and never mutates source files or the snapshot store. Viewing, filtering, drilling down, and downloading a brief all record nothing — there is no write path to abuse.
-- **Local-only by default.** `python -m app.server` binds `127.0.0.1`. Binding to a non-local host is refused unless you explicitly opt in with `PIPELINE_HYGIENE_ALLOW_NONLOCAL_HOST=1`, so the private data is never served to the network by accident.
-- **Strict Content-Security-Policy on every response.** `default-src 'self'; style-src 'self' 'unsafe-inline'`. Scripts are same-origin only — no inline JavaScript and no `eval`; only inline *styles* are permitted.
-- **Zero-CDN, fully offline, integrity-pinned assets.** htmx, vega/vega-lite/vega-embed, the CSP-safe AST interpreter, and the Tailwind stylesheet are all vendored under `app/static` and served locally — no third-party requests, no CDN supply-chain exposure, no external tracking. Each asset's upstream version and SHA-256 are recorded in `app/static/vendor/VENDOR.md` and re-verified on update (`sha256sum -c`).
-- **CSP-safe chart rendering.** Charts render through the Vega AST interpreter specifically so the app needs no `unsafe-eval` — the strict CSP above holds with no exceptions carved out for charting.
-- **Uploaded CSVs never persist.** An uploaded snapshot is validated and held in a transient in-memory session keyed by an opaque `secrets`-generated token, then pruned on expiry. Nothing from an upload is written to disk or into the snapshot store.
-- **Auth at the platform edge, not hand-rolled.** The app ships no bespoke authentication. It serves synthetic demo data openly; for real data you place sign-in *in front* of it (e.g. Azure App Service "Easy Auth" / Entra `RequireAuthentication`), a clean boundary with no auth code to get wrong. The deploy guide explicitly warns not to point it at real pipeline data until sign-in is enabled.
-- **Small, auditable surface.** A single read-only FastHTML + htmx process with minimal dependencies and no database writes keeps the attack surface small and the behavior easy to reason about.
+- **Read-only.** It never writes back to a CRM, contacts sellers, or mutates source files or the snapshot store — viewing, filtering, and downloading a brief record nothing.
+- **Local-only by default.** `python -m app.server` binds `127.0.0.1`; serving to a non-local host requires an explicit `PIPELINE_HYGIENE_ALLOW_NONLOCAL_HOST=1` opt-in.
+- **Offline, locked-down front-end.** All assets (htmx, vega, Tailwind) are vendored under `app/static` and integrity-pinned — no CDNs or third-party calls — under a strict `default-src 'self'` CSP with no `unsafe-eval`.
+- **Uploads never persist.** An uploaded CSV is validated and held in a transient in-memory session, then pruned on expiry — nothing is written to disk or the store.
+- **Auth at the platform edge.** The app ships no bespoke auth; for real data you put sign-in in front of it (e.g. Azure "Easy Auth" / Entra), so there's no auth code to get wrong.
 
-This is a demo-grade tool, not a hardened multi-tenant service: there is no built-in RBAC, audit logging, or activity capture. The design goal is that the default posture is safe (local, read-only, offline) and that using it with real data is a deliberate, gated step.
+This is a demo-grade tool, not a hardened multi-tenant service (no built-in RBAC or audit logging): the default posture is safe (local, read-only, offline), and using it with real data is a deliberate, gated step.
 
 ## Bring your own CSV
 
