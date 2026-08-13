@@ -16,6 +16,7 @@ the parity gate guards that this duplication never drifts.
 """
 from dataclasses import dataclass, field
 from datetime import date
+from urllib.parse import urlencode
 
 import altair as alt
 import pandas as pd
@@ -124,6 +125,20 @@ class Drilldown:
     """Owner drill-down region. `prompt` is the unselected-state caption; the
     selected states are produced on demand by owner_drilldown_blocks()."""
     prompt: str
+
+
+@dataclass
+class Packets:
+    """Monday-Packet tab payload (PR E). A pure data carrier — the view model
+    performs NO DB access; build_from_store fills it. `flatten.walk()` has no
+    branch for it, so the parity gate ignores it (new UI is parity-exempt)."""
+    owners: list                     # list[{normalized, display, open_count}]
+    selected: str = None             # normalized owner, or None
+    packet: object = None            # src.packet.PacketModel or None
+    items: list = field(default_factory=list)          # selected owner's open items
+    dismissed: list = field(default_factory=list)      # selected owner's dismissed items
+    dismiss_counts: list = field(default_factory=list)  # [{key, count}] (R5.3)
+    selection_query: str = ""           # snapshot/as_of query for matching exports
 
 
 @dataclass
@@ -265,7 +280,7 @@ def _group_coverage_series(store, config, dates, dimension):
 def build_page_model(*, store, config, snapshot_date, as_of, rows, data,
                      prev_summary, prev_opens, outcomes, validation,
                      f_owners=(), f_teams=(), f_stages=(), f_sev=(),
-                     controls=None, trend_config=None):
+                     controls=None, trend_config=None, packets=None):
     """Build the full page model from the same inputs the dashboard held after
     loading (`data` = brief.build_from_rows(...)). `store` is None for an
     in-memory upload; the multi-snapshot sections degrade exactly as before."""
@@ -362,6 +377,24 @@ def build_page_model(*, store, config, snapshot_date, as_of, rows, data,
         Tab("Appendix", _appendix(data, config, _matches, results, rows_by_id,
                                   prev_opens, store, snapshot_date, validation)),
     ]
+    # Monday Packet (PR E), strictly behind the flag AND an actual packets
+    # payload. When off / None, nothing below runs and the page is byte-identical
+    # (flatten ignores V.Packets, so parity is unaffected either way).
+    from src.work_items import packets_enabled
+    if packets is not None and packets_enabled():
+        tabs.append(Tab("Packets", [packets]))
+        # R5.3 dismiss-reason analytics appended to the existing Appendix tab.
+        appendix = tabs[6].blocks
+        appendix.append(Divider())
+        appendix.append(Heading("Dismissed work items (by source)"))
+        if packets.dismiss_counts:
+            appendix.append(Table(
+                "dismiss_counts", ["source", "count"],
+                [{"source": c["key"], "count": c["count"]}
+                 for c in packets.dismiss_counts]))
+        else:
+            appendix.append(Caption("No work items dismissed yet."))
+
     # Static sidebar section headings (st.sidebar.header) — chrome the FastHTML
     # sidebar form renders; captured here so parity sees the same strings.
     sidebar = [Heading("Data source", level=2), Heading("Filters", level=2)]
@@ -889,7 +922,8 @@ def _basename(path):
 
 def build_from_store(config_path, db_path, quotas_path=None, *,
                      snapshot_date=None, as_of=None,
-                     f_owners=(), f_teams=(), f_stages=(), f_sev=()):
+                     f_owners=(), f_teams=(), f_stages=(), f_sev=(),
+                     packet_owner=None):
     """Load a snapshot store and build the PageModel, mirroring the dashboard's
     store path (no upload). Returns a 'stopped' PageModel (read-only caption +
     optional quotas caption + a warning, no tabs) for a missing/empty store."""
@@ -963,9 +997,75 @@ def build_from_store(config_path, db_path, quotas_path=None, *,
                          for m in (config.get("owner_meta") or {}).values()}
                         - {None}),
     }
+    # Monday Packet (PR E): only touch the writable work-items ledger behind the
+    # flag. Flag off -> packets stays None and no WorkItemStore is opened.
+    packets = None
+    from src.work_items import packets_enabled
+    if packets_enabled():
+        from src.work_items import WorkItemStore
+        wi = WorkItemStore(db_path, config)
+        try:
+            packets = _build_packets(wi, config, as_of, packet_owner,
+                                     snapshot_store=store,
+                                     snapshot_date=snapshot_date)
+        finally:
+            wi.close()
+
     return build_page_model(
         store=store, config=config, snapshot_date=snapshot_date, as_of=as_of,
         rows=rows, data=data, prev_summary=prev_summary, prev_opens=prev_opens,
         outcomes=outcomes, validation=validation, f_owners=f_owners,
         f_teams=f_teams, f_stages=f_stages, f_sev=f_sev, controls=controls,
-        trend_config=base_config)
+        trend_config=base_config, packets=packets)
+
+
+def _build_packets(wi, config, as_of, packet_owner, *, snapshot_store=None,
+                   snapshot_date=None):
+    """Assemble the Packets view-model block from the work-items ledger (PR E).
+    Pure w.r.t. rendering — reads the ledger, resolves the selected owner's
+    packet + open items, and rolls up dismiss counts (R5.3). Callable from the
+    server for OOB panel refreshes after a mutation."""
+    from src import packet as packet_mod
+    from src.work_items import normalize_owner
+
+    # Owner list with open-item counts, from open work items.
+    open_items = wi.items(open_only=True)
+    counts = {}
+    for it in open_items:
+        counts[it["owner_normalized"]] = counts.get(it["owner_normalized"], 0) + 1
+    owners = []
+    for norm in sorted(counts):
+        display = packet_mod._resolve_owner_name(snapshot_store, snapshot_date,
+                                                 norm)
+        owners.append({"normalized": norm, "display": display,
+                       "open_count": counts[norm]})
+
+    # A selected owner with zero open items still resolves to an empty packet
+    # (empty-state (b) is rendered from packet.item_count == 0).
+    selected = normalize_owner(packet_owner) if packet_owner else None
+
+    pkt = items = None
+    dismissed = []
+    if selected is not None:
+        pkt = packet_mod.build_owner_packet(
+            wi, selected, config, as_of, snapshot_store=snapshot_store,
+            snapshot_date=snapshot_date)
+        items = wi.items(open_only=True, owner=selected)
+        dismissed = wi.items(status="dismissed", owner=selected)
+
+    # R5.3 dismiss analytics: counts by source across all dismissed items.
+    dcounts = {}
+    for it in wi.items(status="dismissed"):
+        dcounts[it["source"]] = dcounts.get(it["source"], 0) + 1
+    dismiss_counts = [{"key": k, "count": dcounts[k]} for k in sorted(dcounts)]
+
+    query = []
+    if snapshot_date is not None:
+        query.append(("snapshot", snapshot_date.isoformat()))
+    if as_of is not None:
+        query.append(("as_of", as_of.isoformat()))
+
+    return Packets(owners=owners, selected=selected, packet=pkt,
+                   items=items or [], dismissed=dismissed,
+                   dismiss_counts=dismiss_counts,
+                   selection_query=f"?{urlencode(query)}" if query else "")

@@ -1,17 +1,36 @@
-"""Read-only FastHTML dashboard: python -m app.server (binds 127.0.0.1).
+"""FastHTML dashboard: python -m app.server (binds 127.0.0.1).
 
 Offline-first, zero-CDN: htmx, vega/vega-lite/vega-embed, the CSP-safe AST
 interpreter, and the Tailwind stylesheet are all served locally from
 app/static (versions + SHA-256 in app/static/vendor/VENDOR.md). A strict CSP
-(`default-src 'self'; style-src 'self' 'unsafe-inline'`) is sent from the app.
+(`default-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self';
+connect-src 'self'`) is sent from the app.
 
 Renders strictly from the pure view model (src/pipeline_hygiene_view); no
-business logic here. The page is read-only — nothing writes outside the
-snapshot store, and viewing/downloading records nothing. This is the sole UI:
-the prior Streamlit page (app/dashboard.py) was retired once parity + manual
-acceptance were signed off (migration Task 5); the parity gate (tests/parity)
-remains as the regression baseline against its frozen goldens.
+business logic here.
+
+Read-only boundary (refined, Monday Packet PR E): the server is READ-ONLY
+AGAINST SOURCE SYSTEMS — it never writes to `opportunities`, snapshots, or any
+ingested source data, and viewing/downloading records nothing. The ONE writable
+surface is the packet ledger (`work_items` / `work_item_events`), and only via
+the /work-item/* mutation routes, all gated behind PIPELINE_HYGIENE_PACKETS
+(absent -> those routes 404 and no WorkItemStore is ever opened, so the app is
+byte-identical to the packets-disabled build).
+
+Auth posture (accepted risk, threat-modelled): single-operator, localhost-only.
+The app binds 127.0.0.1 explicitly; there is no login, session, or role check.
+The `by` actor recorded on every work_item_event is an operator identity read
+from PIPELINE_HYGIENE_OPERATOR (default "operator"). This is acceptable ONLY
+because the surface is one trusted operator on loopback. As a defence-in-depth
+control the mutation routes still enforce a same-origin guard (below) so a
+cross-site browser request cannot forge a write.
+
+This is the sole UI: the prior Streamlit page (app/dashboard.py) was retired
+once parity + manual acceptance were signed off (migration Task 5); the parity
+gate (tests/parity) remains as the regression baseline against its frozen
+goldens (it runs with packets OFF).
 """
+import json
 import os
 import secrets
 import tempfile
@@ -24,9 +43,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from starlette.staticfiles import StaticFiles
 
-from src import brief, pipeline_hygiene_view as V
+from src import brief, packet, pipeline_hygiene_view as V
+from src.extract import FIELD_TYPES, _coerce as _coerce_field
 from src.ingest import AllRowsRejectedError, IngestError, load_config, \
     snapshot_date_from_filename, validate_csv
+from src.work_items import WorkItemStore, normalize_owner, packets_enabled
 from app import render as R
 
 HERE = Path(__file__).resolve().parent
@@ -83,24 +104,38 @@ class CSPMiddleware(BaseHTTPMiddleware):
         # bundled AST interpreter avoids eval); Vega applies inline element
         # styles, so style-src allows inline.
         resp.headers["Content-Security-Policy"] = (
-            "default-src 'self'; style-src 'self' 'unsafe-inline'")
+            "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "form-action 'self'; connect-src 'self'")
         return resp
 
 
 app.add_middleware(CSPMiddleware)
 
 
-def _selections(request):
+def _selections(request, form=None):
     q = request.query_params
+    def scalar(key, default=None):
+        if form is not None:
+            val = form.get(key)
+            if val is not None:
+                return val
+        return q.get(key, default)
+
+    def multi(key):
+        if form is not None:
+            return form.getlist(key)
+        return q.getlist(key)
+
     return {
-        "stage_map": q.get("stage_map", "default"),
-        "snapshot": q.get("snapshot"),
-        "as_of": q.get("as_of"),
-        "owners": q.getlist("owner"),
-        "teams": q.getlist("team"),
-        "stages": q.getlist("stage"),
-        "sev": q.getlist("sev"),
-        "upload_token": q.get("upload_token"),
+        "stage_map": scalar("stage_map", "default"),
+        "snapshot": scalar("snapshot"),
+        "as_of": scalar("as_of"),
+        "owners": multi("owner"),
+        "teams": multi("team"),
+        "stages": multi("stage"),
+        "sev": multi("sev"),
+        "upload_token": scalar("upload_token"),
+        "packet_owner": scalar("packet_owner"),
     }
 
 
@@ -111,7 +146,7 @@ def _page(sel):
     return V.build_from_store(
         config_path, db_path, quotas_path, snapshot_date=snap, as_of=as_of,
         f_owners=sel["owners"], f_teams=sel["teams"], f_stages=sel["stages"],
-        f_sev=sel["sev"])
+        f_sev=sel["sev"], packet_owner=sel.get("packet_owner"))
 
 
 def _upload_page(token, sel):
@@ -172,6 +207,44 @@ def _upload_status(message, *, warning=False, report=None):
                                    ["row", "opp_id", "reason"], rows), "$"),
             cls="expander"))
     return Div(*parts, id="upload-status")
+
+
+# --- Monday Packet (PR E): operator identity + write-route defences ---
+
+
+def _operator():
+    """The single-operator actor recorded on every work_item_event `by` field
+    (accepted-risk auth model; see module docstring)."""
+    return os.environ.get("PIPELINE_HYGIENE_OPERATOR", "operator")
+
+
+def _same_origin_ok(request):
+    """Defence-in-depth CSRF guard for mutation routes. Reject cross-site
+    browser requests. Modern browsers send Sec-Fetch-Site; when absent (e.g. a
+    server-side TestClient) fall back to an Origin/base-URL match, and allow the
+    no-Origin/no-Sec-Fetch-Site case (server-side clients)."""
+    site = request.headers.get("sec-fetch-site")
+    if site is not None:
+        return site in ("same-origin", "none")
+    origin = request.headers.get("origin")
+    if origin is None:
+        return True
+    base = str(request.base_url).rstrip("/")
+    return origin.rstrip("/") == base
+
+
+def _packets_panel(request, item_id=None, *, form=None, error_for=None):
+    """Rebuild the current page for the active selection and return JUST the
+    #packets-panel div for an htmx outerHTML swap after a mutation."""
+    sel = _selections(request, form=form)
+    page = _page(sel)
+    cur = V._cur(page.controls.get("config") or {})
+    for tab in page.tabs:
+        for b in tab.blocks:
+            if isinstance(b, V.Packets):
+                return R.render_packets(b, cur, error_for=error_for)
+    # No Packets block (e.g. no selection) — return an empty stable container.
+    return R.Div(id="packets-panel", cls="packets-panel")
 
 
 @app.get("/")
@@ -303,6 +376,200 @@ async def upload(request):
     return (status,
             R.render_content(page, sel, oob=True),
             R._sidebar_dynamic(page, sel, oob=True))
+
+
+# --- Monday Packet mutation + export routes (PR E) -------------------------
+# All gated behind PIPELINE_HYGIENE_PACKETS (404 when off) and the same-origin
+# guard (403 cross-site). Writes go ONLY to the work_items ledger, never to
+# source data. `at=date.today()` here is correct: this is a request-entry point
+# stamping the actor/event time, not an evaluation function (SPEC's as_of ban is
+# for time-EVALUATING code, not mutation-event boundaries).
+
+
+def _mutation_guard(request):
+    if not packets_enabled():
+        return Response(status_code=404)
+    if not _same_origin_ok(request):
+        return Response("cross-site request refused", status_code=403)
+    return None
+
+
+def _item_or_response(wi, item_id):
+    item = next((it for it in wi.items() if it["id"] == item_id), None)
+    if item is None:
+        return None, Response(status_code=404)
+    return item, None
+
+
+def _require_status(item, allowed):
+    if item["status"] not in allowed:
+        allowed_text = ", ".join(allowed)
+        return Response(f"item status must be one of: {allowed_text}",
+                        status_code=409)
+    return None
+
+
+@app.post("/work-item/{item_id:int}/accept")
+async def wi_accept(request, item_id: int):
+    guard = _mutation_guard(request)
+    if guard is not None:
+        return guard
+    form = await request.form()
+    config_path, db_path, _ = _paths()
+    config = load_config(config_path)
+    wi = WorkItemStore(db_path, config)
+    try:
+        item, response = _item_or_response(wi, item_id)
+        if response is not None:
+            return response
+        response = _require_status(item, ("proposed", "edited"))
+        if response is not None:
+            return response
+        wi.accept(item_id, at=date.today(), by=_operator())
+    finally:
+        wi.close()
+    return _packets_panel(request, item_id, form=form)
+
+
+@app.post("/work-item/{item_id:int}/dismiss")
+async def wi_dismiss(request, item_id: int):
+    guard = _mutation_guard(request)
+    if guard is not None:
+        return guard
+    form = await request.form()
+    reason = (form.get("reason") or "").strip()
+    if not reason:
+        return Response("dismiss requires a reason", status_code=400)
+    config_path, db_path, _ = _paths()
+    config = load_config(config_path)
+    wi = WorkItemStore(db_path, config)
+    try:
+        item, response = _item_or_response(wi, item_id)
+        if response is not None:
+            return response
+        response = _require_status(item, ("proposed", "accepted", "edited"))
+        if response is not None:
+            return response
+        wi.dismiss(item_id, reason=reason, at=date.today(), by=_operator())
+    finally:
+        wi.close()
+    return _packets_panel(request, item_id, form=form)
+
+
+@app.post("/work-item/{item_id:int}/edit")
+async def wi_edit(request, item_id: int):
+    guard = _mutation_guard(request)
+    if guard is not None:
+        return guard
+    form = await request.form()
+    raw_value = form.get("proposed_value")
+    config_path, db_path, _ = _paths()
+    config = load_config(config_path)
+    wi = WorkItemStore(db_path, config)
+    try:
+        item, response = _item_or_response(wi, item_id)
+        if response is not None:
+            return response
+        response = _require_status(item, ("proposed", "edited"))
+        if response is not None:
+            return response
+        if item["item_type"] != "field_update":
+            return Response("only field_update items can be edited",
+                            status_code=409)
+        payload = json.loads(item["payload_json"])
+        field_name = payload.get("field")
+        kind = FIELD_TYPES.get(field_name)
+        # Re-run the new value through the field's TYPE check before saving; on
+        # failure return the panel unchanged with an inline error (200).
+        try:
+            coerced = _coerce_field(raw_value, kind) if kind else None
+            if kind is None:
+                raise ValueError("not a typed field")
+        except (ValueError, TypeError):
+            return _packets_panel(request, item_id, form=form,
+                                  error_for=item_id)
+        new_payload = dict(payload, proposed_value=coerced)
+        wi.edit(item_id, new_payload, at=date.today(), by=_operator())
+    finally:
+        wi.close()
+    return _packets_panel(request, item_id, form=form)
+
+
+@app.post("/work-item/{item_id:int}/reopen")
+async def wi_reopen(request, item_id: int):
+    guard = _mutation_guard(request)
+    if guard is not None:
+        return guard
+    form = await request.form()
+    config_path, db_path, _ = _paths()
+    config = load_config(config_path)
+    wi = WorkItemStore(db_path, config)
+    try:
+        item, response = _item_or_response(wi, item_id)
+        if response is not None:
+            return response
+        # Reversible while pre-export: dismissed -> proposed. expired items are
+        # NOT reopenable (terminal resolution in source).
+        response = _require_status(item, ("dismissed",))
+        if response is not None:
+            return response
+        wi.transition(item_id, "proposed", at=date.today(), by=_operator(),
+                      reason="reopened")
+    finally:
+        wi.close()
+    return _packets_panel(request, item_id, form=form)
+
+
+@app.get("/packet/{owner}.md")
+def packet_md(request, owner: str):
+    if not packets_enabled():
+        return Response(status_code=404)
+    return _packet_export(request, owner, "md")
+
+
+@app.get("/packet/{owner}.html")
+def packet_html(request, owner: str):
+    if not packets_enabled():
+        return Response(status_code=404)
+    return _packet_export(request, owner, "html")
+
+
+def _packet_export(request, owner, fmt):
+    sel = _selections(request)
+    config_path, db_path, _ = _paths()
+    config = load_config(config_path)
+    snap = date.fromisoformat(sel["snapshot"]) if sel.get("snapshot") else None
+    as_of = date.fromisoformat(sel["as_of"]) if sel.get("as_of") else None
+    from src.snapshots import SnapshotStore
+    store = None
+    if Path(db_path).exists():
+        store = SnapshotStore(db_path, config)
+        dates = store.snapshot_dates()
+        if dates:
+            snap = snap or dates[-1]
+            from src.funnel import resolve_aging_config
+            config = resolve_aging_config(store, config, snap)
+            store.config = config
+    as_of = as_of or snap
+    wi = WorkItemStore(db_path, config)
+    try:
+        model = packet.build_owner_packet(
+            wi, normalize_owner(owner), config, as_of,
+            snapshot_store=store, snapshot_date=snap)
+    finally:
+        wi.close()
+        if store is not None:
+            store.close()
+    if fmt == "md":
+        body = packet.render_markdown(model, config)
+        media, ext = "text/markdown", "md"
+    else:
+        body = packet.render_html(model, config)
+        media, ext = "text/html", "html"
+    return Response(
+        body, media_type=media,
+        headers={"Content-Disposition":
+                 f'attachment; filename="packet_{normalize_owner(owner)}.{ext}"'})
 
 
 if __name__ == "__main__":
