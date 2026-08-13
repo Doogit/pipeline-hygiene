@@ -48,9 +48,11 @@ def _external_origins(html):
 def test_index_renders_offline_read_only(full_env):
     r = client.get("/")
     assert r.status_code == 200
-    # CSP: strict scripts (no unsafe-eval), inline styles allowed for Vega.
+    # CSP: strict scripts (no unsafe-eval), inline styles allowed for Vega,
+    # form-action/connect-src locked to self (Monday Packet write-route hardening).
     assert r.headers["content-security-policy"] == \
-        "default-src 'self'; style-src 'self' 'unsafe-inline'"
+        ("default-src 'self'; style-src 'self' 'unsafe-inline'; "
+         "form-action 'self'; connect-src 'self'")
     html = r.text
     assert "metric-card" in html and "tab-btn" in html
     # 8 chart spec blocks + only-local asset references

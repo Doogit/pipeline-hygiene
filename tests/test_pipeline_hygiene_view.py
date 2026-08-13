@@ -224,3 +224,47 @@ def test_upload_patterns_and_ledger_unavailable(tmp_path):
 def test_upload_no_previous_run_note(tmp_path):
     page = _upload_page(tmp_path)
     assert "Since last run: no previous run recorded." in _captions(page)
+
+
+# --- Monday Packet (PR E): flag gating in the view model -------------------
+
+def test_packets_tab_absent_when_flag_off(tmp_path, monkeypatch):
+    monkeypatch.delenv("PIPELINE_HYGIENE_PACKETS", raising=False)
+    env = build_full_multi(tmp_path)
+    page = V.build_from_store(env["PIPELINE_HYGIENE_CONFIG"],
+                              env["PIPELINE_HYGIENE_DB"],
+                              env["PIPELINE_HYGIENE_QUOTAS"])
+    assert [t.label for t in page.tabs] == list(V.TAB_LABELS)
+    assert not any(isinstance(b, V.Packets)
+                   for t in page.tabs for b in t.blocks)
+
+
+def test_build_page_model_packets_none_leaves_appendix_untouched(tmp_path,
+                                                                 monkeypatch):
+    """With packets=None the Appendix tab gets no dismiss-analytics block and no
+    Packets tab is appended — the flag-off byte-identity the parity gate asserts.
+    (build_page_model is called directly with a stopped-store minimal input.)"""
+    monkeypatch.delenv("PIPELINE_HYGIENE_PACKETS", raising=False)
+    env = build_full_multi(tmp_path)
+    page = V.build_from_store(env["PIPELINE_HYGIENE_CONFIG"],
+                              env["PIPELINE_HYGIENE_DB"],
+                              env["PIPELINE_HYGIENE_QUOTAS"])
+    appendix = page.tabs[6]
+    assert appendix.label == "Appendix"
+    subheads = [b.text for b in appendix.blocks if isinstance(b, V.Heading)]
+    assert "Dismissed work items (by source)" not in subheads
+
+
+def test_packets_tab_and_appendix_analytics_when_flag_on(tmp_path, monkeypatch):
+    """Flag on -> the Packets tab is appended AND the Appendix carries the R5.3
+    dismiss-analytics heading. This is exactly why the parity gate runs flag-off."""
+    monkeypatch.setenv("PIPELINE_HYGIENE_PACKETS", "1")
+    env = build_full_multi(tmp_path)
+    page = V.build_from_store(env["PIPELINE_HYGIENE_CONFIG"],
+                              env["PIPELINE_HYGIENE_DB"],
+                              env["PIPELINE_HYGIENE_QUOTAS"])
+    assert page.tabs[-1].label == "Packets"
+    assert any(isinstance(b, V.Packets) for b in page.tabs[-1].blocks)
+    appendix = next(t for t in page.tabs if t.label == "Appendix")
+    subheads = [b.text for b in appendix.blocks if isinstance(b, V.Heading)]
+    assert "Dismissed work items (by source)" in subheads

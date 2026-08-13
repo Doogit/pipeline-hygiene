@@ -273,7 +273,158 @@ def render_block(b, cur):
     if isinstance(b, V.Drilldown):
         return Div(P(b.prompt, cls="caption"), id="owner-drilldown",
                    cls="drilldown")
+    if isinstance(b, V.Packets):
+        return render_packets(b, cur)
     return ""
+
+
+# --- Packets panel (PR E) ---------------------------------------------------
+
+# Mutation controls carry the sidebar form (snapshot/as_of/filters/packet_owner)
+# so the OOB re-render preserves the current selection, then swap #packets-panel.
+_WI_HX = {"hx_include": "#sidebar-form", "hx_target": "#packets-panel",
+          "hx_swap": "outerHTML", "hx_indicator": "#load"}
+
+
+def _packet_item_value(item):
+    """The proposed value shown for a work item — proposed_value for a
+    field_update, else a short type-appropriate summary."""
+    try:
+        payload = json.loads(item.get("payload_json") or "{}")
+    except (ValueError, TypeError):
+        payload = {}
+    if item["item_type"] == "field_update":
+        return str(payload.get("proposed_value", ""))
+    return str(payload.get("draft_text") or payload.get("subject")
+               or payload.get("title") or "")
+
+
+def _packet_item_row(item, error_for=None):
+    iid = item["id"]
+    status = item["status"]
+    value = _packet_item_value(item)
+    controls = []
+    if status == "proposed":
+        controls.append(Button("Accept", cls="wi-accept",
+                               hx_post=f"/work-item/{iid}/accept", **_WI_HX))
+    if status in ("proposed", "accepted", "edited"):
+        # Dismiss is a two-step inline confirm: reveal a reason input + confirm.
+        # The real input carries the stable id the confirm hx_include references,
+        # so the typed reason is what gets submitted (the inputs live outside any
+        # form; htmx must include them by id).
+        controls.append(Details(
+            Summary("Dismiss", cls="wi-dismiss-toggle"),
+            Div(Input(type="text", id=f"wi-reason-{iid}", name="reason",
+                      placeholder="reason…", cls="wi-reason"),
+                Button("Confirm dismiss", cls="wi-dismiss-confirm",
+                       hx_post=f"/work-item/{iid}/dismiss",
+                       hx_include=f"#sidebar-form, #wi-reason-{iid}",
+                       hx_target="#packets-panel", hx_swap="outerHTML",
+                       hx_indicator="#load"),
+                cls="wi-dismiss-body"),
+            cls="wi-dismiss"))
+    if item["item_type"] == "field_update" and status in ("proposed", "edited"):
+        controls.append(Details(
+            Summary("Edit", cls="wi-edit-toggle"),
+            Div(Input(type="text", id=f"wi-edit-{iid}", name="proposed_value",
+                      value=value, cls="wi-edit-input"),
+                Button("Save edit", cls="wi-edit-save",
+                       hx_post=f"/work-item/{iid}/edit",
+                       hx_include=f"#sidebar-form, #wi-edit-{iid}",
+                       hx_target="#packets-panel", hx_swap="outerHTML",
+                       hx_indicator="#load"),
+                cls="wi-edit-body"),
+            cls="wi-edit"))
+    cells = [Td(item["opp_id"], cls="mono"), Td(item["item_type"]),
+             Td(item.get("target_field") or ""), Td(value, cls="wide"),
+             Td(status)]
+    ctrl_cell = Td(*controls, cls="wi-controls")
+    if error_for == iid:
+        ctrl_cell = Td(*controls,
+                       P("Invalid value — not saved.", cls="wi-error"),
+                       cls="wi-controls")
+    cells.append(ctrl_cell)
+    return Tr(*cells)
+
+
+def render_packets(b, cur, *, error_for=None):
+    """The interactive Packets panel (PR E). Owner selector + packet preview +
+    export buttons + work-item table with accept/dismiss/edit/reopen controls.
+    The whole panel has a stable id so mutations swap it as one unit."""
+    parts = [H3("Packets", cls="h3")]
+
+    # Desk-wide summary: each owner + open count, click to select.
+    if not b.owners and b.selected is None:
+        parts.append(P("No work items yet — enable and run a packet build to "
+                       "populate the queue.", cls="caption"))
+    if b.owners:
+        summary_rows = []
+        for o in b.owners:
+            summary_rows.append(Tr(
+                Td(A(o["display"], href="#",
+                     hx_get=f"/content?packet_owner={_q(o['normalized'])}",
+                     hx_include="#sidebar-form", hx_target="#content",
+                     hx_swap="outerHTML", hx_indicator="#load")),
+                Td(str(o["open_count"]), cls="num")))
+        parts.append(Div(Table(
+            Thead(Tr(Th("owner"), Th("open", cls="num"))),
+            Tbody(*summary_rows), cls="ph-table"), cls="table-wrap"))
+    elif b.selected is not None:
+        parts.append(P("No owners have open work items.", cls="caption"))
+
+    pkt = b.packet
+    if b.selected is None:
+        parts.append(P("Select an owner above to see their packet.",
+                       cls="caption"))
+    elif pkt is None or pkt.item_count == 0:
+        parts.append(P("No open work items for the selected owner.",
+                       cls="caption"))
+    else:
+        parts.append(H4(pkt.header, cls="packet-header"))
+        parts.append(P(pkt.score_delta_line, cls="caption"))
+        parts.append(P(f"Estimated {pkt.minutes_to_clear} minute(s) to clear "
+                       f"{pkt.item_count} item(s).", cls="caption"))
+        parts.append(NotStr(f"<pre class='crm'>{_pre_esc(pkt.crm_block)}</pre>"))
+        # Export buttons (plain download links).
+        parts.append(Div(
+            A("Export .md", href=f"/packet/{_q(b.selected)}.md",
+              cls="download", download=True),
+            " ",
+            A("Export .html", href=f"/packet/{_q(b.selected)}.html",
+              cls="download", download=True),
+            cls="download-row"))
+
+    # Work-item table (open items only).
+    if b.selected is not None:
+        if b.items:
+            head = Tr(Th("opp_id"), Th("type"), Th("field"), Th("proposed"),
+                      Th("status"), Th("actions"))
+            body = [_packet_item_row(it, error_for=error_for) for it in b.items]
+            parts.append(Div(Table(Thead(head), Tbody(*body), cls="ph-table"),
+                             cls="table-wrap"))
+        else:
+            parts.append(P("No open work items for this owner.", cls="caption"))
+        # Recently dismissed (reopenable while pre-export).
+        if b.dismissed:
+            rows = []
+            for it in b.dismissed:
+                rows.append(Tr(
+                    Td(it["opp_id"], cls="mono"), Td(it["item_type"]),
+                    Td(it.get("dismiss_reason") or ""),
+                    Td(Button("Reopen", cls="wi-reopen",
+                              hx_post=f"/work-item/{it['id']}/reopen",
+                              **_WI_HX))))
+            parts.append(H4("Recently dismissed (reopenable)", cls="h4"))
+            parts.append(Div(Table(
+                Thead(Tr(Th("opp_id"), Th("type"), Th("reason"), Th(""))),
+                Tbody(*rows), cls="ph-table"), cls="table-wrap"))
+
+    return Div(*parts, id="packets-panel", cls="packets-panel")
+
+
+def _pre_esc(text):
+    return (str(text).replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;"))
 
 
 def render_tab_panels(page, cur):

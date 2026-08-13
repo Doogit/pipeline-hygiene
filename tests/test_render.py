@@ -37,3 +37,25 @@ def test_contextual_h10_without_forecast_keeps_low_fallback():
 
     assert 'tr class="sev-low"' in html
     assert 'class="chip mono low"' in html
+
+
+def test_packet_item_controls_submit_the_typed_value():
+    # The dismiss-reason and edit-value inputs live outside any form, so htmx
+    # includes them by id. The REAL (typed) inputs must carry those ids — a
+    # hidden shadow input would silently submit an empty/stale value instead.
+    item = {"id": 7, "item_type": "field_update", "status": "proposed",
+            "opp_id": "OPP-1", "target_field": "close_date",
+            "payload_json": '{"field": "close_date", '
+                            '"proposed_value": "2026-10-15"}'}
+    b = V.Packets(owners=[], selected="rowan", packet=None, items=[item])
+    html = to_xml(R.render_packets(b, "$"))
+
+    # No hidden shadow inputs anywhere in the panel.
+    assert 'type="hidden"' not in html
+    # The typed reason input owns the id the confirm button includes.
+    assert 'id="wi-reason-7"' in html and 'name="reason"' in html
+    assert 'hx-include="#sidebar-form, #wi-reason-7"' in html
+    # The edit input owns its id and is seeded with the current value.
+    assert 'id="wi-edit-7"' in html and 'name="proposed_value"' in html
+    assert 'value="2026-10-15"' in html
+    assert 'hx-include="#sidebar-form, #wi-edit-7"' in html
