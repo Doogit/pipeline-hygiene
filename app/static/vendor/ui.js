@@ -9,6 +9,10 @@
     tabs.querySelectorAll(".tab-panel").forEach(function (p, i) {
       p.setAttribute("data-active", i === idx ? "1" : "0");
     });
+    // Vega charts with width:"container" render at 0px while their panel is
+    // display:none (nothing to measure) and don't recover on show; nudge them
+    // to re-measure the now-visible container.
+    window.dispatchEvent(new Event("resize"));
   }
   function wire(root) {
     (root || document).querySelectorAll(".tab-bar").forEach(function (bar) {

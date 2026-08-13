@@ -90,6 +90,14 @@ class Chart:
     id: str
     spec: dict
 
+    def __post_init__(self):
+        # Make every chart fill its card. Vega-Lite defaults to a fixed ~200px
+        # width, which left the line/waterfall charts squished into a narrow box
+        # with a wide empty gutter. "container" sizes to the .chart div (CSS
+        # width:100%). Parity strips top-level width, so the gate is unaffected.
+        if isinstance(self.spec, dict):
+            self.spec.setdefault("width", "container")
+
 
 @dataclass
 class Table:
