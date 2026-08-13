@@ -4,89 +4,227 @@
 @source "./render.py";
 @source "./server.py";
 
-/* Component classes authored with Tailwind utilities via @apply, built offline
-   by the standalone tailwindcss CLI into app/static/app.css. Light theme;
-   step 1 reproduces the current content on a controllable substrate — the
-   visual redesign is step 2 (out of scope). */
+/* Step 2 visual redesign (feat/step2-visual-redesign). Distinctive light-theme
+   restyle on a SHARED TOKEN LAYER — the @theme block below is the reusable
+   handoff artifact (the GridSignals-shared vocabulary, migration plan §14). In
+   Tailwind v4 these tokens generate utilities (bg-surface, text-ink,
+   border-border, rounded-lg, shadow-sm, font-mono, …) that the component classes
+   @apply. Effects utilities can't express (gradients, backdrop blur, severity
+   chips/stripes, score tiers) are authored as raw CSS at the bottom, referencing
+   the same var(--color-*) tokens. Built offline by scripts/build_css.sh into
+   app/static/app.css. Presentation only — not parity-gated. Charts are a
+   separate re-baselining PR. */
+
+@theme {
+  --color-bg: #F6F7F9;
+  --color-surface: #FFFFFF;
+  --color-surface-sunken: #EEF1F4;
+  --color-border: #E1E5EA;
+  --color-border-strong: #C6CDD6;
+  --color-ink: #171C24;
+  --color-ink-muted: #59616E;
+  --color-ink-faint: #8B95A3;
+  --color-accent: #0072B2;
+  --color-accent-strong: #005E93;
+  --color-accent-tint: #E5F0F7;
+  --color-high: #D55E00;
+  --color-high-tint: #FBEBE0;
+  --color-high-ink: #A9430B;
+  --color-medium: #E69F00;
+  --color-medium-tint: #FBF1DC;
+  --color-medium-ink: #855E00;
+  --color-low: #0072B2;
+  --color-low-tint: #E5F0F7;
+  --color-low-ink: #005E93;
+  --color-positive: #009E73;
+  --color-positive-ink: #00795A;
+  --color-negative: #D55E00;
+
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
+
+  --shadow-sm: 0 1px 2px rgba(20, 28, 40, .05);
+}
 
 @layer components {
-  .app { @apply text-slate-800 text-sm; }
-  .topbar { @apply flex items-center gap-3 px-6 py-3 border-b border-slate-200 bg-white sticky top-0 z-10; }
-  .title { @apply text-lg font-semibold text-slate-900; }
-  .layout { @apply flex items-start gap-6 px-6 py-4 max-w-[1600px] mx-auto; }
-  .sidebar { @apply w-72 shrink-0 flex flex-col gap-3 sticky top-16 self-start; }
+  .app { @apply text-ink bg-bg font-sans text-[13px] leading-normal min-h-screen; }
+
+  /* ---------- top bar ---------- */
+  .topbar { @apply flex items-center gap-3 border-b border-border sticky top-0 z-20 px-[22px] py-[11px]; }
+  .title { @apply text-[15px] font-bold text-ink; }
+
+  /* ---------- layout ---------- */
+  .layout { @apply flex items-start gap-5 max-w-[1600px] mx-auto px-[22px] pt-[18px] pb-[60px]; }
+  .sidebar { @apply w-64 shrink-0 flex flex-col gap-[14px] sticky top-16 self-start bg-surface border border-border rounded-lg shadow-sm p-4; }
   .main { @apply flex-1 min-w-0; }
-  .content { @apply flex flex-col gap-3; }
+  .content { @apply flex flex-col gap-4; }
 
-  .field { @apply flex flex-col gap-1; }
-  .lbl { @apply text-xs font-medium text-slate-600; }
+  /* ---------- sidebar controls ---------- */
+  .field { @apply flex flex-col gap-[5px]; }
+  .lbl { @apply text-[11.5px] font-medium text-ink-muted; }
   .field input[type="date"], .field select {
-    @apply border border-slate-300 rounded px-2 py-1 text-sm bg-white; }
+    @apply border border-border-strong rounded px-2 py-[6px] text-[12.5px] bg-surface text-ink w-full; }
+  .field input[type="date"]:focus, .field select:focus, .field input[type="text"]:focus {
+    @apply outline-2 outline-accent-tint border-accent; }
   .field input[type="file"] {
-    @apply text-xs border border-slate-300 rounded bg-white cursor-pointer text-slate-600; }
+    @apply text-[11.5px] border border-dashed border-border-strong rounded bg-surface-sunken cursor-pointer text-ink-muted w-full p-2; }
   .field input[type="file"]::file-selector-button {
-    @apply mr-2 border-0 border-r border-slate-300 bg-slate-100 px-2 py-1 text-slate-700 font-medium cursor-pointer; }
-  .field input[type="file"]:hover::file-selector-button { @apply bg-slate-200; }
-  .cb-list { @apply flex flex-col gap-1; }
-  .cb-filter { @apply border border-slate-300 rounded px-2 py-1 text-xs mb-1; }
-  .cb-scroll { @apply max-h-40 overflow-y-auto border border-slate-200 rounded p-1 flex flex-col; }
-  .cb { @apply flex items-center gap-1 text-xs py-0.5; }
-  .apply { @apply mt-1 bg-slate-800 text-white rounded px-3 py-1.5 text-sm font-medium hover:bg-slate-700 cursor-pointer; }
+    @apply mr-2 border-0 rounded-sm bg-surface text-accent-strong px-2 py-1 font-semibold cursor-pointer; }
+  .field input[type="file"]:hover::file-selector-button { @apply bg-accent-tint; }
+  .cb-list { @apply flex flex-col gap-[3px]; }
+  .cb-filter { @apply border border-border-strong rounded px-2 py-[6px] text-[12.5px] mb-[6px] bg-surface w-full; }
+  .cb-scroll { @apply max-h-[132px] overflow-y-auto border border-border rounded px-[7px] py-[5px] flex flex-col gap-[3px]; }
+  .cb { @apply flex items-center gap-[7px] text-xs text-ink; }
+  .cb input { accent-color: var(--color-accent); }
+  .apply { @apply mt-[2px] bg-accent text-white rounded px-3 py-[9px] text-[13px] font-semibold hover:bg-accent-strong cursor-pointer border-0; }
 
-  .h2 { @apply text-sm font-semibold text-slate-700 mt-2 border-b border-slate-200 pb-1; }
-  .h3 { @apply text-base font-semibold text-slate-900 mt-2; }
-  .h4 { @apply text-sm font-semibold text-slate-800; }
-  .caption { @apply text-xs text-slate-500 leading-snug; }
-  .md { @apply text-sm text-slate-700; }
-  .warn { @apply text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2; }
-  .divider { @apply border-slate-200 my-3; }
+  /* section headings — sidebar renders these as .h2 (uppercase caption chrome) */
+  .sidebar .h2 { @apply text-[11px] font-bold uppercase text-ink-muted border-b border-border pb-[6px] mt-0; }
 
+  .h2 { @apply text-sm font-semibold text-ink mt-2 border-b border-border pb-1; }
+  .h3 { @apply text-[17px] font-bold text-ink mt-1; }
+  .h4 { @apply text-[13px] font-semibold text-ink; }
+  .caption { @apply text-xs text-ink-muted leading-snug max-w-[92ch]; }
+  .md { @apply text-[13px] text-ink; }
+  .warn { @apply text-[12.5px] text-high-ink bg-high-tint border border-high-tint rounded px-3 py-[9px]; }
+  .divider { @apply border-border my-3; }
+
+  /* ---------- metric band ---------- */
   .metric-row { @apply grid grid-cols-2 md:grid-cols-5 gap-3; }
-  .metric-card { @apply border border-slate-200 rounded-lg p-3 bg-white; }
-  .metric-label { @apply text-xs text-slate-500; }
-  .metric-value { @apply text-xl font-semibold text-slate-900; }
-  .metric-delta { @apply text-xs text-slate-400 min-h-4; }
-  .delta-up { @apply text-emerald-600; }
-  .delta-down { @apply text-red-600; }
+  .metric-card { @apply border border-border rounded-lg bg-surface shadow-sm px-[15px] pt-[14px] pb-[13px]; }
+  .metric-label { @apply text-[11px] font-semibold uppercase text-ink-muted mb-[7px] leading-tight min-h-[28px]; }
+  .metric-value { @apply text-[27px] font-bold leading-none text-ink tabular-nums; }
+  .metric-delta { @apply text-xs mt-[6px] min-h-[17px] flex items-center gap-[5px] tabular-nums text-ink-faint; }
+  .delta-up { @apply text-positive-ink font-semibold; }
+  .delta-down { @apply text-high-ink font-semibold; }
 
-  .chart-wrap { @apply border border-slate-200 rounded-lg p-3 bg-white; }
+  /* ---------- charts (PR 2 re-baselines specs; card chrome only here) ---------- */
+  .chart-wrap { @apply border border-border rounded-lg bg-surface shadow-sm p-4; }
   .chart { @apply w-full min-h-[60px]; }
 
-  .table-wrap { @apply overflow-x-auto border border-slate-200 rounded-lg bg-white; }
+  /* ---------- tables ---------- */
+  .table-wrap { @apply overflow-x-auto border border-border rounded-lg bg-surface shadow-sm; }
   .ph-table { @apply w-full text-xs border-collapse; }
-  .ph-table th { @apply text-left font-semibold text-slate-600 px-2 py-1.5 border-b border-slate-200 whitespace-nowrap bg-slate-50; }
-  .ph-table td { @apply px-2 py-1 border-b border-slate-100 align-top; }
+  .ph-table th {
+    @apply text-left font-semibold text-ink-muted uppercase text-[11px] px-[11px] py-[9px]
+           border-b border-border-strong whitespace-nowrap bg-surface sticky top-0; }
+  .ph-table td { @apply px-[11px] py-2 border-b border-border align-middle; }
+  .ph-table tr:last-child td { @apply border-b-0; }
   .ph-table td.num, .ph-table th.num { @apply text-right tabular-nums; }
-  .ph-table td.wide { @apply min-w-[16rem] whitespace-normal; }
+  .ph-table td.mono { @apply font-mono text-[11.5px] text-ink-muted; }
+  .ph-table td.wide { @apply min-w-[22rem] whitespace-normal text-ink-muted; }
 
+  /* ---------- popovers ---------- */
   .pop { @apply inline-block; }
-  .pop-btn { @apply text-xs text-blue-700 underline cursor-pointer bg-transparent; }
-  .pop-body { @apply border border-slate-300 rounded-lg p-3 shadow-lg max-w-md bg-white; }
+  .pop-btn { @apply text-xs text-accent-strong underline cursor-pointer bg-transparent border-0; }
+  .pop-body { @apply border border-border-strong rounded-lg p-3 shadow-lg max-w-md bg-surface; }
 
-  .expander { @apply border border-slate-200 rounded-lg bg-white; }
-  .expander summary { @apply cursor-pointer px-3 py-2 font-medium text-slate-700 text-sm; }
+  /* ---------- expanders ---------- */
+  .expander { @apply border border-border rounded-lg bg-surface; }
+  .expander summary { @apply cursor-pointer px-3 py-2 font-medium text-ink text-[13px]; }
   .exp-body { @apply px-3 pb-3 flex flex-col gap-2; }
-  .drilldown { @apply border-l-2 border-slate-200 pl-3 mt-2; }
+  .drilldown { @apply mt-2; }
 
+  /* ---------- download ---------- */
   .download-row { @apply mt-4; }
-  .download { @apply inline-block bg-emerald-700 text-white rounded px-3 py-2 text-sm font-medium hover:bg-emerald-600 no-underline; }
+  .download { @apply inline-flex items-center gap-2 bg-surface text-accent-strong border border-border-strong
+             rounded px-[14px] py-[9px] text-[13px] font-semibold no-underline hover:bg-accent-tint hover:border-accent; }
 
+  /* ---------- tabs ---------- */
   .tabs { @apply mt-2; }
-  .tab-bar { @apply flex flex-wrap gap-1 border-b border-slate-200; }
-  .tab-btn { @apply px-3 py-1.5 text-sm text-slate-600 border-b-2 border-transparent cursor-pointer bg-transparent; }
-  .tab-btn[aria-selected="true"] { @apply text-slate-900 font-semibold border-slate-800; }
-  .tab-panel { @apply pt-3 flex-col gap-3; }
+  .tab-bar { @apply flex flex-wrap gap-[2px] border-b border-border; }
+  .tab-btn { @apply px-[14px] py-[9px] text-[13px] text-ink-muted border-b-2 border-transparent cursor-pointer bg-transparent rounded-t whitespace-nowrap hover:text-ink; }
+  .tab-btn[aria-selected="true"] { @apply text-accent-strong font-semibold border-accent bg-accent-tint; }
+  .tab-panel { @apply pt-1 flex-col gap-[14px]; }
   .tab-panel[data-active="1"] { @apply flex; }
   .tab-panel[data-active="0"] { @apply hidden; }
 }
 
-/* Raw CSS (non-utility): score bars, sparklines, loader, popover reset. */
-.score-bar { position: relative; height: 16px; background: #eef2f6; border-radius: 3px; min-width: 60px; }
-.score-bar-fill { position: absolute; inset: 0 auto 0 0; background: #0072B2; border-radius: 3px; opacity: .85; }
-.score-bar-label { position: relative; font-size: 10px; padding-left: 4px; line-height: 16px; color: #0f172a; }
+/* =====================================================================
+   Raw CSS (non-utility): effects the token utilities can't express, all
+   referencing the same @theme tokens via var(--color-*).
+   ===================================================================== */
+
+/* Frosted, sticky top bar (backdrop blur can't be @applied portably here). */
+.topbar { background: rgba(255, 255, 255, .86); backdrop-filter: blur(8px); }
+
+/* Primary desk-score card: subtle brand gradient + tinted border. */
+.metric-card.primary {
+  background: linear-gradient(180deg, #FBFDFF, #F3F9FD);
+  border-color: #BFDCEF;
+}
+
+/* Hover affordance for interactive (owner drill-down) rows. */
+.ph-table tr:hover td { background: #F7FAFC; }
+.ph-table tr.row-click { cursor: pointer; }
+
+/* Severity row stripe: an inset left rule on the first cell, tier-colored. */
+.ph-table tr.sev-high td:first-child { box-shadow: inset 3px 0 0 var(--color-high); }
+.ph-table tr.sev-med  td:first-child { box-shadow: inset 3px 0 0 var(--color-medium); }
+.ph-table tr.sev-low  td:first-child { box-shadow: inset 3px 0 0 var(--color-low); }
+
+/* Severity / flag chips. Rule-code chips read on a small tinted pill with a
+   status dot; on any table row they carry the row's worst-severity tier
+   (presentation heuristic mirroring src/rules.py — see render.py _CANON_SEV). */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0;
+  padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  background: var(--color-surface-sunken); color: var(--color-ink-muted);
+}
+.chip .cd { width: 6px; height: 6px; border-radius: 50%; background: var(--color-ink-faint); }
+.chip.mono { font-family: var(--font-mono); font-size: 10px; padding: 2px 6px; }
+.chip.high { background: var(--color-high-tint); color: var(--color-high-ink); }
+.chip.high .cd { background: var(--color-high); }
+.chip.med  { background: var(--color-medium-tint); color: var(--color-medium-ink); }
+.chip.med .cd { background: var(--color-medium); }
+.chip.low  { background: var(--color-low-tint); color: var(--color-low-ink); }
+.chip.low .cd { background: var(--color-low); }
+
+/* Score bar: tier-colored fill (by score) on a small white chip label so the
+   number reads on any fill. */
+.score-bar {
+  position: relative; height: 20px; min-width: 78px; display: inline-block;
+  vertical-align: middle; overflow: hidden;
+  background: var(--color-surface-sunken); border-radius: var(--radius-sm);
+}
+.score-bar-fill {
+  position: absolute; inset: 0 auto 0 0; border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, #0A86C9, var(--color-accent));
+}
+.score-bar.warn .score-bar-fill { background: linear-gradient(90deg, #E6A719, var(--color-medium)); }
+.score-bar.bad  .score-bar-fill { background: linear-gradient(90deg, #E06A1C, var(--color-high)); }
+.score-bar-label {
+  position: relative; float: right; margin: 2px; padding: 0 5px; line-height: 16px;
+  font-size: 10.5px; font-weight: 700; color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, .82); border-radius: 3px;
+}
+
+/* Drill-down region: accent-tinted panel. */
+.drilldown {
+  border-left: 3px solid var(--color-accent); background: var(--color-accent-tint);
+  border-radius: 0 var(--radius) var(--radius) 0; padding: 10px 14px;
+}
+.drilldown .caption, .drilldown .md { color: var(--color-accent-strong); }
+
 .spark { display: block; }
+.spark .spark-end { fill: var(--color-accent); }
 .pop-body { margin: 0; }
 .pop-body:popover-open { display: block; }
-.loader { width: 14px; height: 14px; border: 2px solid #cbd5e1; border-top-color: #0072B2; border-radius: 50%; opacity: 0; }
+
+.loader { width: 14px; height: 14px; border: 2px solid #CBD5E1; border-top-color: var(--color-accent); border-radius: 50%; opacity: 0; }
 .htmx-request .loader, .htmx-request.loader { opacity: 1; animation: spin .6s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Stack the sidebar above the main column on narrow viewports. */
+@media (max-width: 1080px) {
+  .layout { flex-direction: column; }
+  .sidebar { width: 100%; position: static; }
+  .metric-row { grid-template-columns: repeat(2, 1fr); }
+}
