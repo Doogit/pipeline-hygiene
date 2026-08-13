@@ -93,6 +93,7 @@ _SEV_CLS = {"high": "high", "medium": "med", "low": "low"}
 # hold coverage flags (low_coverage, small_n) and get neutral chips.
 _CHIP_COL = {"risky_commits": ("flags", True), "slippage": ("rules", True),
              "exceptions": ("rules", True), "owner_drilldown": ("rules", True),
+             "flag_explain": ("rule", True),
              "owner_scoreboard": ("flags", False), "teams": ("flags", False),
              "regions": ("flags", False)}
 

@@ -164,6 +164,36 @@ def test_owner_flagged_opps_scopes_and_ranks(tmp_path, config):
                                     cfg) == []
 
 
+def test_flag_explanations_pairs_rule_threshold_and_observed(tmp_path, config):
+    from src.rules import RULE_LABELS, is_open
+    store, cfg, _ = _seeded_store(tmp_path, config)
+    data = brief.build(store, AS_OF, AS_OF, cfg)
+    results = data["results"]
+    rows_by_id = {r["opp_id"]: r for r in data["rows"]}
+    owner = next(rows_by_id[r.opp_id]["owner"] for r in results.values()
+                 if r.violations and is_open(rows_by_id[r.opp_id]))
+
+    recs = brief.owner_flagged_opps(owner, results, rows_by_id, cfg)
+    exp = brief.flag_explanations(owner, results, rows_by_id, cfg)
+    assert exp, "expected at least one flag explanation row"
+    # one explanation row per (opp, violation)
+    assert len(exp) == sum(len(results[r["opp_id"]].violations) for r in recs)
+    # opp ordering mirrors owner_flagged_opps
+    assert [r["opp_id"] for r in recs] == list(dict.fromkeys(
+        e["opp_id"] for e in exp))
+    for e in exp:
+        # rule + human label + trip line (threshold) + observed value present
+        assert e["rule"] in RULE_LABELS
+        assert e["flag"] == RULE_LABELS[e["rule"]]
+        assert e["trips when"] == brief.rule_trip(e["rule"], cfg)
+        assert e["observed"]
+    # within an opp, rules ascend by number
+    from itertools import groupby
+    for _, grp in groupby(exp, key=lambda e: e["opp_id"]):
+        nums = [int(e["rule"][1:]) for e in grp]
+        assert nums == sorted(nums)
+
+
 def test_staleness_escalation_section(tmp_path, config):
     from src.rules import is_open, staleness_tier
     store, cfg, _ = _seeded_store(tmp_path, config)

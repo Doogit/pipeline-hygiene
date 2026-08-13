@@ -650,6 +650,14 @@ def owner_drilldown_blocks(owner, data, config, rows_by_id):
                              "worst", "rules", "detail"], detail,
                             formats={"amount": _MONEY, "score": _SCORE,
                                      "detail": _WIDE}))
+        explanations = brief.flag_explanations(owner, data["results"],
+                                               rows_by_id, config)
+        blocks.append(Expander(
+            "Why flagged — rule, threshold, and observed value per flag",
+            [Table("flag_explain",
+                   ["opp_id", "rule", "flag", "trips when", "observed"],
+                   explanations,
+                   formats={"trips when": _WIDE, "observed": _WIDE})]))
     else:
         blocks.append(Caption(f"{owner} has no open opps with violations."))
     return blocks
