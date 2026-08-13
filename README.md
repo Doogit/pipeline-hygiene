@@ -4,7 +4,9 @@ A local-only sales pipeline inspection app. This tool ingests CRM opportunity
 snapshots (CSV exports) into a SQLite snapshot store, runs deterministic hygiene rules
 (H1-H11), and provides opportunity, owner, and desk insights.
 
-The tool is intended to be run in a local environment (e.g. Azure server / workspace) to protect sensitive data. After install in the local environment, all data stays local.   
+The tool is intended to be run in a local environment (e.g. Azure server / workspace) to protect sensitive data. After install in the local environment, all data stays local.
+
+Note: The tool in its current state is designed to demonstrate potential sales pipeline automation opportunities. See the [Target Architecture](#-target-architecture) section for details on how this tool could be architected for an enterprise environment. 
 
 ## Demo
 
