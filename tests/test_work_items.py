@@ -273,3 +273,28 @@ def test_field_update_requires_field(wi):
 
 def test_payload_hash_is_order_insensitive():
     assert payload_hash({"a": 1, "b": 2}) == payload_hash({"b": 2, "a": 1})
+
+
+def test_date_payloads_are_serialized_for_field_update_expiry(wi, config):
+    proposed = AS_OF + timedelta(days=45)
+    wid = wi.upsert_item(
+        opp_id="OPP-1", owner="D", source="capture", item_type="field_update",
+        payload={"field": "close_date", "proposed_value": proposed},
+        as_of=AS_OF)
+    (item,) = wi.items()
+    assert f'"proposed_value": "{proposed.isoformat()}"' in item["payload_json"]
+    assert wi.expire_resolved([_clean_row(close_date=proposed)], config, AS_OF) == 1
+    assert wi.events(wid)[-1]["to_status"] == "expired"
+
+
+def test_edit_accepts_date_payload(wi):
+    wid = wi.upsert_item(opp_id="OPP-1", owner="D", source="capture",
+                         item_type="field_update",
+                         payload={"field": "close_date",
+                                  "proposed_value": "2026-09-30"},
+                         as_of=AS_OF)
+    proposed = AS_OF + timedelta(days=60)
+    wi.edit(wid, {"field": "close_date", "proposed_value": proposed},
+            at=AS_OF + timedelta(days=1), by="mgr")
+    (item,) = wi.items()
+    assert f'"proposed_value": "{proposed.isoformat()}"' in item["payload_json"]

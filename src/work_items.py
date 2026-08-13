@@ -42,12 +42,22 @@ def normalize_owner(owner):
 def payload_hash(payload):
     """Stable hash over canonical JSON so key ordering / whitespace can't
     silently break dedup (mirrors record_run's sort_keys convention)."""
-    blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    blob = _payload_json(payload, separators=(",", ":"))
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
 def _iso(value):
     return value.isoformat() if isinstance(value, date) else value
+
+
+def _json_default(value):
+    if isinstance(value, date):
+        return value.isoformat()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _payload_json(payload, **kwargs):
+    return json.dumps(payload, sort_keys=True, default=_json_default, **kwargs)
 
 
 def _coerce(value):
@@ -133,7 +143,7 @@ class WorkItemStore:
             raise ValueError("field_update payload requires a 'field'")
         target_field = payload.get("field") if item_type == "field_update" else None
         phash = payload_hash(payload)
-        pj = json.dumps(payload, sort_keys=True)
+        pj = _payload_json(payload)
         at = _iso(as_of)
         holes = ",".join("?" for _ in OPEN_STATUSES)
         with self.conn:
@@ -196,7 +206,7 @@ class WorkItemStore:
 
     def edit(self, item_id, new_payload, *, at, by=None):
         """Replace an item's payload and mark it `edited` (audit-logged)."""
-        pj = json.dumps(new_payload, sort_keys=True)
+        pj = _payload_json(new_payload)
         at_s = _iso(at)
         target_field = new_payload.get("field")
         with self.conn:
