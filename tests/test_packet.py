@@ -160,6 +160,21 @@ def test_minutes_scale_with_item_count_not_a_fixed_slogan(tmp_path, config):
     wi.close()
 
 
+def test_minutes_use_defaults_when_packet_config_absent(tmp_path, config):
+    """Older configs may have the drafts block from R2 without R4's nested
+    packet block; packet export should still render using defaults."""
+    store, wi = _seeded_stores(tmp_path, config)
+    older = dict(config)
+    older["drafts"] = {k: v for k, v in config["drafts"].items()
+                       if k != "packet"}
+
+    model = build_owner_packet(wi, OWNER, older, AS_OF,
+                               snapshot_store=store, snapshot_date=AS_OF)
+    assert model.minutes_to_clear == 11
+    assert "Estimated 11 minute(s)" in render_markdown(model, older)
+    wi.close()
+
+
 def test_score_delta_line_present_without_prior_snapshot(tmp_path, config):
     store, wi = _seeded_stores(tmp_path, config)
     model = build_owner_packet(wi, OWNER, config, AS_OF,

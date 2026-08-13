@@ -64,6 +64,17 @@ _TYPE_SECTION = {
     "agenda_item": "review_docs",
 }
 
+_DEFAULT_PACKET_MINUTES = {
+    "minutes_per_item": {
+        "field_update": 1,
+        "next_step": 2,
+        "email_draft": 4,
+        "clinic_doc": 6,
+        "agenda_item": 3,
+    },
+    "default_minutes_per_item": 2,
+}
+
 
 @dataclass
 class PacketItem:
@@ -116,8 +127,13 @@ def _minutes_to_clear(items, config):
     """item_count x per-type minute constants (R4.5). The estimate is COMPUTED
     and printed as-is — no fixed "15-minute" promise a large packet would
     falsify (resolves the P2 slogan risk)."""
-    per_type = config["drafts"]["packet"]["minutes_per_item"]
-    default = config["drafts"]["packet"].get("default_minutes_per_item", 1)
+    packet_config = (config.get("drafts") or {}).get("packet") or \
+        _DEFAULT_PACKET_MINUTES
+    per_type = packet_config.get("minutes_per_item") or \
+        _DEFAULT_PACKET_MINUTES["minutes_per_item"]
+    default = packet_config.get(
+        "default_minutes_per_item",
+        _DEFAULT_PACKET_MINUTES["default_minutes_per_item"])
     total = sum(per_type.get(it.item_type, default) for it in items)
     return int(total)
 
