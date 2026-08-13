@@ -38,3 +38,40 @@ stage_map:
 # staleness_escalation: {escalate_days: 7, review_days: 21} # H1 tiers flag/escalate/review, days BEYOND the per-stage threshold; escalate_days < review_days (off)
 # aging_norm_mode: derived                                 # H6 norms: static aging_norm_days (default) or derived from observed per-stage dwell
 # aging_norm_derived_multiple: 1.75                        # derived mode: norm = round(this x median observed dwell), per stage (1.75)
+
+# Monday Packet draft templates (R2.6). Optional block — safe to omit; the
+# rule-to-draft generators (src/drafts.py) only run when PIPELINE_HYGIENE_PACKETS
+# is on. All template text lives here so it is editable without code, no LLM.
+drafts:
+  proposed_date_offset_business_days: 10   # R2.1/R2.2 fallback: as_of + this many business days
+  stage_exit:                              # R2.1 next-step criterion per open stage
+    prospect: "the buyer has confirmed a business problem worth solving"
+    qualify: "budget, authority, need, and timeline are confirmed"
+    develop: "the economic buyer has agreed the evaluation criteria"
+    propose: "pricing and terms are with the buyer for review"
+    commit: "the buyer has verbally agreed and paperwork is in motion"
+  next_step_template: "Confirm {criterion} by {due_date}"
+  timeline_email:                          # R2.2 timeline-validation email
+    subject: "Confirming the timeline for {account}"
+    body: |
+      Hi {account} team,
+
+      As we plan the next few weeks on {opp_name}, I want to make sure the
+      timeline still reflects reality. Our records show a target close of
+      {close_date}; based on how this deal has moved, {proposed_close_date}
+      looks like a more realistic date.
+
+      Could you confirm the date your team is working toward so we can plan
+      accordingly?
+
+      Thanks,
+      {owner}
+  disqualification:                        # R2.3 disqualification-review clinic doc
+    questions:
+      - "What has changed in the buyer's business case since this deal was first committed?"
+      - "What single next event would prove this deal is still real, and when does it happen?"
+  coverage_task_template: "Pipeline generation for {owner}: coverage is below target. Work these plays this week:"
+  coverage_plays:                          # R2.5 pipeline-generation play names
+    - "Re-engage closed-lost accounts from the last two quarters"
+    - "Book three first meetings from existing customer relationships"
+    - "Run a partner-sourced pipeline session"
