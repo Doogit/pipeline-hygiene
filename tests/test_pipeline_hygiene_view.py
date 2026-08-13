@@ -7,7 +7,9 @@ None: no push history, patterns/ledger unavailable) — plus the degradation not
 and empty states, asserted as readable unit checks.
 """
 import random
-from datetime import date
+from datetime import date, timedelta
+
+import yaml
 
 from src import brief, pipeline_hygiene_view as V
 from src.ingest import validate_csv
@@ -28,6 +30,28 @@ def _captions(page):
 def _all_text(page):
     d = flatten(page)
     return d["caption"] + d["markdown"] + d["warning"] + d["subheader"]
+
+
+def _stored_row(opp_id, snap_date, stage, **over):
+    row = {
+        "opp_id": opp_id, "account": "Granitefreight LLC", "opp_name": "Deal",
+        "owner": "Avery Farrow", "stage": stage, "amount": 50_000.0,
+        "currency": "USD", "created_date": date(2026, 1, 5),
+        "close_date": date(2026, 10, 1), "last_activity_date": snap_date,
+        "next_step": "Send updated proposal to procurement",
+        "next_step_date": snap_date + timedelta(days=10),
+        "forecast_category": "pipeline", "contact_count": 3,
+        "product_line": "CorePlatform", "stage_entered_date": snap_date,
+        "close_date_changes": 0,
+    }
+    row.update(over)
+    return row
+
+
+def _write_snapshot(store, tmp_path, snap_date, rows):
+    path = tmp_path / f"opps_{snap_date.isoformat()}.csv"
+    write_csv(path, rows)
+    assert store.ingest_csv(path, snap_date).rejected == 0
 
 
 # --- happy path (store-backed) ---
@@ -71,6 +95,40 @@ def test_full_multi_download_is_shared_brief_render(tmp_path):
     md = brief.render(data, config)
     assert md == brief.render(data, config)  # deterministic
     assert md.startswith("#") and "## Headline" in md
+
+
+def test_store_page_uses_derived_aging_config(tmp_path, config):
+    d1 = AS_OF - timedelta(days=14)
+    d2 = AS_OF - timedelta(days=7)
+    cfg = dict(config)
+    cfg["aging_norm_mode"] = "derived"
+    cfg["aging_norm_derived_multiple"] = 2.0
+    cfg["min_closed_for_win_rate"] = 2
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+    db_path = tmp_path / "pipeline.db"
+    store = SnapshotStore(db_path, cfg)
+    movers = [f"DEV-{i}" for i in range(1, 4)]
+    _write_snapshot(
+        store, tmp_path, d1,
+        [_stored_row(o, d1, "develop") for o in movers]
+        + [_stored_row("SITTER", d1, "develop",
+                       stage_entered_date=AS_OF - timedelta(days=30))])
+    _write_snapshot(
+        store, tmp_path, d2,
+        [_stored_row(o, d2, "develop") for o in movers]
+        + [_stored_row("SITTER", d2, "develop",
+                       stage_entered_date=AS_OF - timedelta(days=30))])
+    _write_snapshot(
+        store, tmp_path, AS_OF,
+        [_stored_row(o, AS_OF, "propose") for o in movers]
+        + [_stored_row("SITTER", AS_OF, "develop",
+                       stage_entered_date=AS_OF - timedelta(days=30))])
+    store.close()
+
+    page = V.build_from_store(str(cfg_path), str(db_path))
+    assert page.controls["config"]["aging_norm_days"]["develop"] == 28
+    assert "H6" in page.controls["data"]["results"]["SITTER"].rule_ids()
 
 
 # --- degradation: single snapshot + bare quotas ---

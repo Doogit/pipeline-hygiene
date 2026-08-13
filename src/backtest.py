@@ -38,8 +38,11 @@ def backtest(store, config, as_of):
     closed = {o["opp_id"]: o["stage"] for o in store.closed_outcomes(as_of)}
 
     flagged = {rule: set() for rule in RULE_LABELS}
+    from .funnel import resolve_aging_config
     for d in dates:
-        results = evaluate_snapshot(store.rows_with_history(d), config, d)
+        snapshot_config = resolve_aging_config(store, config, d)
+        results = evaluate_snapshot(store.rows_with_history(d),
+                                    snapshot_config, d)
         for result in results.values():
             for v in result.violations:
                 flagged[v.rule_id].add(result.opp_id)

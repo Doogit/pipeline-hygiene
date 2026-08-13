@@ -36,3 +36,5 @@ stage_map:
 # delta_detail_max_per_rule: 20                             # collapse a rule's since-last-run detail past this many opps (20)
 # low_coverage_desk_note_share: 0.75                        # desk-wide under-coverage note when >= this share of quota'd owners is under 1.00x (0.75)
 # staleness_escalation: {escalate_days: 7, review_days: 21} # H1 tiers flag/escalate/review, days BEYOND the per-stage threshold; escalate_days < review_days (off)
+# aging_norm_mode: derived                                 # H6 norms: static aging_norm_days (default) or derived from observed per-stage dwell
+# aging_norm_derived_multiple: 1.75                        # derived mode: norm = round(this x median observed dwell), per stage (1.75)

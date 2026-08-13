@@ -136,6 +136,8 @@ _OPTIONAL_CONFIG = {
     "delta_detail_max_per_rule": int,
     "low_coverage_desk_note_share": _NUMBER,
     "staleness_escalation": {"escalate_days": int, "review_days": int},
+    "aging_norm_mode": str,
+    "aging_norm_derived_multiple": _NUMBER,
 }
 
 
@@ -188,7 +190,12 @@ def validate_config(config):
     _require_positive(config, "pipeline_gen_weekly_target")
     _require_positive(config, "trend_snapshots")
     _require_positive(config, "delta_detail_max_per_rule")
+    _require_positive(config, "aging_norm_derived_multiple")
     _require_unit_interval(config, "low_coverage_desk_note_share")
+    mode = config.get("aging_norm_mode")
+    if mode is not None and mode not in ("static", "derived"):
+        raise ConfigError("config key 'aging_norm_mode' must be 'static' or "
+                          "'derived'")
     if esc and esc["escalate_days"] >= esc["review_days"]:
         raise ConfigError("config key 'staleness_escalation' requires "
                           "escalate_days < review_days")
