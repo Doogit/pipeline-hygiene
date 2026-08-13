@@ -1,11 +1,10 @@
 # pipeline-hygiene
 
-A read-only sales pipeline inspection agent. This branch ingests opportunity
-CSV snapshots into a SQLite snapshot store, runs deterministic hygiene rules
-(H1-H11), and scores every opportunity, owner, and desk.
+A local-only sales pipeline inspection app. This tool ingests CRM opportunity
+snapshots (CSV exports) into a SQLite snapshot store, runs deterministic hygiene rules
+(H1-H11), and provides opportunity, owner, and desk insights.
 
-Operating principle: **agents inspect, people sell.** The agent never writes to
-source data and never contacts sellers.
+The tool is intended to be run in a local environment (e.g. Azure server / workspace) to protect sensitive data. After install in the local environment, all data stays local.   
 
 ## Demo
 
@@ -15,103 +14,33 @@ stays in sync with them (CI rebuilds it whenever the screenshots change).
 
 ![Demo reel cycling through the dashboard tabs](docs/demo-reel.gif)
 
-## Install
+## Security & secure-by-design
 
-```
-pip install -r requirements.txt
-```
+This tool handles sales-pipeline data, so it is built to keep that data local, inert, and hard to exfiltrate. The security posture is a design property, not a bolt-on:
 
-Python 3.10+. Runtime needs pyyaml, pandas, python-fasthtml and altair;
-pytest/hypothesis are dev-only. No services, no API keys, no LLM calls.
+- **Read-only over the data.** The tool never writes back to a CRM, never contacts sellers, and never mutates source files or the snapshot store. Viewing, filtering, drilling down, and downloading a brief all record nothing — there is no write path to abuse.
+- **Local-only by default.** `python -m app.server` binds `127.0.0.1`. Binding to a non-local host is refused unless you explicitly opt in with `PIPELINE_HYGIENE_ALLOW_NONLOCAL_HOST=1`, so the private data is never served to the network by accident.
+- **Strict Content-Security-Policy on every response.** `default-src 'self'; style-src 'self' 'unsafe-inline'`. Scripts are same-origin only — no inline JavaScript and no `eval`; only inline *styles* are permitted.
+- **Zero-CDN, fully offline, integrity-pinned assets.** htmx, vega/vega-lite/vega-embed, the CSP-safe AST interpreter, and the Tailwind stylesheet are all vendored under `app/static` and served locally — no third-party requests, no CDN supply-chain exposure, no external tracking. Each asset's upstream version and SHA-256 are recorded in `app/static/vendor/VENDOR.md` and re-verified on update (`sha256sum -c`).
+- **CSP-safe chart rendering.** Charts render through the Vega AST interpreter specifically so the app needs no `unsafe-eval` — the strict CSP above holds with no exceptions carved out for charting.
+- **Uploaded CSVs never persist.** An uploaded snapshot is validated and held in a transient in-memory session keyed by an opaque `secrets`-generated token, then pruned on expiry. Nothing from an upload is written to disk or into the snapshot store.
+- **Auth at the platform edge, not hand-rolled.** The app ships no bespoke authentication. It serves synthetic demo data openly; for real data you place sign-in *in front* of it (e.g. Azure App Service "Easy Auth" / Entra `RequireAuthentication`), a clean boundary with no auth code to get wrong. The deploy guide explicitly warns not to point it at real pipeline data until sign-in is enabled.
+- **Small, auditable surface.** A single read-only FastHTML + htmx process with minimal dependencies and no database writes keeps the attack surface small and the behavior easy to reason about.
 
-## Run it hosted (Azure App Service)
-
-To put the dashboard on a URL instead of a laptop, `deploy/azure-deploy.ps1`
-builds a container image *inside Azure* (no local Docker) and provisions
-App Service for Containers with the committed synthetic demo data baked in:
-
-```powershell
-az login
-./deploy/azure-deploy.ps1
-```
-
-It serves synthetic data with no auth by default; see
-[deploy/README.md](deploy/README.md) for the one-command Entra (Microsoft
-sign-in) gate to add before using real data. The `Dockerfile` also runs
-anywhere Docker does (`docker build -t pipeline-hygiene . && docker run -p
-8000:8000 pipeline-hygiene`).
+This is a demo-grade tool, not a hardened multi-tenant service: there is no built-in RBAC, audit logging, or activity capture. The design goal is that the default posture is safe (local, read-only, offline) and that using it with real data is a deliberate, gated step.
 
 ## Bring your own CSV
 
-The simulator is only a demo. For a real CRM export, run `python -m src.ingest
---init your_export.csv`: it inspects the file, prints a ready-to-paste
-`stage_map` skeleton, and names any missing columns so you never hand-write the
-mapping. The required columns are `opp_id, account, opp_name, owner, stage,
-amount, currency, created_date, close_date, last_activity_date, next_step,
-next_step_date, forecast_category, contact_count, product_line` (ISO dates, one
-currency per file); pass a quotas JSON with `--quotas` to unlock coverage and
-team/region rollups. `config.yaml` ships `default`, `dynamics_default`, and
-`hubspot` stage-map presets, and ingest is safe to schedule — it stores nothing
-and exits nonzero if every row is rejected.
+Export data from your CRM and upload the file to the dashboard. The tool does the rest.
+
+If you want to generate test / seed data, use the following commands.
 
 ```
 python -m src.ingest your_export.csv --stage-map your_map
 python -m src.brief --as-of 2026-08-10 --quotas your_quotas.json --digests
 ```
 
-## For your boss (FAQ)
-
-For an evaluator deciding between this and a commercial suite:
-
-- **Cost of operation.** Runs locally on Python 3.10+; no API keys, no LLM
-  calls, no external services, no per-seat license. Dependencies are pyyaml,
-  pandas, python-fasthtml, altair (pytest/hypothesis are dev-only). A snapshot
-  ingests and briefs in seconds on a laptop.
-- **Auditability.** Every hygiene rule (H1–H11) is a deterministic pure
-  function with a versioned threshold in `config.yaml`; there is no model and
-  no randomness in the engine. The coverage number prints its own basis
-  (`trailing win rate 28/43 closed won (65.1%) -> required multiple 1.54x`),
-  the pipeline waterfall reconciles to the dollar, and a golden-file test pins
-  the brief byte-for-byte. A skeptic can reproduce every figure by hand.
-- **Extensibility.** Add a rule as a pure function in `src/rules.py` plus a
-  weight in `config.yaml`; map any CRM's stage vocabulary with `stage_map`;
-  get team/region rollups by adding an `owners` block to the quotas JSON. No
-  schema migration, no vendor lock-in — it's plain CSV in, Markdown/SQLite out.
-- **What it deliberately does NOT do** (by design, not omission):
-  - No CRM write-back and no contacting sellers — it is read-only over CSV
-    snapshots (*agents inspect, people sell*). The forecast-call checkboxes
-    are paper, on purpose.
-  - No real-time sync — it reasons over batch snapshots, which is what makes
-    the since-last-run and slippage history possible.
-  - No opaque AI/ML deal-risk score — the deterministic, auditable rules are
-    the intended *complement* to CRM-vendor risk AI, not a copy of it.
-  - One currency per file (mixed currency is a fatal ingest error), no
-    activity capture, no built-in SSO/RBAC (bind the dashboard to localhost
-    and distribute the private digests per seller).
-
-## Hygiene rules (H1–H11)
-
-Each rule is a deterministic pure function `(row, config, as_of)` with a
-versioned threshold in `config.yaml` (the same legend prints at the foot of
-every brief). Score starts at 100 and each violation deducts its weight.
-
-| Rule | Meaning | Key threshold(s) in `config.yaml` | Weight |
-|---|---|---|---|
-| H1 | stale by stage | `staleness_days` (per stage) | 15 |
-| H2 | close date in past | close_date < as_of | 20 |
-| H3 | serial slippage | ≥2 close-date changes (high at 3) | 10 |
-| H4 | missing/expired next step | next_step empty or next_step_date < as_of | 20 |
-| H5 | forecast mismatch | commit on pre-develop stage, or no valid next step | 25 |
-| H6 | aging in stage | `aging_norm_days` (per stage) | 10 |
-| H7 | single-threaded big deal | `big_deal_threshold` and contact_count < 2 | 10 |
-| H8 | amount hygiene | amount blank or ≤ 0 | 5 |
-| H9 | vague next step | `next_step_quality` (min chars / filler / action verb) | 5 |
-| H10 | parked close date | `close_date_horizon_days` | 10 |
-| H11 | lost deal control | `push_alarm_days` / `cumulative_push_alarm_days` | 20 |
-
-H3, H6, and H11 need snapshot history; with a single snapshot H3/H6 report
-`insufficient_history` (never a false flag) and H11 is silent.
-
+## Features
 ## Dashboard (FastHTML)
 
 ```
@@ -226,7 +155,114 @@ button.
 
 ![Appendix tab](docs/screenshots/tab-appendix.png)
 
-Implementation notes:
+## Install & run
+
+Two ways: local Python, or Docker (no Python needed).
+
+### Option A — Docker (no local Python)
+
+You still need the repo (Docker builds the image *from* it — the app code and demo data are copied in), but you don't install Python or any dependencies on your host:
+
+```
+bash
+git clone https://github.com/Doogit/pipeline-hygiene.git
+cd pipeline-hygiene
+
+docker build -t pipeline-hygiene .
+docker run -p 8000:8000 pipeline-hygiene   # open http://127.0.0.1:8000
+```
+
+### Option B — Local (Python 3.10+)
+
+```
+bash
+git clone https://github.com/Doogit/pipeline-hygiene.git
+cd pipeline-hygiene
+
+# optional but recommended: isolate deps
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+
+pip install -r requirements.txt
+```
+
+That installs the runtime (pyyaml, pandas, python-fasthtml, altair). No services, no API keys, no LLM calls, and no Node/CSS build step — the Tailwind stylesheet ships prebuilt in `app/static`.
+
+The dashboard reads from a local SQLite store that isn't committed, so load the bundled demo snapshots once before launching:
+
+```bash
+# bash / macOS / Linux
+for f in data/snapshots/opps_*.csv; do python -m src.ingest "$f"; done
+```
+
+```powershell
+# Windows PowerShell
+Get-ChildItem data/snapshots/opps_*.csv | ForEach-Object { python -m src.ingest $_.FullName }
+```
+
+Then run it:
+
+```bash
+python -m app.server        # open http://127.0.0.1:5100
+```
+
+Ingesting the full four-snapshot series (not just one) is what makes the Trajectory, Slippage, and Flow tabs populate. To use real data instead, ingest your own CRM export — see [Bring your own CSV](#bring-your-own-csv).
+
+
+
+## For your boss (FAQ)
+
+For an evaluator deciding between this and a commercial suite:
+
+- **Cost of operation.** Runs locally on Python 3.10+; no API keys, no LLM
+  calls, no external services, no per-seat license. Dependencies are pyyaml,
+  pandas, python-fasthtml, altair (pytest/hypothesis are dev-only). A snapshot
+  ingests and briefs in seconds on a laptop.
+- **Auditability.** Every hygiene rule (H1–H11) is a deterministic pure
+  function with a versioned threshold in `config.yaml`; there is no model and
+  no randomness in the engine. The coverage number prints its own basis
+  (`trailing win rate 28/43 closed won (65.1%) -> required multiple 1.54x`),
+  the pipeline waterfall reconciles to the dollar, and a golden-file test pins
+  the brief byte-for-byte. A skeptic can reproduce every figure by hand.
+- **Extensibility.** Add a rule as a pure function in `src/rules.py` plus a
+  weight in `config.yaml`; map any CRM's stage vocabulary with `stage_map`;
+  get team/region rollups by adding an `owners` block to the quotas JSON. No
+  schema migration, no vendor lock-in — it's plain CSV in, Markdown/SQLite out.
+- **What it deliberately does NOT do** (by design, not omission):
+  - No CRM write-back and no contacting sellers — it is read-only over CSV
+    snapshots (*agents inspect, people sell*). The forecast-call checkboxes
+    are paper, on purpose.
+  - No real-time sync — it reasons over batch snapshots, which is what makes
+    the since-last-run and slippage history possible.
+  - No opaque AI/ML deal-risk score — the deterministic, auditable rules are
+    the intended *complement* to CRM-vendor risk AI, not a copy of it.
+  - One currency per file (mixed currency is a fatal ingest error), no
+    activity capture, no built-in SSO/RBAC (bind the dashboard to localhost
+    and distribute the private digests per seller).
+
+## Hygiene rules (H1–H11)
+
+Each rule is a deterministic pure function `(row, config, as_of)` with a
+versioned threshold in `config.yaml` (the same legend prints at the foot of
+every brief). Score starts at 100 and each violation deducts its weight.
+
+| Rule | Meaning | Key threshold(s) in `config.yaml` | Weight |
+|---|---|---|---|
+| H1 | stale by stage | `staleness_days` (per stage) | 15 |
+| H2 | close date in past | close_date < as_of | 20 |
+| H3 | serial slippage | ≥2 close-date changes (high at 3) | 10 |
+| H4 | missing/expired next step | next_step empty or next_step_date < as_of | 20 |
+| H5 | forecast mismatch | commit on pre-develop stage, or no valid next step | 25 |
+| H6 | aging in stage | `aging_norm_days` (per stage) | 10 |
+| H7 | single-threaded big deal | `big_deal_threshold` and contact_count < 2 | 10 |
+| H8 | amount hygiene | amount blank or ≤ 0 | 5 |
+| H9 | vague next step | `next_step_quality` (min chars / filler / action verb) | 5 |
+| H10 | parked close date | `close_date_horizon_days` | 10 |
+| H11 | lost deal control | `push_alarm_days` / `cumulative_push_alarm_days` | 20 |
+
+H3, H6, and H11 need snapshot history; with a single snapshot H3/H6 report
+`insufficient_history` (never a false flag) and H11 is silent.
+
+## Implementation notes:
 
 - Data source: the latest stored snapshot from `data/pipeline.db` by
   default (snapshot selectable in the sidebar). An uploaded CSV runs the
