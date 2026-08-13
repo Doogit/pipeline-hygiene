@@ -81,13 +81,11 @@ def _sparkline(values):
         f'<circle class="spark-end" cx="{ex:.1f}" cy="{ey:.1f}" r="1.8"/></svg>')
 
 
-# Canonical rule -> severity tier. Severity is per-violation in src/rules.py
-# (H1/H3/H10 vary by row context), so this is a presentation heuristic: the
-# rule's representative tier, used ONLY to color chips/stripes where the view
-# model doesn't carry an authoritative row severity. Keep in sync with rules.py.
-_CANON_SEV = {"H1": "medium", "H2": "high", "H3": "medium", "H4": "high",
+# Rule -> severity tier fallback. H1/H3/H10 are context-sensitive in rules.py,
+# so _rule_severity handles them from row context where the table carries it.
+_CANON_SEV = {"H2": "high", "H4": "high",
               "H5": "high", "H6": "medium", "H7": "medium", "H8": "low",
-              "H9": "low", "H10": "low", "H11": "high"}
+              "H9": "low", "H11": "high"}
 _SEV_RANK = {"high": 0, "medium": 1, "low": 2}
 _SEV_CLS = {"high": "high", "medium": "med", "low": "low"}
 
@@ -104,8 +102,25 @@ def _codes(text):
             if p and p != "-"]
 
 
-def _worst_sev(codes):
-    ranks = [_SEV_RANK[_CANON_SEV[c]] for c in codes if c in _CANON_SEV]
+def _rule_severity(code, row):
+    stage = str((row or {}).get("stage") or "")
+    if code == "H1":
+        return "high" if stage in ("commit", "propose") else "medium"
+    if code == "H3":
+        try:
+            pushes = int((row or {}).get("pushes") or 0)
+        except (TypeError, ValueError):
+            pushes = 0
+        return "high" if stage == "commit" or pushes >= 3 else "medium"
+    if code == "H10":
+        forecast = str((row or {}).get("forecast") or "")
+        return "medium" if forecast in ("commit", "best_case") else "low"
+    return _CANON_SEV.get(code)
+
+
+def _worst_sev(codes, row=None):
+    ranks = [_SEV_RANK[sev] for c in codes
+             for sev in [_rule_severity(c, row)] if sev in _SEV_RANK]
     return ["high", "medium", "low"][min(ranks)] if ranks else None
 
 
@@ -113,10 +128,11 @@ def _row_severity(t, r):
     """Row-level severity tier for the stripe, or None. exceptions/owner_drilldown
     carry an authoritative 'worst'; risky_commits/slippage derive it from codes."""
     if "worst" in r:
-        return r.get("worst")
+        sev = r.get("worst")
+        return sev if sev in _SEV_CLS else None
     if t.id in ("risky_commits", "slippage"):
         col = "flags" if t.id == "risky_commits" else "rules"
-        return _worst_sev(_codes(r.get(col)))
+        return _worst_sev(_codes(r.get(col)), r)
     return None
 
 
@@ -183,8 +199,9 @@ def render_table(t, cur):
                      "hx_include": "#sidebar-form", "hx_indicator": "#load",
                      "role": "button", "tabindex": "0"}
             row_cls.append("row-click")
-        if sev:
-            row_cls.append("sev-" + _SEV_CLS[sev])
+        sev_cls = _SEV_CLS.get(sev)
+        if sev_cls:
+            row_cls.append("sev-" + sev_cls)
         if row_cls:
             attrs["cls"] = " ".join(row_cls)
         body.append(Tr(*cells, **attrs))

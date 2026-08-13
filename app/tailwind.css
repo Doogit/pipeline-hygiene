@@ -45,7 +45,7 @@
 
   --radius-sm: 4px;
   --radius: 6px;
-  --radius-lg: 10px;
+  --radius-lg: 8px;
 
   --shadow-sm: 0 1px 2px rgba(20, 28, 40, .05);
 }
@@ -55,7 +55,7 @@
 
   /* ---------- top bar ---------- */
   .topbar { @apply flex items-center gap-3 border-b border-border sticky top-0 z-20 px-[22px] py-[11px]; }
-  .title { @apply text-[15px] font-bold tracking-tight text-ink; }
+  .title { @apply text-[15px] font-bold text-ink; }
 
   /* ---------- layout ---------- */
   .layout { @apply flex items-start gap-5 max-w-[1600px] mx-auto px-[22px] pt-[18px] pb-[60px]; }
@@ -83,10 +83,10 @@
   .apply { @apply mt-[2px] bg-accent text-white rounded px-3 py-[9px] text-[13px] font-semibold hover:bg-accent-strong cursor-pointer border-0; }
 
   /* section headings — sidebar renders these as .h2 (uppercase caption chrome) */
-  .sidebar .h2 { @apply text-[11px] font-bold tracking-[0.08em] uppercase text-ink-muted border-b border-border pb-[6px] mt-0; }
+  .sidebar .h2 { @apply text-[11px] font-bold uppercase text-ink-muted border-b border-border pb-[6px] mt-0; }
 
   .h2 { @apply text-sm font-semibold text-ink mt-2 border-b border-border pb-1; }
-  .h3 { @apply text-[17px] font-bold tracking-tight text-ink mt-1; }
+  .h3 { @apply text-[17px] font-bold text-ink mt-1; }
   .h4 { @apply text-[13px] font-semibold text-ink; }
   .caption { @apply text-xs text-ink-muted leading-snug max-w-[92ch]; }
   .md { @apply text-[13px] text-ink; }
@@ -96,8 +96,8 @@
   /* ---------- metric band ---------- */
   .metric-row { @apply grid grid-cols-2 md:grid-cols-5 gap-3; }
   .metric-card { @apply border border-border rounded-lg bg-surface shadow-sm px-[15px] pt-[14px] pb-[13px]; }
-  .metric-label { @apply text-[11px] font-semibold tracking-[0.04em] uppercase text-ink-muted mb-[7px] leading-tight min-h-[28px]; }
-  .metric-value { @apply text-[27px] font-bold tracking-tight leading-none text-ink tabular-nums; }
+  .metric-label { @apply text-[11px] font-semibold uppercase text-ink-muted mb-[7px] leading-tight min-h-[28px]; }
+  .metric-value { @apply text-[27px] font-bold leading-none text-ink tabular-nums; }
   .metric-delta { @apply text-xs mt-[6px] min-h-[17px] flex items-center gap-[5px] tabular-nums text-ink-faint; }
   .delta-up { @apply text-positive-ink font-semibold; }
   .delta-down { @apply text-high-ink font-semibold; }
@@ -110,7 +110,7 @@
   .table-wrap { @apply overflow-x-auto border border-border rounded-lg bg-surface shadow-sm; }
   .ph-table { @apply w-full text-xs border-collapse; }
   .ph-table th {
-    @apply text-left font-semibold text-ink-muted tracking-[0.03em] uppercase text-[11px] px-[11px] py-[9px]
+    @apply text-left font-semibold text-ink-muted uppercase text-[11px] px-[11px] py-[9px]
            border-b border-border-strong whitespace-nowrap bg-surface sticky top-0; }
   .ph-table td { @apply px-[11px] py-2 border-b border-border align-middle; }
   .ph-table tr:last-child td { @apply border-b-0; }
@@ -173,7 +173,7 @@
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .chip {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: 10.5px; font-weight: 600; letter-spacing: .02em;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0;
   padding: 2px 8px; border-radius: 999px; white-space: nowrap;
   background: var(--color-surface-sunken); color: var(--color-ink-muted);
 }
