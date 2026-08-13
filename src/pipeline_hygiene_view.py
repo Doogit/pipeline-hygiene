@@ -928,6 +928,9 @@ def build_from_store(config_path, db_path, quotas_path=None, *,
 
     snapshot_date = snapshot_date or dates[-1]
     as_of = as_of or snapshot_date
+    from src.funnel import resolve_aging_config
+    config = resolve_aging_config(store, config, snapshot_date)
+    store.config = config
     rows = store.rows_with_history(snapshot_date)
     validation = store.validation_report_dict(snapshot_date)
     prev = store.last_run_before_snapshot(snapshot_date)

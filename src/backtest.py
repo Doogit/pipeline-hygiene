@@ -31,6 +31,8 @@ def backtest(store, config, as_of):
     meta carries the window (snapshot dates used) and min_n for the caption.
     An opp flagged by a rule in several snapshots counts once for that rule.
     """
+    from .funnel import resolve_aging_config
+    config = resolve_aging_config(store, config, as_of)
     dates = [d for d in store.snapshot_dates() if d <= as_of]
     # Final outcome per opp: closed rows are terminal, so closed_outcomes (the
     # last observed row per opp, kept only if closed) is the whole resolution

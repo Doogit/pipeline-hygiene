@@ -105,6 +105,31 @@ def test_render_and_run_write_report(tmp_path, config):
     assert "n/a" in text
 
 
+def test_backtest_uses_derived_aging_config(tmp_path, config):
+    d1, d2 = AS_OF - timedelta(days=14), AS_OF - timedelta(days=7)
+    cfg = dict(config)
+    cfg["aging_norm_mode"] = "derived"
+    cfg["aging_norm_derived_multiple"] = 2.0
+    cfg["min_closed_for_win_rate"] = 2
+    store = SnapshotStore(":memory:", cfg)
+    movers = [f"DEV-{i}" for i in range(1, 4)]
+    _ingest(store, tmp_path, d1,
+            [_row(o, d1, stage="develop") for o in movers]
+            + [_row("SITTER", d1, stage="develop",
+                    stage_entered_date=AS_OF - timedelta(days=30))])
+    _ingest(store, tmp_path, d2,
+            [_row(o, d2, stage="develop") for o in movers]
+            + [_row("SITTER", d2, stage="develop",
+                    stage_entered_date=AS_OF - timedelta(days=30))])
+    _ingest(store, tmp_path, AS_OF,
+            [_row(o, AS_OF, stage="propose") for o in movers]
+            + [_row("SITTER", AS_OF, stage="develop",
+                    stage_entered_date=AS_OF - timedelta(days=30))])
+
+    records, _ = bt.backtest(store, cfg, AS_OF)
+    assert _rec(records, "H6")["flagged"] == 1
+
+
 def test_empty_store_reports_nothing(tmp_path, config):
     store = SnapshotStore(":memory:", config)
     records, meta = bt.backtest(store, config, AS_OF)
