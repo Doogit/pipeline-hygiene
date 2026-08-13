@@ -129,6 +129,25 @@ button.
 
 ![Appendix tab](docs/screenshots/tab-appendix.png)
 
+### Packets (optional — draft actions)
+
+Behind the `PIPELINE_HYGIENE_PACKETS` flag (off by default), the dashboard gains
+a **Packets** tab — the one place the tool drafts *action* rather than only
+inspecting. For each owner it assembles their open work items (proposed field
+updates, next steps, draft emails, review docs, and 1:1 agenda items),
+dollar-ranked, with a computed minutes-to-clear estimate and a paste-ready CRM
+block built only from the updates you accept. Every packet carries the verbatim
+header *"Drafts only — review before use… Nothing was sent or written on your
+behalf,"* and exports to `.md`/`.html` — the app never sends anything.
+
+This is the tool's **one writable surface**, and it stays local: writes go only
+to the packet ledger (`work_items` / `work_item_events`), never to source data;
+each accept / edit / dismiss is timestamped in an append-only audit trail; the
+routes are single-operator and localhost-bound. Capture is manual entry — there
+is no LLM, API, or network call anywhere.
+
+![Packets tab](docs/screenshots/tab-packets.png)
+
 ## Install & run
 
 Two ways: local Python, or Docker (no Python needed).
