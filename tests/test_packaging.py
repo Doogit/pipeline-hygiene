@@ -6,6 +6,7 @@ assert the *satisfiability* of the Dockerfile's declarations, not its wording.
 """
 
 import importlib
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -91,6 +92,18 @@ def test_package_workflow_probes_fasthtml_health_endpoint():
         "container smoke test must probe the FastHTML health endpoint"
     assert "/_stcore/health" not in workflow, \
         "container smoke test still probes retired Streamlit health endpoint"
+
+
+def test_local_vendor_manifest_hashes_match_files():
+    manifest = (REPO / "app" / "static" / "vendor" / "VENDOR.md").read_text(
+        encoding="utf-8"
+    )
+    rows = re.findall(r"\| ([^|]+\.js) \| \(local\) \| `([0-9a-f]{64})` \|", manifest)
+    assert rows, "VENDOR.md must record hashes for local runtime JS"
+    for asset, expected in rows:
+        path = REPO / "app" / "static" / "vendor" / asset
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        assert actual == expected, f"{asset} SHA-256 in VENDOR.md is stale"
 
 
 def test_deploy_does_not_enable_streamlit_websockets():
