@@ -298,7 +298,7 @@ def render_tabs(page, cur):
 
 def _selection_query(sel):
     pairs = []
-    for key in ("stage_map", "snapshot", "as_of"):
+    for key in ("stage_map", "snapshot", "as_of", "upload_token"):
         if sel and sel.get(key):
             pairs.append((key, sel[key]))
     for key, param in (("owners", "owner"), ("teams", "team"),
@@ -308,8 +308,10 @@ def _selection_query(sel):
     return f"?{urlencode(pairs)}" if pairs else ""
 
 
-def render_content(page, sel=None):
-    """The headline + tabs region (htmx-swappable target)."""
+def render_content(page, sel=None, *, oob=False):
+    """The headline + tabs region (htmx-swappable target). oob=True marks it as
+    an out-of-band swap target so /upload can replace #content while its primary
+    response updates #upload-status."""
     cur = V._cur(page.controls.get("config") or {})
     top = [render_block(b, cur) for b in page.blocks]
     body = list(top)
@@ -321,7 +323,10 @@ def render_content(page, sel=None):
                           title="Rendered from the selected snapshot; does not "
                                 "record a run."),
                         cls="download-row"))
-    return Div(*body, id="content", cls="content", **{"aria_live": "polite"})
+    attrs = {"id": "content", "cls": "content", "aria_live": "polite"}
+    if oob:
+        attrs["hx_swap_oob"] = "true"
+    return Div(*body, **attrs)
 
 
 # --- sidebar + page shell ---
@@ -343,56 +348,78 @@ def _checkbox_list(name, options, selected, searchable=False):
     return Div(*inner, cls="cb-list")
 
 
-def render_sidebar(page, sel):
+def _sidebar_dynamic(page, sel, *, oob=False):
+    """The stage-vocab + snapshot/filter controls (an htmx OOB target). /upload
+    swaps this so filters reflect the uploaded rows and carry upload_token; the
+    static upload field + #upload-status above it stay in place."""
     c = page.controls
     stage_maps = c.get("stage_maps") or ["default"]
     dates = [d.isoformat() for d in c.get("snapshot_dates") or []]
     snap = (c.get("snapshot_date").isoformat() if c.get("snapshot_date")
             else (dates[-1] if dates else ""))
     as_of = c.get("as_of").isoformat() if c.get("as_of") else snap
+    upload_token = c.get("upload_token")
 
-    controls = [
-        H2("Data source", cls="h2"),
-        Div(Label("Upload a snapshot CSV (validated, evaluated in memory, "
-                  "never stored)", cls="lbl"),
-            Input(type="file", name="upload", accept=".csv",
-                  hx_post="/upload", hx_target="#upload-status",
-                  hx_encoding="multipart/form-data", hx_trigger="change",
-                  hx_indicator="#load"),
-            Div(id="upload-status"), cls="field"),
-        Div(Label("Stage vocabulary (stage_map)", cls="lbl"),
-            Select(*[Option(s, value=s, selected=(s == sel.get("stage_map",
-                                                               "default")))
-                     for s in stage_maps],
-                   name="stage_map", hx_trigger="change", **_HX), cls="field"),
-    ]
+    parts = [Div(Label("Stage vocabulary (stage_map)", cls="lbl"),
+                 Select(*[Option(s, value=s,
+                                 selected=(s == sel.get("stage_map", "default")))
+                          for s in stage_maps],
+                        name="stage_map", hx_trigger="change", **_HX),
+                 cls="field")]
+    if upload_token:
+        # Carry the temp-session token on every filter/drill-down/download
+        # request; offer a way back to the stored view (a plain reload).
+        parts.append(Input(type="hidden", name="upload_token",
+                           value=upload_token))
+        parts.append(P("Viewing an uploaded snapshot — not added to the store. ",
+                       A("Return to the stored view", href="/", cls="download"),
+                       cls="caption"))
     if dates:
-        controls.append(Div(
+        parts.append(Div(
             Label("Snapshot", cls="lbl"),
             Select(*[Option(d, value=d, selected=(d == snap)) for d in dates],
                    name="snapshot", hx_trigger="change", **_HX), cls="field"))
-        controls.append(Div(
+        parts.append(Div(
             Label("Evaluate as of", cls="lbl"),
             Input(type="date", name="as_of", value=as_of,
                   hx_trigger="change", **_HX), cls="field"))
-        controls.append(H2("Filters", cls="h2"))
-        controls.append(Div(Label("Owner", cls="lbl"),
-                            _checkbox_list("owner", c.get("owners") or [],
-                                           sel.get("owners"), searchable=True),
-                            cls="field"))
+    if dates or upload_token:
+        parts.append(H2("Filters", cls="h2"))
+        parts.append(Div(Label("Owner", cls="lbl"),
+                         _checkbox_list("owner", c.get("owners") or [],
+                                        sel.get("owners"), searchable=True),
+                         cls="field"))
         if c.get("teams"):
-            controls.append(Div(Label("Team", cls="lbl"),
-                                _checkbox_list("team", c["teams"],
-                                               sel.get("teams"),
-                                               searchable=True), cls="field"))
-        controls.append(Div(Label("Stage", cls="lbl"),
-                            _checkbox_list("stage", c.get("stages") or [],
-                                           sel.get("stages")), cls="field"))
-        controls.append(Div(Label("Severity", cls="lbl"),
-                            _checkbox_list("sev", ["high", "medium", "low"],
-                                           sel.get("sev")), cls="field"))
-        controls.append(Button("Apply filters", type="button", cls="apply",
-                               hx_trigger="click", **_HX))
+            parts.append(Div(Label("Team", cls="lbl"),
+                             _checkbox_list("team", c["teams"],
+                                            sel.get("teams"),
+                                            searchable=True), cls="field"))
+        parts.append(Div(Label("Stage", cls="lbl"),
+                         _checkbox_list("stage", c.get("stages") or [],
+                                        sel.get("stages")), cls="field"))
+        parts.append(Div(Label("Severity", cls="lbl"),
+                         _checkbox_list("sev", ["high", "medium", "low"],
+                                        sel.get("sev")), cls="field"))
+        parts.append(Button("Apply filters", type="button", cls="apply",
+                            hx_trigger="click", **_HX))
+    attrs = {"id": "sidebar-dynamic"}
+    if oob:
+        attrs["hx_swap_oob"] = "true"
+    return Div(*parts, **attrs)
+
+
+def render_sidebar(page, sel):
+    controls = [
+        H2("Data source", cls="h2"),
+        Div(Label("Upload a snapshot CSV (validated and rendered below; not "
+                  "added to the snapshot store)", cls="lbl"),
+            Input(type="file", name="upload", accept=".csv",
+                  hx_post="/upload", hx_target="#upload-status",
+                  hx_swap="outerHTML", hx_encoding="multipart/form-data",
+                  hx_trigger="change", hx_indicator="#load"),
+            Div(id="upload-status"), cls="field"),
+        _sidebar_dynamic(page, sel),
+    ]
     return Form(*controls, cls="sidebar", id="sidebar-form")
 
 

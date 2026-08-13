@@ -13,7 +13,9 @@ acceptance were signed off (migration Task 5); the parity gate (tests/parity)
 remains as the regression baseline against its frozen goldens.
 """
 import os
+import secrets
 import tempfile
+import time
 from datetime import date
 from pathlib import Path
 
@@ -31,6 +33,24 @@ HERE = Path(__file__).resolve().parent
 STATIC = HERE / "static"
 MAX_UPLOAD_BYTES = int(os.environ.get("PIPELINE_HYGIENE_UPLOAD_LIMIT_BYTES",
                                       str(5 * 1024 * 1024)))
+
+# In-memory upload sessions: a validated CSV is rendered as a full page (store
+# is None) and its parsed rows are held here — keyed by an opaque token — only
+# so the drill-down and .md download can operate on the uploaded snapshot too.
+# Nothing is written to disk or the snapshot store; sessions are transient
+# (bounded count, idle TTL) and vanish on process exit or reload.
+_UPLOAD_SESSIONS = {}
+_UPLOAD_TTL_SECONDS = int(os.environ.get("PIPELINE_HYGIENE_UPLOAD_TTL", "1800"))
+_UPLOAD_MAX_SESSIONS = 8
+
+
+def _prune_sessions(now):
+    for tok in [t for t, s in _UPLOAD_SESSIONS.items()
+                if now - s["ts"] > _UPLOAD_TTL_SECONDS]:
+        _UPLOAD_SESSIONS.pop(tok, None)
+    while len(_UPLOAD_SESSIONS) > _UPLOAD_MAX_SESSIONS:
+        oldest = min(_UPLOAD_SESSIONS, key=lambda t: _UPLOAD_SESSIONS[t]["ts"])
+        _UPLOAD_SESSIONS.pop(oldest, None)
 
 def _paths():
     # Read per-request so tests (and redeploys) can repoint the store via env.
@@ -79,6 +99,7 @@ def _selections(request):
         "teams": q.getlist("team"),
         "stages": q.getlist("stage"),
         "sev": q.getlist("sev"),
+        "upload_token": q.get("upload_token"),
     }
 
 
@@ -90,6 +111,49 @@ def _page(sel):
         config_path, db_path, quotas_path, snapshot_date=snap, as_of=as_of,
         f_owners=sel["owners"], f_teams=sel["teams"], f_stages=sel["stages"],
         f_sev=sel["sev"])
+
+
+def _upload_page(token, sel):
+    """Rebuild the PageModel for an uploaded snapshot from its held rows (store
+    is None), applying the active filters. Returns None if the token is unknown
+    or expired (caller falls back to the stored view)."""
+    s = _UPLOAD_SESSIONS.get(token)
+    if s is None:
+        return None
+    s["ts"] = time.monotonic()  # refresh idle TTL on use
+    config, rows = s["config"], s["rows"]
+    controls = {
+        "config": config,
+        "data": s["data"],              # byte-identical brief.render download
+        "rows": rows,                   # owner drill-down
+        "snapshot_dates": [],           # single uploaded snapshot; no selector
+        "snapshot_date": s["snapshot_date"],
+        "as_of": s["as_of"],
+        "upload_token": token,
+        "stage_maps": sorted(config.get("stage_map", {})),
+        "owners": sorted({r["owner"] for r in rows if V.is_open(r)}),
+        "stages": sorted({r["stage"] for r in rows if V.is_open(r)}),
+        "teams": sorted({(m or {}).get("team")
+                         for m in (config.get("owner_meta") or {}).values()}
+                        - {None}),
+    }
+    return V.build_page_model(
+        store=None, config=config, snapshot_date=s["snapshot_date"],
+        as_of=s["as_of"], rows=rows, data=s["data"], prev_summary=None,
+        prev_opens=[], outcomes=None, validation=s["validation"],
+        f_owners=sel["owners"], f_teams=sel["teams"], f_stages=sel["stages"],
+        f_sev=sel["sev"], controls=controls)
+
+
+def _page_for(sel):
+    """Route a request to the uploaded-snapshot view when a valid upload_token
+    is present, otherwise the stored view."""
+    token = sel.get("upload_token")
+    if token:
+        page = _upload_page(token, sel)
+        if page is not None:
+            return page
+    return _page(sel)
 
 
 def _upload_status(message, *, warning=False, report=None):
@@ -120,14 +184,14 @@ def healthz():
 @app.get("/content")
 def content(request):
     sel = _selections(request)
-    return R.render_content(_page(sel), sel)
+    return R.render_content(_page_for(sel), sel)
 
 
 @app.get("/drilldown")
 def drilldown(request):
     sel = _selections(request)
     owner = request.query_params.get("owner")
-    page = _page(sel)
+    page = _page_for(sel)
     data = page.controls.get("data")
     if not owner or data is None:
         return R.render_block(V.Drilldown("Select an owner row to drill into "
@@ -144,7 +208,7 @@ def drilldown(request):
 @app.get("/download")
 def download(request):
     sel = _selections(request)
-    page = _page(sel)
+    page = _page_for(sel)
     data = page.controls.get("data")
     if data is None:
         return Response("No snapshot loaded.", status_code=404)
@@ -203,12 +267,37 @@ async def upload(request):
         except IngestError as exc:
             return _upload_status(f"Upload rejected: {exc}", warning=True)
 
-    return _upload_status(
-        f"Uploaded snapshot {snapshot_date.isoformat()} validated: accepted "
+    # Render the uploaded rows as a full page (store is None → the multi-snapshot
+    # sections degrade to their empty-state notes) and hold the parsed rows in a
+    # transient session so the drill-down and .md download work on it too. The
+    # status swaps #upload-status; #content and the sidebar filters swap out of
+    # band so the stored view is replaced without a reload.
+    validation = dict(report.to_dict(), source_file=filename)
+    data = brief.build_from_rows(
+        rows, snapshot_date, snapshot_date, config, validation=validation,
+        prev_summary=None, outcomes=None, prev_opens=[], patterns=None,
+        ledger=None)
+    now = time.monotonic()
+    _prune_sessions(now)
+    token = secrets.token_urlsafe(16)
+    _UPLOAD_SESSIONS[token] = {
+        "rows": rows, "data": data, "config": config,
+        "snapshot_date": snapshot_date, "as_of": snapshot_date,
+        "validation": validation, "ts": now}
+
+    sel = {"stage_map": stage_map, "snapshot": None, "as_of": None,
+           "owners": [], "teams": [], "stages": [], "sev": [],
+           "upload_token": token}
+    page = _upload_page(token, sel)
+    status = _upload_status(
+        f"Uploaded snapshot {snapshot_date.isoformat()} rendered below — single "
+        f"snapshot, so H3/H6 may report insufficient history. Accepted "
         f"{report.accepted}/{report.total_rows} rows, rejected "
-        f"{report.rejected}. Step 1 does not yet re-render uploaded CSVs; "
-        "the stored snapshot view remains unchanged.",
+        f"{report.rejected}.",
         report=report if report.rejected else None)
+    return (status,
+            R.render_content(page, sel, oob=True),
+            R._sidebar_dynamic(page, sel, oob=True))
 
 
 if __name__ == "__main__":
