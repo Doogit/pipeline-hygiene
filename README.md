@@ -408,12 +408,15 @@ the code, and git history.
 
 ## Handoff
 
-Recently implemented or unblocked:
+Recently implemented in this stack:
 
-- Org-specific backtesting: `python -m src.backtest` reports each rule's
-  flagged opportunities joined to final observed outcomes from stored history.
 - Seed series stage progression: `--progress-per-week` can now create
   mid-funnel movement for later conversion and dwell analytics.
+- Org-specific backtesting: `python -m src.backtest` reports each rule's
+  flagged opportunities joined to final observed outcomes from stored history.
+- Stage-funnel analytics from stored snapshots: `python -m src.funnel`
+  reports width, advancement, closed outcomes, and observed median dwell by
+  open stage without reading the seed delta manifest.
 
 Next session candidates (recorded, deliberately NOT built) — reviewed this
 session against the code; all remain unimplemented:
@@ -425,10 +428,5 @@ session against the code; all remain unimplemented:
 - Slack/email push delivery of the brief and digests (top 3-5 cap, weekly,
   digest not firehose — alert fatigue kills adoption).
 - Cross-CRM connector via `stage_map` (original spec handoff option).
-- Funnel / stage-transition analytics (deferred across earlier sessions):
-  seed series can now opt into mid-funnel stage progression with
-  `--progress-per-week`, so the next step is deriving conversion and dwell
-  analytics from stored snapshots.
-
 Start the next session by reading `README.md`, `SPEC.md`,
 `data/seed_manifest.json`, and `data/delta_manifest.json`.
