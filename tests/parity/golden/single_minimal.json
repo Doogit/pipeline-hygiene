@@ -1919,10 +1919,11 @@
   "charts": [
     {
       "data": {
-        "name": "a86f9cf5f124ba7f561f4736cfa56b3d"
+        "name": "data-9da8b9d8ea94bf57f38fbfa81baccc91"
       },
       "mark": {
         "type": "bar",
+        "cornerRadiusEnd": 3,
         "size": 26
       },
       "encoding": {
@@ -1930,7 +1931,7 @@
           "field": "severity",
           "legend": {
             "orient": "right",
-            "title": " "
+            "title": null
           },
           "scale": {
             "domain": [
@@ -1974,11 +1975,7 @@
         }
       },
       "height": 40,
-      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json",
-      "autosize": {
-        "type": "fit",
-        "contains": "padding"
-      }
+      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
     }
   ]
 }
