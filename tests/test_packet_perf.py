@@ -32,25 +32,32 @@ def test_400_opp_packet_build_under_10s(tmp_path, config, monkeypatch):
         "owners": {s.name: {"team": s.team, "region": s.region}
                    for s in org.sellers}})
     store = SnapshotStore(":memory:", cfg)
-    for d, rows in snapshots:
-        path = tmp_path / f"opps_{d.isoformat()}.csv"
-        write_csv(path, rows)
-        assert store.ingest_csv(path, d).rejected == 0
-    latest = dates[-1]
+    wi = None
+    try:
+        for d, rows in snapshots:
+            path = tmp_path / f"opps_{d.isoformat()}.csv"
+            write_csv(path, rows)
+            assert store.ingest_csv(path, d).rejected == 0
+        latest = dates[-1]
 
-    # Measure only the build (seeding/ingest above is test setup, not the gate).
-    wi = WorkItemStore(":memory:", cfg)
-    start = time.monotonic()
-    result = build_work_items(store, wi, latest, cfg, latest)
-    counts = {}
-    for it in wi.items(open_only=True):
-        counts[it["owner_normalized"]] = counts.get(it["owner_normalized"], 0) + 1
-    if counts:  # build the packet for the busiest owner
-        busiest = max(counts, key=counts.get)
-        packet.build_owner_packet(wi, busiest, cfg, latest,
-                                  snapshot_store=store, snapshot_date=latest)
-    elapsed = time.monotonic() - start
-    wi.close()
+        # Measure only the build (seeding/ingest above is test setup, not the gate).
+        wi = WorkItemStore(":memory:", cfg)
+        start = time.monotonic()
+        result = build_work_items(store, wi, latest, cfg, latest)
+        counts = {}
+        for it in wi.items(open_only=True):
+            counts[it["owner_normalized"]] = \
+                counts.get(it["owner_normalized"], 0) + 1
+        if counts:  # build the packet for the busiest owner
+            busiest = max(counts, key=counts.get)
+            packet.build_owner_packet(wi, busiest, cfg, latest,
+                                      snapshot_store=store,
+                                      snapshot_date=latest)
+        elapsed = time.monotonic() - start
+    finally:
+        if wi is not None:
+            wi.close()
+        store.close()
 
     assert result["upserted"] > 0, "expected the 400-opp snapshot to fire rules"
     assert elapsed < 10.0, \

@@ -24,10 +24,13 @@ def test_flag_off_no_packets_surface_anywhere(tmp_path, monkeypatch):
         monkeypatch.setenv(k, v)
     monkeypatch.delenv("PIPELINE_HYGIENE_PACKETS", raising=False)
 
-    html = client.get("/").text
-    assert ">Packets<" not in html, "Packets tab must be absent when flag off"
-    assert "packets-panel" not in html
-    assert "Dismissed work items" not in html  # R5.3 Appendix analytics absent
+    for path in ("/", "/content"):
+        response = client.get(path)
+        assert response.status_code == 200, path
+        html = response.text
+        assert ">Packets<" not in html, "Packets tab must be absent when flag off"
+        assert "packets-panel" not in html
+        assert "Dismissed work items" not in html  # R5.3 analytics absent
 
     # Every packet mutation route 404s (the flag gate runs first, before auth).
     for path in _MUTATION_ROUTES:
