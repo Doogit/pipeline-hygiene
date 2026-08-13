@@ -4,7 +4,7 @@
 - New repo `pipeline-hygiene`. Create branch `feat/mvp-rules-engine` before any code.
 - Vendor-neutral core: no MSX, Dataverse, Salesforce, or HubSpot dependencies. Ingestion is CSV against the schema below; CRM connectors are future sessions. A config-driven `stage_map` (not code) handles vocabulary differences between CRMs.
 - The agent is **read-only** over pipeline data. It inspects and reports. It never writes to source data and never contacts sellers directly. Operating principle: **agents inspect, people sell.**
-- Deterministic rules engine first. **No LLM calls in Tasks 1–5.** Task 6 is feature-flagged (`LLM_ENABLED=1`) and skippable.
+- Deterministic rules engine first. **No LLM calls in Tasks 1–6.** Task 7 is feature-flagged (`LLM_ENABLED=1`) and skippable.
 - **Clock determinism:** every function that evaluates time takes an explicit `as_of: date` parameter. `date.today()` may appear only in CLI entry points as the default for `--as-of`. No exceptions — rules, scoring, seed, brief, dashboard all thread `as_of` through.
 - **Test config isolation:** tests load `tests/config_test.yaml` (frozen copy of defaults), never the repo `config.yaml`. Editing runtime config must never break tests.
 - Synthetic data only. No real customer, employer, or colleague names anywhere in the repo.
@@ -112,7 +112,7 @@ Each rule = a pure function `(row, config, as_of) -> Violation | None | Insuffic
 - **At-risk dollars** = sum of amount over **distinct** open opps having ≥1 high-severity violation. Never sum per violation.
 
 ## Task 1: Scaffold + config
-- Layout: `src/` (`ingest.py`, `snapshots.py`, `rules.py`, `scoring.py`, `brief.py`), `src/seed/` (`__main__.py`, `org.py`, `pathologies.py`, `series.py`), `app/dashboard.py`, `data/`, `tests/`, `out/`, `config.yaml`, `tests/config_test.yaml`, `README.md`.
+- Layout: `src/` (`ingest.py`, `snapshots.py`, `rules.py`, `scoring.py`, `brief.py`), `src/seed/` (`__main__.py`, `org.py`, `pathologies.py`, `series.py`), `app/server.py`, `app/render.py`, `app/static/`, `data/`, `tests/`, `out/`, `config.yaml`, `tests/config_test.yaml`, `README.md`.
 - `config.yaml` per the block above; `tests/config_test.yaml` is a byte-identical frozen copy with a header comment: "Frozen for tests. Do not edit to make tests pass."
 
 ## Task 2: Org simulator seed (`python -m src.seed`)

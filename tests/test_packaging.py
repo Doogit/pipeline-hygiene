@@ -93,6 +93,14 @@ def test_package_workflow_probes_fasthtml_health_endpoint():
         "container smoke test still probes retired Streamlit health endpoint"
 
 
+def test_deploy_does_not_enable_streamlit_websockets():
+    deploy = (REPO / "deploy" / "azure-deploy.ps1").read_text(encoding="utf-8")
+    assert not re.search(r"--web-sockets-enabled\s+true\b", deploy), (
+        "FastHTML dashboard is plain HTTP; deploy should not enable retired "
+        "Streamlit WebSockets"
+    )
+
+
 def test_packaging_modules_importable():
     # Modules the Dockerfile invokes with `python -m` must import cleanly.
     for mod in ("src.ingest", "src.snapshots"):

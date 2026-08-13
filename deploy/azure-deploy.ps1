@@ -47,7 +47,7 @@ Write-Host "Building image in Azure (az acr build)..."
 az acr build -r $AcrName -t $Image "$RepoRoot" -o none
 
 # 3. Linux App Service plan. B1 keeps the container Always On so the first
-#    visitor doesn't hit a cold WebSocket. F1 (free) works but has no Always On.
+#    visitor doesn't hit a cold container. F1 (free) works but has no Always On.
 az appservice plan create -g $ResourceGroup -n $PlanName --is-linux --sku B1 -o none
 
 # 4. Web app pointing at the freshly built image
@@ -64,9 +64,10 @@ az role assignment create --assignee-object-id $PrincipalId `
 az webapp config set -g $ResourceGroup -n $AppName `
     --generic-configurations '{"acrUseManagedIdentityCreds": true}' -o none
 
-# 6. Tell App Service the container port, enable WebSockets, and keep the app warm.
+# 6. Tell App Service the container port, disable unused WebSockets, and keep
+#    the app warm.
 az webapp config appsettings set -g $ResourceGroup -n $AppName --settings WEBSITES_PORT=$Port -o none
-az webapp config set -g $ResourceGroup -n $AppName --web-sockets-enabled true --always-on true -o none
+az webapp config set -g $ResourceGroup -n $AppName --web-sockets-enabled false --always-on true -o none
 
 # 7. Restart so the pull uses the identity + role granted above.
 az webapp restart -g $ResourceGroup -n $AppName -o none
