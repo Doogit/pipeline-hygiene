@@ -47,30 +47,17 @@ python -m src.brief --as-of 2026-08-10 --quotas your_quotas.json --digests
 python -m app.server        # then open http://127.0.0.1:5100
 ```
 
-The dashboard is a read-only FastHTML + htmx page (`app/server.py`) whose tabs
-mirror the brief structure — it never writes to the store or to source data,
-and viewing or downloading a brief from it does not record a run. It binds
-`127.0.0.1` explicitly (serving the private digest data to the network needs a
-deliberate `PIPELINE_HYGIENE_ALLOW_NONLOCAL_HOST=1` opt-in), sends a strict CSP
-(`default-src 'self'; style-src 'self' 'unsafe-inline'`), and is offline/zero-CDN:
-htmx, vega/vega-lite/vega-embed, the CSP-safe AST interpreter, and the Tailwind
-stylesheet are all served locally from `app/static` (versions + SHA-256 in
-`app/static/vendor/VENDOR.md`; the stylesheet is built offline by the standalone
-`tailwindcss` CLI via `scripts/build_css.sh`, no Node). Styling is a light
-Fluent/Microsoft-web theme (Segoe UI system stack, no CDN fonts; accent
-`#0072B2`, the Okabe-Ito "low" blue that doubles as Microsoft brand blue). The
-page renders strictly from a pure view model (`src/pipeline_hygiene_view.py`);
-a parity gate (`tests/parity/`) freezes the values/strings/chart-specs and the
-exported brief byte-for-byte against the prior Streamlit render. Every view
-shares the same headline: a metric row with week-over-week delta arrows wired to
-since-last-run (desk score, open pipeline, at-risk dollars — at-risk inverts, so
-rising risk reads red), the violation counts as colored text, and the severity
-mix as a compact stacked bar. The sidebar
-holds the data source (stored snapshot picker or CSV upload), the explicit
-`as_of` evaluation date, and owner/team/stage/severity filters (team
-selections expand to their rosters; the sidebar states which tables the
-filters apply to — headline metrics and team/region rollups stay
-desk-wide).
+The dashboard is a read-only page: it never changes your data, and viewing or
+downloading a brief records nothing. It runs locally on `127.0.0.1` by default
+and works fully offline — no CDNs, external calls, or fonts pulled from the
+internet — in a light Microsoft-style theme.
+
+Every tab shares the same header: desk score, open pipeline, and at-risk dollars
+with week-over-week arrows (at-risk turns red as it rises), the violation counts,
+and a severity-mix bar. The sidebar chooses the data source (a stored snapshot or
+a CSV upload), sets the `as_of` evaluation date, and filters by owner, team,
+stage, or severity — the headline metrics and team/region rollups always stay
+desk-wide.
 
 ### Forecast call (landing tab)
 
@@ -84,65 +71,52 @@ frontline manager can run her 9:00 call on just her team's risky commits.
 
 ### Slippage
 
-The push analytics derived from snapshot history: pushes, cumulative
-later-drift, max push, H11 badges, the disqualification-review marker at
-3+ pushes, and a per-opp close-date drift sparkline (inline SVG).
+Push analytics from snapshot history: how often each deal's close date has
+slipped and by how much, the H11 badges, a disqualification-review marker at
+3+ pushes, and a small close-date drift sparkline per deal.
 
 ![Slippage tab](docs/screenshots/tab-slippage.png)
 
 ### Trajectory
 
-Altair charts across stored snapshots: coverage (open vs required pipeline
-at 1 / trailing win rate, with the basis printed underneath) and the desk
-score trend — snapshot-anchored (the engine re-run per stored snapshot, no
-holes from snapshots without recorded runs). Needs at least 2 stored
-snapshots; with fewer it degrades to a clear caption instead of a
-one-point trend. Below the charts: commit accuracy by committed-for
-quarter (the fiscal quarter of the close date when the deal was first
-called commit — immune to later pushes, so a slipped commit stays counted
-against the quarter it was promised for). The created-vs-closed flow bars
-moved to the Flow tab.
+Charts across stored snapshots: coverage (open vs required pipeline, with its
+basis printed underneath) and the desk-score trend. Needs at least 2 snapshots;
+with fewer it shows a short caption instead of a misleading one-point trend.
+Below the charts, commit accuracy by the quarter each deal was first called
+commit — so a later slip stays counted against the quarter it was promised for.
 
 ![Trajectory tab](docs/screenshots/tab-trajectory.png)
 
 ### Flow
 
-Where the pipeline dollars went between the last two snapshots, and
-whether enough new pipeline is being generated. The open-pipeline
-waterfall (beginning + created + increased − decreased − won − lost −
-removed = ending — reconciles exactly; close-date pushes move no dollars
-and render as an annotation, never a bucket), pipeline-generation pacing
-per snapshot week against the optional `pipeline_gen_weekly_target` line
-(no target configured → no line guessed), and created-vs-closed bars per
-snapshot week. The same waterfall renders as a table on brief page 1.
+Where the pipeline dollars went between the last two snapshots, and whether
+enough new pipeline is being created. An open-pipeline waterfall (beginning +
+created + increased − decreased − won − lost − removed = ending) that reconciles
+exactly, pipeline-generation pacing per week against an optional target line, and
+created-vs-closed bars per week. The same waterfall appears as a table on brief
+page 1.
 
 ![Flow tab](docs/screenshots/tab-flow.png)
 
 ### Owners
 
-Owner scoreboard (progress-bar scores, pipeline dollars, coverage, small_n
-and low_coverage flags), the forecast-integrity patterns — overcall /
-undercall — and the per-owner commit-accuracy ledger, all rendered with
-the "coaching signal, not a comp input" disclaimer. Coverage is open pipeline vs required pipeline (remaining quota
-net of wins this quarter x the win-rate-derived required multiple — the same
-basis as the desk headline), and `low_coverage` means exactly under 1.00x,
-so the shown ratio and the flag can never disagree.
+Owner scoreboard (scores, pipeline dollars, coverage, small-n and low-coverage
+flags), the forecast-integrity patterns (over- and under-calling), and the
+per-owner commit-accuracy ledger — all marked "coaching signal, not a comp
+input." Coverage uses the same basis as the desk headline, and `low_coverage`
+means exactly under 1.00x, so the ratio and the flag can never disagree.
 
 ![Owners tab](docs/screenshots/tab-owners.png)
 
 ### Teams
 
-Team and region roll-ups over the same open opps — owners, open pipeline,
-roster quota, coverage, violations, at-risk dollars — sorted worst coverage
-first so ordering itself carries the signal, each table carrying the
-desk-wide under-coverage note when most groups trip the flag (so a uniform
-`low_coverage` column reads as a desk condition, not "every team failing").
-Below the tables, a per-team and per-region **coverage trend** across stored
-snapshots (each point on its own win-rate basis, with a 1.00x reference
-line), and commit accuracy by team and region. Team/region membership comes
-from the `owners` block of the `--quotas`/`PIPELINE_HYGIENE_QUOTAS` JSON (the
-seed manifest already carries it); without that metadata the tab degrades to
-a clear caption.
+Team and region roll-ups over the same open opps — owners, pipeline, quota,
+coverage, violations, at-risk dollars — sorted worst-coverage first, so the order
+itself carries the signal. When most groups trip the flag, each table notes it as
+a desk-wide condition rather than "every team failing." Below the tables, a
+per-team and per-region **coverage trend** across snapshots, plus commit accuracy
+by team and region. Team/region membership comes from the quotas JSON; without
+it, the tab shows a caption instead.
 
 ![Teams tab](docs/screenshots/tab-teams.png)
 
