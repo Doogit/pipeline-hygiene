@@ -43,6 +43,13 @@ def _row(opp_id="OPP-1", **over):
     return row
 
 
+def _ingest(store, tmp_path, snapshot_date, rows):
+    path = tmp_path / f"opps_{snapshot_date.isoformat()}.csv"
+    write_csv(path, rows)
+    report = store.ingest_csv(path, snapshot_date)
+    assert report.rejected == 0
+
+
 # --- R2.1: next step (H4) ---
 
 def test_next_step_draft_is_deterministic_stage_template(config):
@@ -210,6 +217,66 @@ def test_build_covers_every_fired_rule_and_is_idempotent(tmp_path, config,
     before = len(open_items)
     build_work_items(store, wi, AS_OF, cfg, AS_OF)
     assert len(wi.items(open_only=True)) == before
+    wi.close()
+
+
+def test_build_uses_one_close_date_pair_when_h2_and_h3_overlap(tmp_path, config,
+                                                               monkeypatch):
+    monkeypatch.setenv("PIPELINE_HYGIENE_PACKETS", "1")
+    store = SnapshotStore(":memory:", config)
+    opp_id = "OPP-OVERLAP"
+    for snap, close_date in (
+        (date(2026, 7, 20), date(2026, 7, 20)),
+        (date(2026, 7, 27), date(2026, 7, 28)),
+        (AS_OF, date(2026, 8, 1)),
+    ):
+        _ingest(store, tmp_path, snap, [
+            _row(opp_id, close_date=close_date, forecast_category="pipeline",
+                 stage_entered_date=AS_OF - timedelta(days=5),
+                 close_date_changes=None),
+        ])
+    wi = WorkItemStore(":memory:", config)
+
+    result = build_work_items(store, wi, AS_OF, config, AS_OF)
+
+    assert result["upserted"] == 2
+    items = wi.items(open_only=True)
+    assert [(i["source"], i["item_type"]) for i in items] == [
+        ("H3", "field_update"),
+        ("H3", "email_draft"),
+    ]
+    wi.close()
+
+
+def test_build_expires_low_coverage_task_when_owner_recovers(tmp_path, config,
+                                                             monkeypatch):
+    monkeypatch.setenv("PIPELINE_HYGIENE_PACKETS", "1")
+    cfg = dict(config)
+    cfg["quotas"] = {"Rowan Pemberton": 1_000_000.0}
+    store = SnapshotStore(":memory:", cfg)
+    first_snap = AS_OF - timedelta(days=7)
+    _ingest(store, tmp_path, first_snap, [
+        _row("OPP-LOW", amount=100_000.0,
+             last_activity_date=first_snap,
+             next_step_date=first_snap + timedelta(days=10),
+             stage_entered_date=first_snap),
+    ])
+    _ingest(store, tmp_path, AS_OF, [
+        _row("OPP-LOW", amount=4_000_000.0,
+             stage_entered_date=AS_OF - timedelta(days=5)),
+    ])
+    wi = WorkItemStore(":memory:", cfg)
+
+    first = build_work_items(store, wi, first_snap, cfg, first_snap)
+    assert first["upserted"] == 1
+    assert wi.items(open_only=True)[0]["source"] == drafts.OWNER_SCOPE_SOURCE
+
+    second = build_work_items(store, wi, AS_OF, cfg, AS_OF)
+
+    assert second["expired"] == 1
+    (item,) = wi.items()
+    assert item["source"] == drafts.OWNER_SCOPE_SOURCE
+    assert item["status"] == "expired"
     wi.close()
 
 

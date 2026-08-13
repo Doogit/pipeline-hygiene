@@ -11,6 +11,7 @@ no duplicates (acceptance #1).
 
 `as_of` is threaded everywhere; date.today() never appears here.
 """
+import json
 from datetime import date, timedelta
 from statistics import median
 
@@ -226,7 +227,13 @@ def build_work_items(store, wi_store, snapshot_date, config, as_of, *,
     # per-violation routing: source is the rule so expiry re-evaluates it
     for opp_id, opp_result in data["results"].items():
         row = rows_by_id[opp_id]
+        fired = {v.rule_id for v in opp_result.violations}
         for v in opp_result.violations:
+            # H3 emits the same close-date drafts as H2 plus, when applicable,
+            # the disqualification doc. Keep one open close-date/email pair so
+            # expiry remains tied to the strongest still-fired close-date rule.
+            if v.rule_id == "H2" and "H3" in fired:
+                continue
             for item in generate(v.rule_id, row, opp_result, config, as_of,
                                  context=context):
                 push(opp_id, row["owner"], v.rule_id, item)
@@ -246,5 +253,27 @@ def build_work_items(store, wi_store, snapshot_date, config, as_of, *,
                  coverage_task_draft(stats.owner, config))
             upserted += 1
 
+    expired_low_coverage = _expire_resolved_low_coverage(wi_store, data["owners"],
+                                                         as_of, by)
     expired = wi_store.expire_resolved(data["rows"], config, as_of, by=by)
-    return {"upserted": upserted, "expired": expired, "skipped": False}
+    return {"upserted": upserted, "expired": expired + expired_low_coverage,
+            "skipped": False}
+
+
+def _expire_resolved_low_coverage(wi_store, owner_stats, as_of, by):
+    """Expire owner-scoped low-coverage tasks once the owner is no longer
+    flagged. WorkItemStore's generic rule expiry cannot evaluate this synthetic
+    source because it is produced from owner rollups, not a per-opp rule."""
+    expired = 0
+    still_flagged = {stats.owner for stats in owner_stats.values()
+                     if stats.coverage_flagged}
+    for item in wi_store.items(open_only=True):
+        if item["source"] != OWNER_SCOPE_SOURCE:
+            continue
+        payload = json.loads(item["payload_json"])
+        owner = payload.get("owner")
+        if owner not in still_flagged:
+            wi_store.transition(item["id"], "expired", at=as_of, by=by,
+                                reason="resolved_in_source")
+            expired += 1
+    return expired
