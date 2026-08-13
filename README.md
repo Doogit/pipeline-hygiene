@@ -6,7 +6,7 @@ snapshots (CSV exports) into a SQLite snapshot store, runs deterministic hygiene
 
 The tool is intended to be run in a local environment (e.g. Azure server / workspace) to protect sensitive data. After install in the local environment, all data stays local.
 
-Note: The tool in its current state is designed to demonstrate potential sales pipeline automation opportunities. See the [Target Architecture](#-target-architecture) section for details on how this tool could be architected for an enterprise environment. 
+Note: The tool in its current state is designed to demonstrate potential sales pipeline automation opportunities. See the [Target Architecture](#future-state-architecture--automation) section for details on how this tool could be architected for an enterprise environment. 
 
 ## Demo
 
