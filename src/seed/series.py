@@ -22,9 +22,10 @@ Couplings are bookkept field-by-field, never by running the rules engine:
 - closing a deal removes the opp from rule scope; its violations are recorded
   under "closed", not "cleared".
 """
+import random
 from datetime import timedelta
 
-from .pathologies import build_row, generate_snapshot, sample_cohort
+from .pathologies import OPEN_STAGES, build_row, generate_snapshot, sample_cohort
 
 CLEARS_PER_WEEK = 6
 INTRODUCES_PER_WEEK = 5
@@ -81,7 +82,7 @@ def _apply_clear(row, rule, d_next, org, config, rng):
 
 
 def evolve_week(rows, exp, d_prev, d_next, d0, d_last, org, config, rng,
-                pushed_days, next_opp_num):
+                pushed_days, next_opp_num, progress_per_week=0, prog_rng=None):
     """Mutate rows/exp from snapshot d_prev to d_next; return
     (delta record, created opp_ids, next_opp_num).
 
@@ -90,10 +91,14 @@ def evolve_week(rows, exp, d_prev, d_next, d0, d_last, org, config, rng,
     H11 thresholds and makes scripted big pushes the only H11 source.
     d_last/next_opp_num anchor the created cohort: new rows get build_row's
     stability hooks (min_close/entered_headroom/h10_base) computed for the
-    REMAINING weeks, so their expected sets hold at every later snapshot."""
+    REMAINING weeks, so their expected sets hold at every later snapshot.
+
+    progress_per_week/prog_rng: opt-in stage progression drawn from an ISOLATED
+    rng (prog_rng), so with progress_per_week=0 the main rng stream — and hence
+    every existing opp/delta/expected set — is byte-identical to before."""
     delta = {"from": d_prev.isoformat(), "to": d_next.isoformat(),
              "cleared": {}, "introduced": {}, "closed": {},
-             "close_dates_pushed": {}, "added": {}}
+             "close_dates_pushed": {}, "added": {}, "stage_transitions": {}}
     _maintenance(rows, exp, rng)
     touched = set()
     horizon = config["close_date_horizon_days"]
@@ -245,13 +250,49 @@ def evolve_week(rows, exp, d_prev, d_next, d0, d_last, org, config, rng,
         exp[opp_id] = set(exp_rules)
         delta["added"][opp_id] = sorted(exp_rules)
         created_ids.append(opp_id)
+
+    # 6) stage progression (opt-in): advance open, untouched, CLEAN opps one
+    #    stage forward, keeping them clean by construction. stage_entered_date
+    #    resets to d_next (H6 reset) under a series-stability guard that keeps
+    #    the reset from tripping H6 at any later snapshot; last_activity_date
+    #    is refreshed fresh vs the NEW stage's tighter H1 threshold; the
+    #    forecast is left unchanged (a clean early-stage opp is never commit,
+    #    so H5 stays safe, and a propose/commit commit-forecast stays valid).
+    #    Targets and count are drawn from prog_rng, never the main rng.
+    if progress_per_week and prog_rng is not None:
+        created_set = set(created_ids)
+        aging = config["aging_norm_days"]
+        weeks_left_days = (d_last - d_next).days
+        candidates = [
+            o for o in sorted(rows)
+            if _is_open(rows[o]) and not exp[o] and o not in touched
+            and o not in created_set and rows[o]["stage"] != "commit"
+            and weeks_left_days
+            < aging[OPEN_STAGES[OPEN_STAGES.index(rows[o]["stage"]) + 1]]]
+        for opp_id in prog_rng.sample(
+                candidates, min(progress_per_week, len(candidates))):
+            row = rows[opp_id]
+            old = row["stage"]
+            new = OPEN_STAGES[OPEN_STAGES.index(old) + 1]
+            row["stage"] = new
+            row["stage_entered_date"] = d_next
+            row["last_activity_date"] = d_next - timedelta(days=prog_rng.randint(0, 3))
+            delta["stage_transitions"][opp_id] = {"from": old, "to": new}
+            touched.add(opp_id)
+
     return delta, created_ids, next_opp_num
 
 
-def generate_series(org, n_rows, weeks, as_of, config, rng):
-    """Weekly snapshots ending at as_of. Returns (dates, snapshots, manifest_body)."""
+def generate_series(org, n_rows, weeks, as_of, config, rng, progress_per_week=0):
+    """Weekly snapshots ending at as_of. Returns (dates, snapshots, manifest_body).
+
+    progress_per_week (default 0 = off): opt-in count of open, untouched, clean
+    opps advanced one stage each week. Progression randomness is drawn from an
+    isolated Random seeded off as_of, so the main rng stream (and every existing
+    caller's snapshots/deltas/expected sets) stays byte-identical when off."""
     dates = [as_of - timedelta(days=7 * (weeks - 1 - i)) for i in range(weeks)]
     d0, d_last = dates[0], dates[-1]
+    prog_rng = random.Random(as_of.toordinal()) if progress_per_week else None
     initial_rows, initial_expected = generate_snapshot(
         org, n_rows, d0, config, rng,
         min_close=d_last, entered_headroom=7 * (weeks - 1), h10_base=d_last)
@@ -268,7 +309,7 @@ def generate_series(org, n_rows, weeks, as_of, config, rng):
     for d_prev, d_next in zip(dates, dates[1:]):
         delta, created_ids, next_opp_num = evolve_week(
             rows, exp, d_prev, d_next, d0, d_last, org, config, rng,
-            pushed_days, next_opp_num)
+            pushed_days, next_opp_num, progress_per_week, prog_rng)
         deltas.append(delta)
         order.extend(created_ids)
         snapshots.append((d_next, [dict(rows[o]) for o in order]))

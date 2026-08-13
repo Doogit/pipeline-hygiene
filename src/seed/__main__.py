@@ -32,6 +32,9 @@ def main(argv=None):
     p.add_argument("--as-of", type=date.fromisoformat, default=None)
     p.add_argument("--series", type=int, default=None,
                    help="emit N weekly snapshots ending at --as-of")
+    p.add_argument("--progress-per-week", type=int, default=0,
+                   help="series only: advance this many clean opps one stage "
+                        "forward each week (0 = off; isolated rng)")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--out-dir", default="data")
     p.add_argument("--config", default="config.yaml")
@@ -48,7 +51,8 @@ def main(argv=None):
 
     if args.series and args.series > 1:
         dates, snapshots, manifest = generate_series(
-            org, args.rows, args.series, as_of, config, rng)
+            org, args.rows, args.series, as_of, config, rng,
+            args.progress_per_week)
         snap_dir = out_dir / "snapshots"
         snap_dir.mkdir(parents=True, exist_ok=True)
         for d, rows in snapshots:

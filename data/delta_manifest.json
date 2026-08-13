@@ -113,6 +113,40 @@
           "H4"
         ]
       },
+      "stage_transitions": {
+        "OPP-0029": {
+          "from": "propose",
+          "to": "commit"
+        },
+        "OPP-0109": {
+          "from": "qualify",
+          "to": "develop"
+        },
+        "OPP-0158": {
+          "from": "qualify",
+          "to": "develop"
+        },
+        "OPP-0270": {
+          "from": "qualify",
+          "to": "develop"
+        },
+        "OPP-0274": {
+          "from": "develop",
+          "to": "propose"
+        },
+        "OPP-0279": {
+          "from": "propose",
+          "to": "commit"
+        },
+        "OPP-0359": {
+          "from": "qualify",
+          "to": "develop"
+        },
+        "OPP-0396": {
+          "from": "qualify",
+          "to": "develop"
+        }
+      },
       "to": "2026-07-27"
     },
     {
@@ -191,16 +225,16 @@
             "H8"
           ]
         },
-        "OPP-0346": {
+        "OPP-0338": {
           "stage": "closed_won",
           "violations_cleared": [
-            "H9"
+            "H2"
           ]
         },
-        "OPP-0370": {
+        "OPP-0366": {
           "stage": "closed_lost",
           "violations_cleared": [
-            "H9"
+            "H2"
           ]
         }
       },
@@ -237,6 +271,40 @@
           "H1"
         ]
       },
+      "stage_transitions": {
+        "OPP-0023": {
+          "from": "qualify",
+          "to": "develop"
+        },
+        "OPP-0055": {
+          "from": "qualify",
+          "to": "develop"
+        },
+        "OPP-0118": {
+          "from": "prospect",
+          "to": "qualify"
+        },
+        "OPP-0217": {
+          "from": "qualify",
+          "to": "develop"
+        },
+        "OPP-0239": {
+          "from": "prospect",
+          "to": "qualify"
+        },
+        "OPP-0264": {
+          "from": "propose",
+          "to": "commit"
+        },
+        "OPP-0308": {
+          "from": "propose",
+          "to": "commit"
+        },
+        "OPP-0314": {
+          "from": "propose",
+          "to": "commit"
+        }
+      },
       "to": "2026-08-03"
     },
     {
@@ -269,7 +337,7 @@
         "OPP-0300": [
           "H1"
         ],
-        "OPP-0405": [
+        "OPP-0401": [
           "H1"
         ]
       },
@@ -322,13 +390,9 @@
           "stage": "closed_won",
           "violations_cleared": []
         },
-        "OPP-0401": {
+        "OPP-0400": {
           "stage": "closed_won",
-          "violations_cleared": [
-            "H1",
-            "H4",
-            "H6"
-          ]
+          "violations_cleared": []
         }
       },
       "from": "2026-08-03",
@@ -360,6 +424,40 @@
         "OPP-0388": [
           "H1"
         ]
+      },
+      "stage_transitions": {
+        "OPP-0015": {
+          "from": "develop",
+          "to": "propose"
+        },
+        "OPP-0114": {
+          "from": "qualify",
+          "to": "develop"
+        },
+        "OPP-0143": {
+          "from": "develop",
+          "to": "propose"
+        },
+        "OPP-0158": {
+          "from": "develop",
+          "to": "propose"
+        },
+        "OPP-0229": {
+          "from": "propose",
+          "to": "commit"
+        },
+        "OPP-0231": {
+          "from": "develop",
+          "to": "propose"
+        },
+        "OPP-0270": {
+          "from": "develop",
+          "to": "propose"
+        },
+        "OPP-0277": {
+          "from": "develop",
+          "to": "propose"
+        }
       },
       "to": "2026-08-10"
     }
@@ -3096,9 +3194,7 @@
       "OPP-0337": [
         "H2"
       ],
-      "OPP-0338": [
-        "H2"
-      ],
+      "OPP-0338": [],
       "OPP-0339": [
         "H3"
       ],
@@ -3114,7 +3210,9 @@
       ],
       "OPP-0344": [],
       "OPP-0345": [],
-      "OPP-0346": [],
+      "OPP-0346": [
+        "H9"
+      ],
       "OPP-0347": [],
       "OPP-0348": [
         "H7"
@@ -3160,15 +3258,15 @@
       "OPP-0363": [],
       "OPP-0364": [],
       "OPP-0365": [],
-      "OPP-0366": [
-        "H2"
-      ],
+      "OPP-0366": [],
       "OPP-0367": [],
       "OPP-0368": [],
       "OPP-0369": [
         "H6"
       ],
-      "OPP-0370": [],
+      "OPP-0370": [
+        "H9"
+      ],
       "OPP-0371": [
         "H1"
       ],
@@ -4065,9 +4163,7 @@
       "OPP-0337": [
         "H2"
       ],
-      "OPP-0338": [
-        "H2"
-      ],
+      "OPP-0338": [],
       "OPP-0339": [
         "H3"
       ],
@@ -4083,7 +4179,9 @@
       ],
       "OPP-0344": [],
       "OPP-0345": [],
-      "OPP-0346": [],
+      "OPP-0346": [
+        "H9"
+      ],
       "OPP-0347": [],
       "OPP-0348": [
         "H7"
@@ -4129,15 +4227,15 @@
       "OPP-0363": [],
       "OPP-0364": [],
       "OPP-0365": [],
-      "OPP-0366": [
-        "H2"
-      ],
+      "OPP-0366": [],
       "OPP-0367": [],
       "OPP-0368": [],
       "OPP-0369": [
         "H6"
       ],
-      "OPP-0370": [],
+      "OPP-0370": [
+        "H9"
+      ],
       "OPP-0371": [
         "H1"
       ],
@@ -4208,7 +4306,10 @@
         "H3"
       ],
       "OPP-0400": [],
-      "OPP-0401": [],
+      "OPP-0401": [
+        "H4",
+        "H6"
+      ],
       "OPP-0402": [],
       "OPP-0403": [
         "H3"
@@ -4217,6 +4318,7 @@
         "H3"
       ],
       "OPP-0405": [
+        "H1",
         "H4"
       ],
       "OPP-0406": [],
