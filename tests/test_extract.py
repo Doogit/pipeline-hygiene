@@ -109,6 +109,15 @@ def test_unknown_field_rejected_and_logged(config):
     assert len(rej) == 1 and rej[0]["reason"] == "unknown_field"
 
 
+def test_logging_rejection_requires_as_of():
+    store = NotesStore(":memory:")
+    raw = {"field": "secret_margin", "proposed_value": "x", "confidence": 0.9,
+           "evidence_quote": "buyer"}
+    with pytest.raises(ValueError, match="as_of is required"):
+        capture_proposals("buyer", OPP_CONTEXT, [raw], notes_store=store)
+    assert store.rejections() == []
+
+
 def test_extra_key_is_an_unknown_field():
     with pytest.raises(ProposalRejected) as exc:
         validate_proposal({**_good_proposal(), "evil": 1}, NOTES)

@@ -185,6 +185,10 @@ def capture_proposals(notes, opp_context, proposals, *, as_of=None,
             accepted.append(validate_proposal(raw, notes))
         except ProposalRejected as rej:
             if notes_store is not None:
+                if as_of is None:
+                    raise ValueError(
+                        "as_of is required when logging capture rejections"
+                    ) from rej
                 notes_store.log_rejection(
                     at=as_of, reason=rej.reason,
                     opp_id=opp_context.get("opp_id"), note_id=note_id,
