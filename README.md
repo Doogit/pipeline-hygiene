@@ -230,9 +230,10 @@ Implementation notes:
 
 - Data source: the latest stored snapshot from `data/pipeline.db` by
   default (snapshot selectable in the sidebar). An uploaded CSV runs the
-  same ingest validation in memory and reports its accept/reject result;
-  in this step-1 port the stored-snapshot view stays rendered (re-rendering
-  an uploaded snapshot is deferred to the step-2 redesign). Sidebar
+  same ingest validation in memory, renders as a full single-snapshot page,
+  and is kept only in a short-lived in-process session so drill-down and
+  Markdown download target the uploaded rows without writing to the snapshot
+  store. Sidebar
   owner/stage/severity filters apply to the Slippage, Owners, and Appendix
   tables.
 - Tables render from the view model: a CSS bar for 0-100 scores, `$%d`-style

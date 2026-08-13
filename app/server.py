@@ -48,9 +48,10 @@ def _prune_sessions(now):
     for tok in [t for t, s in _UPLOAD_SESSIONS.items()
                 if now - s["ts"] > _UPLOAD_TTL_SECONDS]:
         _UPLOAD_SESSIONS.pop(tok, None)
-    while len(_UPLOAD_SESSIONS) > _UPLOAD_MAX_SESSIONS:
+    while len(_UPLOAD_SESSIONS) >= _UPLOAD_MAX_SESSIONS:
         oldest = min(_UPLOAD_SESSIONS, key=lambda t: _UPLOAD_SESSIONS[t]["ts"])
         _UPLOAD_SESSIONS.pop(oldest, None)
+
 
 def _paths():
     # Read per-request so tests (and redeploys) can repoint the store via env.
@@ -120,7 +121,11 @@ def _upload_page(token, sel):
     s = _UPLOAD_SESSIONS.get(token)
     if s is None:
         return None
-    s["ts"] = time.monotonic()  # refresh idle TTL on use
+    now = time.monotonic()
+    if now - s["ts"] > _UPLOAD_TTL_SECONDS:
+        _UPLOAD_SESSIONS.pop(token, None)
+        return None
+    s["ts"] = now  # refresh idle TTL on use
     config, rows = s["config"], s["rows"]
     controls = {
         "config": config,

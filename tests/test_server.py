@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
+from app import server as server_module
 from src import brief, pipeline_hygiene_view as V
 from app.server import app
 from tests.parity._build import build_empty, build_full_multi
@@ -113,6 +114,12 @@ def _post_upload(tmp_path, name="opps_2026-08-10.csv"):
                            files={"upload": (name, f, "text/csv")})
 
 
+def _upload_token(response):
+    m = re.search(r'name="upload_token"\s+value="([\w-]+)"', response.text)
+    assert m, "upload response must carry an upload_token"
+    return m.group(1)
+
+
 def test_upload_renders_uploaded_snapshot(tmp_path, monkeypatch):
     env = build_full_multi(tmp_path)
     for k, v in env.items():
@@ -140,9 +147,7 @@ def test_uploaded_snapshot_drilldown_and_download_use_token(tmp_path,
     for k, v in env.items():
         monkeypatch.setenv(k, v)
     r = _post_upload(tmp_path)
-    m = re.search(r'name="upload_token"\s+value="([\w-]+)"', r.text)
-    assert m, "upload response must carry an upload_token"
-    token = m.group(1)
+    token = _upload_token(r)
 
     # Rebuild the expected uploaded view independently for parity checks.
     config = load_config(env["PIPELINE_HYGIENE_CONFIG"])
@@ -175,6 +180,27 @@ def test_uploaded_snapshot_drilldown_and_download_use_token(tmp_path,
     # An unknown token silently falls back to the stored view (no crash).
     fb = client.get("/content", params={"upload_token": "nope"})
     assert fb.status_code == 200 and "metric-card" in fb.text
+
+
+def test_upload_sessions_expire_and_remain_bounded(tmp_path, monkeypatch):
+    env = build_full_multi(tmp_path)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setattr(server_module, "_UPLOAD_TTL_SECONDS", 10)
+    monkeypatch.setattr(server_module, "_UPLOAD_MAX_SESSIONS", 2)
+    server_module._UPLOAD_SESSIONS.clear()
+
+    r1 = _post_upload(tmp_path)
+    t1 = _upload_token(r1)
+    server_module._UPLOAD_SESSIONS[t1]["ts"] -= 11
+    assert client.get("/content", params={"upload_token": t1}).status_code == 200
+    assert t1 not in server_module._UPLOAD_SESSIONS
+
+    t2 = _upload_token(_post_upload(tmp_path))
+    t3 = _upload_token(_post_upload(tmp_path))
+    t4 = _upload_token(_post_upload(tmp_path))
+    assert set(server_module._UPLOAD_SESSIONS) == {t3, t4}
+    assert t2 not in server_module._UPLOAD_SESSIONS
 
 
 def test_upload_rejects_filename_without_snapshot_date(full_env):
