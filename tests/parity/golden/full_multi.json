@@ -3280,10 +3280,11 @@
   "charts": [
     {
       "data": {
-        "name": "6fb27081b421c6a4e172b0ca79446f03"
+        "name": "data-d1137b283fb7d7761024bbb96962504b"
       },
       "mark": {
         "type": "bar",
+        "cornerRadiusEnd": 3,
         "size": 26
       },
       "encoding": {
@@ -3291,7 +3292,7 @@
           "field": "severity",
           "legend": {
             "orient": "right",
-            "title": " "
+            "title": null
           },
           "scale": {
             "domain": [
@@ -3335,26 +3336,25 @@
         }
       },
       "height": 40,
-      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json",
-      "autosize": {
-        "type": "fit",
-        "contains": "padding"
-      }
+      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
     },
     {
       "data": {
-        "name": "c2319431127cb4cfa20d391c5eef95a8"
+        "name": "data-1fd7d8749a3fd2090e75b8ca04f809c1"
       },
       "mark": {
         "type": "line",
-        "point": true,
+        "point": {
+          "filled": true,
+          "size": 45
+        },
         "strokeWidth": 2.5
       },
       "encoding": {
         "color": {
           "field": "series",
           "legend": {
-            "title": " "
+            "title": null
           },
           "scale": {
             "range": [
@@ -3395,19 +3395,18 @@
       },
       "height": 220,
       "title": "Coverage: open vs required pipeline (1 / trailing win rate)",
-      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json",
-      "autosize": {
-        "type": "fit",
-        "contains": "padding"
-      }
+      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
     },
     {
       "data": {
-        "name": "55fa1e6b9879c5126769df9273308129"
+        "name": "data-328f37687f6170a165756308f9829d8e"
       },
       "mark": {
         "type": "line",
-        "point": true,
+        "point": {
+          "filled": true,
+          "size": 45
+        },
         "strokeWidth": 2.5
       },
       "encoding": {
@@ -3439,26 +3438,22 @@
       },
       "height": 180,
       "title": "Desk score trend (snapshot-anchored)",
-      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json",
-      "autosize": {
-        "type": "fit",
-        "contains": "padding"
-      }
+      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
     },
     {
       "data": {
-        "name": "f091ee69b882064423fa0ec702fba90f"
+        "name": "data-1b8c077647cbc52631a5e56ed3fa4eed"
       },
       "mark": {
         "type": "bar",
-        "cornerRadiusEnd": 2
+        "cornerRadiusEnd": 3
       },
       "encoding": {
         "color": {
           "field": "kind",
           "legend": {
             "orient": "right",
-            "title": " "
+            "title": null
           },
           "scale": {
             "domain": [
@@ -3515,20 +3510,16 @@
       },
       "height": 240,
       "title": "Open-pipeline waterfall (latest snapshot pair)",
-      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json",
-      "autosize": {
-        "type": "fit",
-        "contains": "padding"
-      }
+      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
     },
     {
       "data": {
-        "name": "947ea1b55c3794bfcc3d0245aad7ba2f"
+        "name": "data-44b5bba796a76d1aebf2e68c8def848c"
       },
       "mark": {
         "type": "bar",
         "color": "#0072B2",
-        "cornerRadiusEnd": 2,
+        "cornerRadiusEnd": 3,
         "size": 26
       },
       "encoding": {
@@ -3563,25 +3554,21 @@
       },
       "height": 200,
       "title": "Pipeline generation: created per snapshot week",
-      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json",
-      "autosize": {
-        "type": "fit",
-        "contains": "padding"
-      }
+      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
     },
     {
       "data": {
-        "name": "f9d91eb38d38b06100852ab57d1a5598"
+        "name": "data-e639ea9223e4755155dcace202d7a5b5"
       },
       "mark": {
         "type": "bar",
-        "cornerRadiusEnd": 2
+        "cornerRadiusEnd": 3
       },
       "encoding": {
         "color": {
           "field": "flow",
           "legend": {
-            "title": " "
+            "title": null
           },
           "scale": {
             "domain": [
@@ -3599,7 +3586,7 @@
         },
         "opacity": {
           "condition": {
-            "param": "param_1",
+            "param": "param_ece466170d3df354",
             "value": 1.0,
             "empty": true
           },
@@ -3645,7 +3632,7 @@
       "height": 220,
       "params": [
         {
-          "name": "param_1",
+          "name": "param_ece466170d3df354",
           "select": {
             "type": "point",
             "fields": [
@@ -3656,21 +3643,20 @@
         }
       ],
       "title": "Created vs closed per snapshot week",
-      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json",
-      "autosize": {
-        "type": "fit",
-        "contains": "padding"
-      }
+      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
     },
     {
       "layer": [
         {
           "data": {
-            "name": "2f63a4bfcc97aeb7352ab5ecc40f6643"
+            "name": "data-90ac223656bb72926d90369d9b66892f"
           },
           "mark": {
             "type": "line",
-            "point": true,
+            "point": {
+              "filled": true,
+              "size": 45
+            },
             "strokeWidth": 2
           },
           "encoding": {
@@ -3678,6 +3664,18 @@
               "field": "team",
               "legend": {
                 "title": "Team"
+              },
+              "scale": {
+                "range": [
+                  "#0072B2",
+                  "#D55E00",
+                  "#E69F00",
+                  "#009E73",
+                  "#CC79A7",
+                  "#56B4E9",
+                  "#F0E442",
+                  "#000000"
+                ]
               },
               "type": "nominal"
             },
@@ -3710,7 +3708,7 @@
         },
         {
           "data": {
-            "name": "e40c4e0077d586d9cca269cd050e1672"
+            "name": "data-62270e77d641448c13ff0a9fcf3e6578"
           },
           "mark": {
             "type": "rule",
@@ -3730,21 +3728,20 @@
       ],
       "height": 260,
       "title": "Coverage over snapshots, by team",
-      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json",
-      "autosize": {
-        "type": "fit",
-        "contains": "padding"
-      }
+      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
     },
     {
       "layer": [
         {
           "data": {
-            "name": "5ef0dc5acb2dfea9f22e1fd246eb779c"
+            "name": "data-f2100c373bc6eff7d0ce1be94691ea8c"
           },
           "mark": {
             "type": "line",
-            "point": true,
+            "point": {
+              "filled": true,
+              "size": 45
+            },
             "strokeWidth": 2
           },
           "encoding": {
@@ -3752,6 +3749,18 @@
               "field": "region",
               "legend": {
                 "title": "Region"
+              },
+              "scale": {
+                "range": [
+                  "#0072B2",
+                  "#D55E00",
+                  "#E69F00",
+                  "#009E73",
+                  "#CC79A7",
+                  "#56B4E9",
+                  "#F0E442",
+                  "#000000"
+                ]
               },
               "type": "nominal"
             },
@@ -3784,7 +3793,7 @@
         },
         {
           "data": {
-            "name": "e40c4e0077d586d9cca269cd050e1672"
+            "name": "data-62270e77d641448c13ff0a9fcf3e6578"
           },
           "mark": {
             "type": "rule",
@@ -3804,11 +3813,7 @@
       ],
       "height": 260,
       "title": "Coverage over snapshots, by region",
-      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json",
-      "autosize": {
-        "type": "fit",
-        "contains": "padding"
-      }
+      "$schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
     }
   ]
 }

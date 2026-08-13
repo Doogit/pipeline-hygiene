@@ -29,6 +29,15 @@ from src.scoring import (fiscal_quarter, group_rollups, opp_score,
 # Okabe-Ito, colorblind-safe; one palette everywhere (ported from dashboard).
 SEVERITY_COLORS = {"high": "#D55E00", "medium": "#E69F00", "low": "#0072B2"}
 FLOW_COLORS = {"created": "#0072B2", "won": "#009E73", "lost": "#D55E00"}
+# Categorical palette for multi-series lines (team/region coverage trend). The
+# same colorblind-safe Okabe-Ito eight the severity/flow tokens draw from, so the
+# charts speak the shared @theme vocabulary (step-2 proposal; migration plan §8).
+CATEGORICAL_COLORS = ["#0072B2", "#D55E00", "#E69F00", "#009E73",
+                      "#CC79A7", "#56B4E9", "#F0E442", "#000000"]
+# Rounded bar tops — the step-2 visual signature; one radius for every bar mark.
+_BAR_RADIUS = 3
+# Emphasized, filled line markers (echoes the sparkline endpoint motif).
+_LINE_POINT = alt.OverlayMarkDef(filled=True, size=45)
 _SEV_RANK = {"high": 0, "medium": 1, "low": 2}
 TAB_LABELS = ["Forecast call", "Slippage", "Trajectory", "Flow", "Owners",
               "Teams", "Appendix"]
@@ -205,7 +214,7 @@ def _ledger_section(blocks, entries, key_fn, label, config, table_id):
 def _severity_mix_spec(severity_counts):
     mix = pd.DataFrame([{"severity": s, "count": n, "y": "violations"}
                         for s, n in severity_counts.items() if n])
-    return alt.Chart(mix).mark_bar(size=26).encode(
+    return alt.Chart(mix).mark_bar(size=26, cornerRadiusEnd=_BAR_RADIUS).encode(
         x=alt.X("count:Q", stack="zero", title=None),
         y=alt.Y("y:N", title=None, axis=None),
         color=alt.Color("severity:N",
@@ -468,7 +477,7 @@ def _trajectory(data, config, store, snapshot_date, snapshot_dates_all):
         cov_df = pd.DataFrame(cov_records).melt("snapshot", var_name="series",
                                                 value_name="dollars")
         spec = alt.Chart(cov_df.dropna()).mark_line(
-            point=True, strokeWidth=2.5).encode(
+            point=_LINE_POINT, strokeWidth=2.5).encode(
             x=alt.X("snapshot:N", title=None),
             y=alt.Y("dollars:Q", title=cur, axis=alt.Axis(format="~s")),
             color=alt.Color("series:N",
@@ -490,7 +499,8 @@ def _trajectory(data, config, store, snapshot_date, snapshot_dates_all):
     if len(trend) >= 2:
         spec = alt.Chart(pd.DataFrame(
             [{"snapshot": d.isoformat(), "desk score": s}
-             for d, s in trend])).mark_line(point=True, strokeWidth=2.5).encode(
+             for d, s in trend])).mark_line(point=_LINE_POINT,
+                                            strokeWidth=2.5).encode(
             x=alt.X("snapshot:N", title=None),
             y=alt.Y("desk score:Q", scale=alt.Scale(domain=[0, 100])),
             tooltip=["snapshot", "desk score"]).properties(
@@ -531,7 +541,7 @@ def _flow(config, waterfalls):
          "kind": ("level" if key in ("beginning", "ending")
                   else "in" if label.startswith("+") else "out")}
         for label, key in zip(_WF_ORDER, _WF_KEYS)])
-    wf_spec = alt.Chart(wf_df).mark_bar(cornerRadiusEnd=2).encode(
+    wf_spec = alt.Chart(wf_df).mark_bar(cornerRadiusEnd=_BAR_RADIUS).encode(
         x=alt.X("bucket:N", sort=_WF_ORDER, title=None),
         y=alt.Y("dollars:Q", title=cur, axis=alt.Axis(format="~s")),
         color=alt.Color("kind:N",
@@ -555,7 +565,7 @@ def _flow(config, waterfalls):
                              "created": w["dollars"], "opps": w["n"]}
                             for w in pacing["weekly"]])
     pace_chart = alt.Chart(pace_df).mark_bar(
-        size=26, cornerRadiusEnd=2, color=FLOW_COLORS["created"]).encode(
+        size=26, cornerRadiusEnd=_BAR_RADIUS, color=FLOW_COLORS["created"]).encode(
         x=alt.X("week:N", title=None),
         y=alt.Y("created:Q", title=cur, axis=alt.Axis(format="~s")),
         tooltip=["week", "opps", alt.Tooltip("created:Q", format=",.0f")])
@@ -583,7 +593,7 @@ def _flow(config, waterfalls):
     flow_hover = alt.selection_point(fields=["flow"], on="mouseover",
                                      empty=True)
     flow_spec = alt.Chart(pd.DataFrame(flow_records)).mark_bar(
-        cornerRadiusEnd=2).encode(
+        cornerRadiusEnd=_BAR_RADIUS).encode(
         x=alt.X("week:N", title=None),
         y=alt.Y("dollars:Q", title=cur, axis=alt.Axis(format="~s")),
         color=alt.Color("flow:N",
@@ -751,10 +761,12 @@ def _teams(data, config, store, snapshot_dates_all):
             if not recs:
                 continue
             df = pd.DataFrame(recs)
-            line = alt.Chart(df).mark_line(point=True, strokeWidth=2).encode(
+            line = alt.Chart(df).mark_line(
+                point=_LINE_POINT, strokeWidth=2).encode(
                 x=alt.X("snapshot:N", title=None),
                 y=alt.Y("coverage:Q", title="coverage (x)"),
                 color=alt.Color(f"{dim}:N",
+                                scale=alt.Scale(range=CATEGORICAL_COLORS),
                                 legend=alt.Legend(title=dim.capitalize())),
                 tooltip=["snapshot", dim,
                          alt.Tooltip("coverage:Q", format=".2f")])

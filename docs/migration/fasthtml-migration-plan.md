@@ -206,6 +206,41 @@ render the two `LineChartColumn` sparklines as inline SVG sparklines and the
 `ProgressColumn` score bars as a CSS bar. List all three in the Task 1 inventory
 and the parity allowlist.
 
+### 8a. Step 2 PR 2 — deliberate chart-spec re-baseline (2026-08-12)
+
+Step 1 shipped option A with the chart goldens **frozen from the live Streamlit
+render** (non-circular, per §10 Task 4). Step 2's visual redesign (PR 2) **changes
+the chart specs on purpose** — rounded bar tops (`cornerRadiusEnd`), a documented
+categorical Okabe-Ito palette on the multi-series team/region coverage-trend
+lines, and emphasized filled line points — all drawing from the shared `@theme`
+tokens (PR 1). Data values and every user-visible string (chart titles, axis
+titles, legend titles) are unchanged; only mark/encoding/scale/legend styling
+moves. This makes `test_chart_parity` fail by design.
+
+**Re-baseline mechanism (accepted, documented tradeoff).** The Streamlit
+re-freeze tool (`freeze_goldens.py`) was deleted in Task 5, so there is **no
+non-circular source** to re-freeze charts from. The chart goldens are therefore
+regenerated from the **new view-model output** — the sole source of truth now
+that Streamlit is retired — by a small reviewed script,
+`tests/parity/refreeze_charts.py` (`python -m tests.parity.refreeze_charts`). It
+rewrites **only the `charts` array** of each golden and **aborts** if any text /
+table / metric surface would change (so it can only ever re-baseline charts,
+never mask a regression). The golden diff is confined to `charts` and reviewed in
+the PR.
+
+**Consequence — the gate is now CIRCULAR for charts only.** Chart specs are
+diffed against goldens derived from the same view model, so `test_chart_parity`
+no longer guards charts against an independent baseline; it now guards them
+against *unintended future drift* (a spec change with no corresponding, reviewed
+`refreeze_charts` run still fails). **Text, table, and metric goldens stay frozen
+from Streamlit and remain non-circular** — they are never touched by the refreeze
+script and `ALLOWLIST` stays `{}`. Because the goldens are now serialized by
+Altair's `to_dict()` (view model) rather than the Streamlit wrapper, the
+re-baselined `charts` also show incidental, `normalize_chart`-invariant
+differences (the `data.name` token, `legend.title` `" "`→`null`, dropped
+`autosize`); `refreeze_charts` drops the `datasets`/`config` blocks Altair inlines
+so the stored golden keeps the frozen shape and the diff stays readable.
+
 ## 9. Offline-first + read-only, enforced not asserted
 
 - **Vendor `htmx.min.js` locally** under `app/static/`; **drop Pico** — Tailwind
