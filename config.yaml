@@ -75,3 +75,14 @@ drafts:
     - "Re-engage closed-lost accounts from the last two quarters"
     - "Book three first meetings from existing customer relationships"
     - "Run a partner-sourced pipeline session"
+  packet:                                  # R4 Monday Packet assembly/export
+    # Minutes-to-clear (R4.5): per-item-type minute constants. The packet PRINTS
+    # the computed sum (item_count x these), never a fixed "15-minute" slogan a
+    # large packet would falsify.
+    minutes_per_item:
+      field_update: 1
+      next_step: 2
+      email_draft: 4
+      clinic_doc: 6
+      agenda_item: 3
+    default_minutes_per_item: 2
