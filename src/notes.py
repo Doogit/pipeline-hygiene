@@ -5,9 +5,13 @@ work_items.py: when the flag is off nothing here is constructed and these tables
 are never created, so the app and the parity gate stay byte-identical to the
 packets-disabled build.
 
-Raw notes are stored so a later, improved extractor can re-process them without
-re-capturing (R3.6). All time is threaded explicitly (captured_at / as_of) —
-date.today() is banned outside CLI entry points, matching the rules engine.
+Raw notes are stored so they can be re-reviewed later without re-capturing
+(R3.6). All time is threaded explicitly (captured_at / as_of) — date.today() is
+banned outside CLI entry points, matching the rules engine.
+
+This is a LOCAL-ONLY tool: captured notes are never sent anywhere. Capture is
+manual review (a human reads the note and enters proposals in src/extract.py);
+there is no LLM/API/network path here or in extract.py.
 
 PRIVACY / RETENTION (P1 open item, plan Deferred 2026-08-13): raw notes may
 carry PII, deal terms, and competitively sensitive text, and today they persist
@@ -32,9 +36,10 @@ from pathlib import Path
 MAX_NOTES_BYTES = 256 * 1024
 
 # Common credential shapes stripped BEFORE storage so secrets never land in the
-# notes table (and never egress to an extractor). Best-effort minimization, not
-# a DLP guarantee. Each pattern replaces the secret VALUE with a redaction
-# marker while keeping surrounding note text intact and re-processable.
+# notes table. Notes never leave the device (local-only tool), so this is
+# defense-in-depth for the stored file, not egress control. Best-effort
+# minimization, not a DLP guarantee. Each pattern replaces the secret VALUE with
+# a redaction marker while keeping surrounding note text intact and re-processable.
 _REDACTED = "[REDACTED]"
 _CREDENTIAL_PATTERNS = (
     # AWS access key id
@@ -133,7 +138,7 @@ class NotesStore:
         Enforces the privacy guard (R3.7) BEFORE anything is written: oversize
         input is refused (NoteTooLargeError) and credential patterns are
         stripped from the text. `captured_at` is threaded explicitly (no wall
-        clock). The stored text is re-processable by a future extractor."""
+        clock). The stored text can be re-reviewed later."""
         raw = text or ""
         if len(raw.encode("utf-8")) > MAX_NOTES_BYTES:
             raise NoteTooLargeError(
@@ -164,7 +169,7 @@ class NotesStore:
     def log_rejection(self, *, at, reason, opp_id=None, note_id=None,
                       detail=None):
         """Append one capture-rejection audit row. Reused for both invalid
-        proposals from the extractor and refused captures. Returns its id."""
+        entered proposals and refused captures. Returns its id."""
         at_s = _iso(at)
         with self.conn:
             cur = self.conn.execute(
