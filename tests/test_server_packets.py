@@ -12,12 +12,14 @@ gated behind PIPELINE_HYGIENE_PACKETS, set per test via monkeypatch.
 """
 import re
 from datetime import date
+from urllib.parse import quote
 
 import pytest
 from starlette.testclient import TestClient
 
 from app.server import app
 from src.ingest import load_config
+from src.snapshots import SnapshotStore
 from src.work_items import WorkItemStore, normalize_owner
 from tests.parity._build import build_full_multi
 
@@ -103,6 +105,16 @@ def test_owner_selector_lists_owners_with_counts(packets_env):
     assert "OPP-0" in r2.text
 
 
+def test_mutation_refresh_uses_included_packet_owner_form_value(packets_env):
+    wid = _seed_field_updates(packets_env, n=1)[0]
+    r = client.post(f"/work-item/{wid}/accept",
+                    data={"packet_owner": _norm()})
+
+    assert r.status_code == 200
+    assert "OPP-0" in r.text
+    assert "accepted" in r.text
+
+
 def test_selected_owner_zero_open_items_empty_state(packets_env):
     r = client.get("/content", params={"packet_owner": "::nobody::"})
     assert r.status_code == 200
@@ -169,6 +181,23 @@ def test_edit_valid_value_updates_status_and_value(packets_env):
         assert json.loads(item["payload_json"])["proposed_value"] == "2026-12-01"
     finally:
         wi.close()
+
+
+def test_edit_then_accept_uses_edited_value_in_crm_block(packets_env):
+    wid = _seed_field_updates(packets_env, n=1)[0]
+    r = client.post(f"/work-item/{wid}/edit",
+                    params={"packet_owner": _norm()},
+                    data={"proposed_value": "2026-12-01"})
+    assert r.status_code == 200
+
+    r = client.post(f"/work-item/{wid}/accept",
+                    params={"packet_owner": _norm()})
+    assert r.status_code == 200
+
+    md = client.get(f"/packet/{_norm()}.md").text
+    crm = md.split("Paste-ready CRM block", 1)[1]
+    assert "OPP-0" in crm
+    assert "close_date = 2026-12-01" in crm
 
 
 def test_edit_type_invalid_value_unchanged_with_error(packets_env):
@@ -243,6 +272,32 @@ def test_expired_item_cannot_be_reopened(packets_env):
         wi.close()
 
 
+def test_closed_items_reject_accept_dismiss_and_edit(packets_env):
+    wid = _seed_field_updates(packets_env, n=1)[0]
+    config = load_config(packets_env["PIPELINE_HYGIENE_CONFIG"])
+    wi = WorkItemStore(packets_env["PIPELINE_HYGIENE_DB"], config)
+    try:
+        wi.transition(wid, "expired", at=AS_OF, by="system",
+                      reason="resolved_in_source")
+    finally:
+        wi.close()
+
+    assert client.post(f"/work-item/{wid}/accept").status_code == 409
+    assert client.post(f"/work-item/{wid}/dismiss",
+                       data={"reason": "stale"}).status_code == 409
+    assert client.post(f"/work-item/{wid}/edit",
+                       data={"proposed_value": "2026-12-01"}).status_code == 409
+
+
+def test_missing_item_mutations_return_404(packets_env):
+    assert client.post("/work-item/999999/accept").status_code == 404
+    assert client.post("/work-item/999999/dismiss",
+                       data={"reason": "stale"}).status_code == 404
+    assert client.post("/work-item/999999/edit",
+                       data={"proposed_value": "2026-12-01"}).status_code == 404
+    assert client.post("/work-item/999999/reopen").status_code == 404
+
+
 # --- same-origin guard -----------------------------------------------------
 
 
@@ -276,6 +331,24 @@ def test_packet_export_md_and_html(packets_env):
     assert html.status_code == 200
     assert html.headers["content-type"].startswith("text/html")
     assert "Drafts only" in html.text
+
+
+def test_packet_export_links_match_selected_snapshot(packets_env):
+    _seed_field_updates(packets_env, n=1)
+    config = load_config(packets_env["PIPELINE_HYGIENE_CONFIG"])
+    store = SnapshotStore(packets_env["PIPELINE_HYGIENE_DB"], config)
+    try:
+        selected = store.snapshot_dates()[0].isoformat()
+    finally:
+        store.close()
+
+    r = client.get("/content",
+                   params={"packet_owner": _norm(), "snapshot": selected,
+                           "as_of": selected})
+
+    assert r.status_code == 200
+    assert f"/packet/{quote(_norm())}.md?snapshot={selected}" in r.text
+    assert f"as_of={selected}" in r.text
 
 
 def test_packet_export_404_when_flag_off(tmp_path, monkeypatch):

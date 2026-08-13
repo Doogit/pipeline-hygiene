@@ -16,6 +16,7 @@ the parity gate guards that this duplication never drifts.
 """
 from dataclasses import dataclass, field
 from datetime import date
+from urllib.parse import urlencode
 
 import altair as alt
 import pandas as pd
@@ -137,6 +138,7 @@ class Packets:
     items: list = field(default_factory=list)          # selected owner's open items
     dismissed: list = field(default_factory=list)      # selected owner's dismissed items
     dismiss_counts: list = field(default_factory=list)  # [{key, count}] (R5.3)
+    selection_query: str = ""           # snapshot/as_of query for matching exports
 
 
 @dataclass
@@ -1057,6 +1059,13 @@ def _build_packets(wi, config, as_of, packet_owner, *, snapshot_store=None,
         dcounts[it["source"]] = dcounts.get(it["source"], 0) + 1
     dismiss_counts = [{"key": k, "count": dcounts[k]} for k in sorted(dcounts)]
 
+    query = []
+    if snapshot_date is not None:
+        query.append(("snapshot", snapshot_date.isoformat()))
+    if as_of is not None:
+        query.append(("as_of", as_of.isoformat()))
+
     return Packets(owners=owners, selected=selected, packet=pkt,
                    items=items or [], dismissed=dismissed,
-                   dismiss_counts=dismiss_counts)
+                   dismiss_counts=dismiss_counts,
+                   selection_query=f"?{urlencode(query)}" if query else "")

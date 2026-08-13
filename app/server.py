@@ -112,18 +112,30 @@ class CSPMiddleware(BaseHTTPMiddleware):
 app.add_middleware(CSPMiddleware)
 
 
-def _selections(request):
+def _selections(request, form=None):
     q = request.query_params
+    def scalar(key, default=None):
+        if form is not None:
+            val = form.get(key)
+            if val is not None:
+                return val
+        return q.get(key, default)
+
+    def multi(key):
+        if form is not None:
+            return form.getlist(key)
+        return q.getlist(key)
+
     return {
-        "stage_map": q.get("stage_map", "default"),
-        "snapshot": q.get("snapshot"),
-        "as_of": q.get("as_of"),
-        "owners": q.getlist("owner"),
-        "teams": q.getlist("team"),
-        "stages": q.getlist("stage"),
-        "sev": q.getlist("sev"),
-        "upload_token": q.get("upload_token"),
-        "packet_owner": q.get("packet_owner"),
+        "stage_map": scalar("stage_map", "default"),
+        "snapshot": scalar("snapshot"),
+        "as_of": scalar("as_of"),
+        "owners": multi("owner"),
+        "teams": multi("team"),
+        "stages": multi("stage"),
+        "sev": multi("sev"),
+        "upload_token": scalar("upload_token"),
+        "packet_owner": scalar("packet_owner"),
     }
 
 
@@ -221,10 +233,10 @@ def _same_origin_ok(request):
     return origin.rstrip("/") == base
 
 
-def _packets_panel(request, item_id=None, *, error_for=None):
+def _packets_panel(request, item_id=None, *, form=None, error_for=None):
     """Rebuild the current page for the active selection and return JUST the
     #packets-panel div for an htmx outerHTML swap after a mutation."""
-    sel = _selections(request)
+    sel = _selections(request, form=form)
     page = _page(sel)
     cur = V._cur(page.controls.get("config") or {})
     for tab in page.tabs:
@@ -382,19 +394,41 @@ def _mutation_guard(request):
     return None
 
 
+def _item_or_response(wi, item_id):
+    item = next((it for it in wi.items() if it["id"] == item_id), None)
+    if item is None:
+        return None, Response(status_code=404)
+    return item, None
+
+
+def _require_status(item, allowed):
+    if item["status"] not in allowed:
+        allowed_text = ", ".join(allowed)
+        return Response(f"item status must be one of: {allowed_text}",
+                        status_code=409)
+    return None
+
+
 @app.post("/work-item/{item_id:int}/accept")
-def wi_accept(request, item_id: int):
+async def wi_accept(request, item_id: int):
     guard = _mutation_guard(request)
     if guard is not None:
         return guard
+    form = await request.form()
     config_path, db_path, _ = _paths()
     config = load_config(config_path)
     wi = WorkItemStore(db_path, config)
     try:
+        item, response = _item_or_response(wi, item_id)
+        if response is not None:
+            return response
+        response = _require_status(item, ("proposed", "edited"))
+        if response is not None:
+            return response
         wi.accept(item_id, at=date.today(), by=_operator())
     finally:
         wi.close()
-    return _packets_panel(request, item_id)
+    return _packets_panel(request, item_id, form=form)
 
 
 @app.post("/work-item/{item_id:int}/dismiss")
@@ -410,10 +444,16 @@ async def wi_dismiss(request, item_id: int):
     config = load_config(config_path)
     wi = WorkItemStore(db_path, config)
     try:
+        item, response = _item_or_response(wi, item_id)
+        if response is not None:
+            return response
+        response = _require_status(item, ("proposed", "accepted", "edited"))
+        if response is not None:
+            return response
         wi.dismiss(item_id, reason=reason, at=date.today(), by=_operator())
     finally:
         wi.close()
-    return _packets_panel(request, item_id)
+    return _packets_panel(request, item_id, form=form)
 
 
 @app.post("/work-item/{item_id:int}/edit")
@@ -427,10 +467,15 @@ async def wi_edit(request, item_id: int):
     config = load_config(config_path)
     wi = WorkItemStore(db_path, config)
     try:
-        items = {it["id"]: it for it in wi.items()}
-        item = items.get(item_id)
-        if item is None:
-            return Response(status_code=404)
+        item, response = _item_or_response(wi, item_id)
+        if response is not None:
+            return response
+        response = _require_status(item, ("proposed", "edited"))
+        if response is not None:
+            return response
+        if item["item_type"] != "field_update":
+            return Response("only field_update items can be edited",
+                            status_code=409)
         payload = json.loads(item["payload_json"])
         field_name = payload.get("field")
         kind = FIELD_TYPES.get(field_name)
@@ -441,37 +486,38 @@ async def wi_edit(request, item_id: int):
             if kind is None:
                 raise ValueError("not a typed field")
         except (ValueError, TypeError):
-            return _packets_panel(request, item_id, error_for=item_id)
+            return _packets_panel(request, item_id, form=form,
+                                  error_for=item_id)
         new_payload = dict(payload, proposed_value=coerced)
         wi.edit(item_id, new_payload, at=date.today(), by=_operator())
     finally:
         wi.close()
-    return _packets_panel(request, item_id)
+    return _packets_panel(request, item_id, form=form)
 
 
 @app.post("/work-item/{item_id:int}/reopen")
-def wi_reopen(request, item_id: int):
+async def wi_reopen(request, item_id: int):
     guard = _mutation_guard(request)
     if guard is not None:
         return guard
+    form = await request.form()
     config_path, db_path, _ = _paths()
     config = load_config(config_path)
     wi = WorkItemStore(db_path, config)
     try:
-        items = {it["id"]: it for it in wi.items()}
-        item = items.get(item_id)
-        if item is None:
-            return Response(status_code=404)
+        item, response = _item_or_response(wi, item_id)
+        if response is not None:
+            return response
         # Reversible while pre-export: dismissed -> proposed. expired items are
         # NOT reopenable (terminal resolution in source).
-        if item["status"] != "dismissed":
-            return Response("only dismissed items can be reopened",
-                            status_code=409)
+        response = _require_status(item, ("dismissed",))
+        if response is not None:
+            return response
         wi.transition(item_id, "proposed", at=date.today(), by=_operator(),
                       reason="reopened")
     finally:
         wi.close()
-    return _packets_panel(request, item_id)
+    return _packets_panel(request, item_id, form=form)
 
 
 @app.get("/packet/{owner}.md")

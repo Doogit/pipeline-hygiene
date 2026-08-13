@@ -282,7 +282,8 @@ def render_block(b, cur):
 
 # Mutation controls carry the sidebar form (snapshot/as_of/filters/packet_owner)
 # so the OOB re-render preserves the current selection, then swap #packets-panel.
-_WI_HX = {"hx_include": "#sidebar-form", "hx_target": "#packets-panel",
+_WI_HX = {"hx_include": "#sidebar-form, #packet-owner",
+          "hx_target": "#packets-panel",
           "hx_swap": "outerHTML", "hx_indicator": "#load"}
 
 
@@ -304,7 +305,7 @@ def _packet_item_row(item, error_for=None):
     status = item["status"]
     value = _packet_item_value(item)
     controls = []
-    if status == "proposed":
+    if status in ("proposed", "edited"):
         controls.append(Button("Accept", cls="wi-accept",
                                hx_post=f"/work-item/{iid}/accept", **_WI_HX))
     if status in ("proposed", "accepted", "edited"):
@@ -318,7 +319,8 @@ def _packet_item_row(item, error_for=None):
                       placeholder="reason…", cls="wi-reason"),
                 Button("Confirm dismiss", cls="wi-dismiss-confirm",
                        hx_post=f"/work-item/{iid}/dismiss",
-                       hx_include=f"#sidebar-form, #wi-reason-{iid}",
+                       hx_include=("#sidebar-form, #packet-owner, "
+                                   f"#wi-reason-{iid}"),
                        hx_target="#packets-panel", hx_swap="outerHTML",
                        hx_indicator="#load"),
                 cls="wi-dismiss-body"),
@@ -330,7 +332,8 @@ def _packet_item_row(item, error_for=None):
                       value=value, cls="wi-edit-input"),
                 Button("Save edit", cls="wi-edit-save",
                        hx_post=f"/work-item/{iid}/edit",
-                       hx_include=f"#sidebar-form, #wi-edit-{iid}",
+                       hx_include=("#sidebar-form, #packet-owner, "
+                                   f"#wi-edit-{iid}"),
                        hx_target="#packets-panel", hx_swap="outerHTML",
                        hx_indicator="#load"),
                 cls="wi-edit-body"),
@@ -352,6 +355,9 @@ def render_packets(b, cur, *, error_for=None):
     export buttons + work-item table with accept/dismiss/edit/reopen controls.
     The whole panel has a stable id so mutations swap it as one unit."""
     parts = [H3("Packets", cls="h3")]
+    if b.selected is not None:
+        parts.append(Input(type="hidden", id="packet-owner",
+                           name="packet_owner", value=b.selected))
 
     # Desk-wide summary: each owner + open count, click to select.
     if not b.owners and b.selected is None:
@@ -386,11 +392,13 @@ def render_packets(b, cur, *, error_for=None):
                        f"{pkt.item_count} item(s).", cls="caption"))
         parts.append(NotStr(f"<pre class='crm'>{_pre_esc(pkt.crm_block)}</pre>"))
         # Export buttons (plain download links).
+        export_query = getattr(b, "selection_query", "")
         parts.append(Div(
-            A("Export .md", href=f"/packet/{_q(b.selected)}.md",
+            A("Export .md", href=f"/packet/{_q(b.selected)}.md{export_query}",
               cls="download", download=True),
             " ",
-            A("Export .html", href=f"/packet/{_q(b.selected)}.html",
+            A("Export .html",
+              href=f"/packet/{_q(b.selected)}.html{export_query}",
               cls="download", download=True),
             cls="download-row"))
 
