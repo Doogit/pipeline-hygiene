@@ -138,6 +138,7 @@ _OPTIONAL_CONFIG = {
     "staleness_escalation": {"escalate_days": int, "review_days": int},
     "aging_norm_mode": str,
     "aging_norm_derived_multiple": _NUMBER,
+    "drafts": dict,
 }
 
 

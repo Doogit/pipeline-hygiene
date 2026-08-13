@@ -187,6 +187,31 @@ class SnapshotStore:
             prev_close = close
         return stats
 
+    def close_date_intervals(self, snapshot_date):
+        """Per-opp ordered close-date PUSH sizes over history <= snapshot_date:
+        {opp_id: [days, ...]}. Each element is how many days a close_date moved
+        LATER at one consecutive-snapshot pair — the same later-only convention
+        push_stats uses, but the raw per-push series push_stats aggregates away.
+        R2.2's proposed-date median and R2.3's drift sparkline need the
+        individual pushes, not the count/sum. Pull-ins are excluded (never
+        negative); fewer than 2 snapshots -> empty list. One query, one pass."""
+        cur = self.conn.execute(
+            "SELECT opp_id, close_date FROM opportunities "
+            "WHERE snapshot_date <= ? ORDER BY opp_id, snapshot_date",
+            (snapshot_date.isoformat(),))
+        series, prev_opp, prev_close = {}, None, None
+        for opp_id, close in cur:
+            if opp_id != prev_opp:
+                series[opp_id] = []
+                prev_opp, prev_close = opp_id, close
+                continue
+            if close is not None and prev_close is not None and close > prev_close:
+                series[opp_id].append(
+                    (date.fromisoformat(close)
+                     - date.fromisoformat(prev_close)).days)
+            prev_close = close
+        return series
+
     def waterfall(self, prev_date, cur_date, owners=None):
         """Open-pipeline bridge between two stored snapshots.
 
