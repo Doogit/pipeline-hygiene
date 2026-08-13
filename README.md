@@ -181,38 +181,6 @@ python -m app.server        # open http://127.0.0.1:5100
 
 Ingesting the full four-snapshot series (not just one) is what makes the Trajectory, Slippage, and Flow tabs populate. To use real data instead, ingest your own CRM export — see [Bring your own CSV](#bring-your-own-csv).
 
-
-
-## For your boss (FAQ)
-
-For an evaluator deciding between this and a commercial suite:
-
-- **Cost of operation.** Runs locally on Python 3.10+; no API keys, no LLM
-  calls, no external services, no per-seat license. Dependencies are pyyaml,
-  pandas, python-fasthtml, altair (pytest/hypothesis are dev-only). A snapshot
-  ingests and briefs in seconds on a laptop.
-- **Auditability.** Every hygiene rule (H1–H11) is a deterministic pure
-  function with a versioned threshold in `config.yaml`; there is no model and
-  no randomness in the engine. The coverage number prints its own basis
-  (`trailing win rate 28/43 closed won (65.1%) -> required multiple 1.54x`),
-  the pipeline waterfall reconciles to the dollar, and a golden-file test pins
-  the brief byte-for-byte. A skeptic can reproduce every figure by hand.
-- **Extensibility.** Add a rule as a pure function in `src/rules.py` plus a
-  weight in `config.yaml`; map any CRM's stage vocabulary with `stage_map`;
-  get team/region rollups by adding an `owners` block to the quotas JSON. No
-  schema migration, no vendor lock-in — it's plain CSV in, Markdown/SQLite out.
-- **What it deliberately does NOT do** (by design, not omission):
-  - No CRM write-back and no contacting sellers — it is read-only over CSV
-    snapshots (*agents inspect, people sell*). The forecast-call checkboxes
-    are paper, on purpose.
-  - No real-time sync — it reasons over batch snapshots, which is what makes
-    the since-last-run and slippage history possible.
-  - No opaque AI/ML deal-risk score — the deterministic, auditable rules are
-    the intended *complement* to CRM-vendor risk AI, not a copy of it.
-  - One currency per file (mixed currency is a fatal ingest error), no
-    activity capture, no built-in SSO/RBAC (bind the dashboard to localhost
-    and distribute the private digests per seller).
-
 ## Hygiene rules (H1–H11)
 
 Each rule is a deterministic pure function `(row, config, as_of)` with a
