@@ -399,6 +399,13 @@ def opp_streak(streaks, result):
 def build(store, snapshot_date, as_of, config, owner_filter=None,
           filter_label=None):
     """Compute all brief data for one stored snapshot. No side effects."""
+    # Dynamic aging (optional): when aging_norm_mode == 'derived', H6 evaluates
+    # against per-stage norms derived from this org's observed dwell. Resolved
+    # once here (needs the store's history) and threaded through every
+    # evaluation below; default 'static' returns config unchanged, so H6 and
+    # the frozen goldens are untouched. See src/funnel.py:resolve_aging_config.
+    from .funnel import resolve_aging_config
+    config = resolve_aging_config(store, config, snapshot_date)
     prev = store.last_run_before_snapshot(snapshot_date)
     # Quota/owner mismatch is a desk-wide data-quality fact; a filtered brief
     # would list every unselected quota owner as "missing", so it skips it.

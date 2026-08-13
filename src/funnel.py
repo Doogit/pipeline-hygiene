@@ -24,7 +24,6 @@ from datetime import date
 from statistics import median
 
 from .ingest import load_config
-from .brief import merge_quota_payload
 from .snapshots import SnapshotStore
 
 OPEN_STAGES = ["prospect", "qualify", "develop", "propose", "commit"]
@@ -54,14 +53,42 @@ def _opp_trajectory(history):
     return seen, max_idx, terminal, dwells
 
 
-def funnel(store, config, as_of):
-    """Per-open-stage width / advancement / median-dwell records over stored
-    history <= as_of. Returns (records, meta). One query, one pass per opp."""
-    dates = [d for d in store.snapshot_dates() if d <= as_of]
+def _walk_opps(store, as_of):
+    """Yield _opp_trajectory(...) for each opp over stored history <= as_of.
+    One query, ascending by opp then snapshot — the shared single pass behind
+    the funnel report and the derived-aging dwell medians."""
     cur = store.conn.execute(
         "SELECT opp_id, snapshot_date, stage FROM opportunities "
         "WHERE snapshot_date <= ? ORDER BY opp_id, snapshot_date",
         (as_of.isoformat(),))
+    prev_opp, history = None, []
+    for opp_id, snap_date, stage in cur:
+        if opp_id != prev_opp:
+            if history:
+                yield _opp_trajectory(history)
+            prev_opp, history = opp_id, []
+        history.append((date.fromisoformat(snap_date), stage))
+    if history:
+        yield _opp_trajectory(history)
+
+
+def stage_dwell_medians(store, as_of):
+    """Per open stage: (median observed dwell days, sample count) over stored
+    history <= as_of. A sample is one completed dwell (an opp seen leaving the
+    stage). Stages with no completed dwell report (None, 0). The primitive the
+    derived aging norms are built from."""
+    dwell_by_stage = {s: [] for s in OPEN_STAGES}
+    for _seen, _max_idx, _terminal, dwells in _walk_opps(store, as_of):
+        for stage, days in dwells:
+            dwell_by_stage[stage].append(days)
+    return {s: (int(median(v)), len(v)) if v else (None, 0)
+            for s, v in dwell_by_stage.items()}
+
+
+def funnel(store, config, as_of):
+    """Per-open-stage width / advancement / median-dwell records over stored
+    history <= as_of. Returns (records, meta). One query, one pass per opp."""
+    dates = [d for d in store.snapshot_dates() if d <= as_of]
 
     # accumulate per stage: opp fates and dwell samples
     fates = {s: {"advanced": 0, "stalled": 0, "won": 0, "lost": 0}
@@ -70,9 +97,7 @@ def funnel(store, config, as_of):
     dwell_by_stage = {s: [] for s in OPEN_STAGES}
     transitions = 0
 
-    def flush(opp_history):
-        nonlocal transitions
-        seen, max_idx, terminal, dwells = _opp_trajectory(opp_history)
+    for seen, max_idx, terminal, dwells in _walk_opps(store, as_of):
         for stage, days in dwells:
             dwell_by_stage[stage].append(days)
         transitions += len(dwells)
@@ -86,16 +111,6 @@ def funnel(store, config, as_of):
                 fates[stage]["lost"] += 1
             else:
                 fates[stage]["stalled"] += 1
-
-    prev_opp, opp_history = None, []
-    for opp_id, snap_date, stage in cur:
-        if opp_id != prev_opp:
-            if opp_history:
-                flush(opp_history)
-            prev_opp, opp_history = opp_id, []
-        opp_history.append((date.fromisoformat(snap_date), stage))
-    if opp_history:
-        flush(opp_history)
 
     records = []
     for stage in OPEN_STAGES:
@@ -114,6 +129,39 @@ def funnel(store, config, as_of):
             "dwell_n": len(samples),
         })
     return records, {"dates": dates, "transitions": transitions}
+
+
+def derived_aging_norms(config, dwell_medians):
+    """Per-stage H6 aging norm from observed dwell: round(multiple x median),
+    clamped to >= 1 day. Any stage with fewer than the min-sample basis keeps
+    its static aging_norm_days value (so a thinly-observed stage never gets a
+    noisy norm). Pure: (config, {stage: (median, n)}) -> {stage: days}."""
+    static = config["aging_norm_days"]
+    multiple = config.get("aging_norm_derived_multiple", 1.75)
+    min_n = config["min_closed_for_win_rate"]
+    norms = {}
+    for stage, base in static.items():
+        median_days, n = dwell_medians.get(stage, (None, 0))
+        if median_days is not None and n >= min_n:
+            norms[stage] = max(1, round(multiple * median_days))
+        else:
+            norms[stage] = base
+    return norms
+
+
+def resolve_aging_config(store, config, as_of):
+    """Return the config H6 should evaluate against. Identity (same object)
+    unless aging_norm_mode == 'derived', in which case a COPY with derived
+    aging_norm_days is returned — so H6 in rules.py stays a pure
+    (row, config, as_of) function and every default-mode caller is untouched
+    (parity-safe). Needs a store (multi-snapshot history); irrelevant to
+    single-upload paths, which never call it."""
+    if config.get("aging_norm_mode", "static") != "derived":
+        return config
+    norms = derived_aging_norms(config, stage_dwell_medians(store, as_of))
+    resolved = dict(config)
+    resolved["aging_norm_days"] = norms
+    return resolved
 
 
 def render_funnel(records, meta, config, as_of):
@@ -192,6 +240,7 @@ def main(argv=None):
     config = load_config(args.config)
     if args.quotas:
         import json
+        from .brief import merge_quota_payload
         with open(args.quotas, encoding="utf-8") as f:
             config = merge_quota_payload(config, json.load(f))
 
