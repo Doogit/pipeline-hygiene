@@ -207,10 +207,12 @@ def desk_score_series(store, config, up_to_snapshot, n=None):
         n = config.get("trend_snapshots") or 8
     dates = [d for d in store.snapshot_dates() if d <= up_to_snapshot][-n:]
     series = []
+    from .funnel import resolve_aging_config
     for d in dates:
+        snapshot_config = resolve_aging_config(store, config, d)
         rows = store.rows_with_history(d)
-        results = evaluate_snapshot(rows, config, d)
-        series.append((d, desk_rollup(rows, results, config)
+        results = evaluate_snapshot(rows, snapshot_config, d)
+        series.append((d, desk_rollup(rows, results, snapshot_config)
                        .weighted_mean_score))
     return series
 
@@ -230,11 +232,13 @@ def group_trends(store, config, up_to_snapshot, n=None):
     fy_start = config["fiscal_year_start_month"]
     dates = [d for d in store.snapshot_dates() if d <= up_to_snapshot][-n:]
     out = {"team": {}, "region": {}}
+    from .funnel import resolve_aging_config
     for d in dates:
+        snapshot_config = resolve_aging_config(store, config, d)
         rows = store.rows_with_history(d)
-        results = evaluate_snapshot(rows, config, d)
+        results = evaluate_snapshot(rows, snapshot_config, d)
         outcomes = store.closed_outcomes(d)
-        multiple, _ = required_coverage_multiple(outcomes, config)
+        multiple, _ = required_coverage_multiple(outcomes, snapshot_config)
         quarter = fiscal_quarter(d, fy_start)
         won_by_owner = {}
         for o in outcomes:
@@ -243,7 +247,7 @@ def group_trends(store, config, up_to_snapshot, n=None):
                 won_by_owner[o["owner"]] = (won_by_owner.get(o["owner"], 0.0)
                                             + (o["amount"] or 0.0))
         for dimension in ("team", "region"):
-            groups = group_rollups(rows, results, config, owner_meta,
+            groups = group_rollups(rows, results, snapshot_config, owner_meta,
                                    dimension, multiple, won_by_owner)
             for key, g in groups.items():
                 out[dimension].setdefault(key, []).append(
@@ -405,7 +409,8 @@ def build(store, snapshot_date, as_of, config, owner_filter=None,
     # evaluation below; default 'static' returns config unchanged, so H6 and
     # the frozen goldens are untouched. See src/funnel.py:resolve_aging_config.
     from .funnel import resolve_aging_config
-    config = resolve_aging_config(store, config, snapshot_date)
+    base_config = config
+    config = resolve_aging_config(store, base_config, snapshot_date)
     prev = store.last_run_before_snapshot(snapshot_date)
     # Quota/owner mismatch is a desk-wide data-quality fact; a filtered brief
     # would list every unselected quota owner as "missing", so it skips it.
@@ -420,11 +425,11 @@ def build(store, snapshot_date, as_of, config, owner_filter=None,
                   for a, b in zip(stored, stored[1:])]
     # The headline trend is a desk-wide series; a filtered brief drops it
     # (same reasoning as dropping the previous run's desk score).
-    score_trend = (desk_score_series(store, config, snapshot_date)
+    score_trend = (desk_score_series(store, base_config, snapshot_date)
                    if owner_filter is None else None)
     # Per-team/region coverage+risk trend is desk-wide (dropped on a filtered
     # brief, same as the desk score trend).
-    grp_trends = (group_trends(store, config, snapshot_date)
+    grp_trends = (group_trends(store, base_config, snapshot_date)
                   if owner_filter is None else None)
     return build_from_rows(
         store.rows_with_history(snapshot_date), snapshot_date, as_of, config,

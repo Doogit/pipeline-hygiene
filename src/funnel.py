@@ -81,7 +81,7 @@ def stage_dwell_medians(store, as_of):
     for _seen, _max_idx, _terminal, dwells in _walk_opps(store, as_of):
         for stage, days in dwells:
             dwell_by_stage[stage].append(days)
-    return {s: (int(median(v)), len(v)) if v else (None, 0)
+    return {s: (median(v), len(v)) if v else (None, 0)
             for s, v in dwell_by_stage.items()}
 
 
@@ -125,7 +125,7 @@ def funnel(store, config, as_of):
             "won": f["won"],
             "lost": f["lost"],
             "advancement_rate": (f["advanced"] / w) if w else None,
-            "median_dwell_days": (int(median(samples)) if samples else None),
+            "median_dwell_days": (median(samples) if samples else None),
             "dwell_n": len(samples),
         })
     return records, {"dates": dates, "transitions": transitions}

@@ -67,6 +67,31 @@ def _derived_cfg(config):
     return cfg
 
 
+def _future_dwell_store(tmp_path, config):
+    """At D2 the store has only one completed develop dwell, below the derived
+    norm sample floor. At D3 it has enough dwell evidence. Historical replay
+    must not use the D3-derived norm while evaluating D2."""
+    store = SnapshotStore(":memory:", config)
+    _ingest(store, tmp_path, D1, [
+        _row("M1", D1, "develop"),
+        _row("SITTER", D1, "develop",
+             stage_entered_date=D2 - timedelta(days=30)),
+    ])
+    _ingest(store, tmp_path, D2, [
+        _row("M1", D2, "propose"),
+        _row("M2", D2, "develop"),
+        _row("SITTER", D2, "develop",
+             stage_entered_date=D2 - timedelta(days=30)),
+    ])
+    _ingest(store, tmp_path, D3, [
+        _row("M1", D3, "propose"),
+        _row("M2", D3, "propose"),
+        _row("SITTER", D3, "closed_lost",
+             stage_entered_date=D2 - timedelta(days=30)),
+    ])
+    return store
+
+
 def test_dwell_medians_from_progression(tmp_path, config):
     store = _store(tmp_path, config)
     medians = fn.stage_dwell_medians(store, D3)
@@ -74,6 +99,13 @@ def test_dwell_medians_from_progression(tmp_path, config):
     # SITTER never left -> no sample; other stages have none either
     assert medians["propose"] == (None, 0)
     assert medians["qualify"] == (None, 0)
+
+
+def test_derived_norms_preserve_fractional_median(config):
+    cfg = _derived_cfg(config)
+    norms = fn.derived_aging_norms(
+        cfg, {"develop": (10.5, cfg["min_closed_for_win_rate"])})
+    assert norms["develop"] == 21
 
 
 def test_derived_norms_with_static_fallback(tmp_path, config):
@@ -119,6 +151,26 @@ def test_brief_build_uses_derived_norm(tmp_path, config):
 
     derived_data = brief.build(store, D3, D3, cfg)
     assert "H6" in derived_data["results"]["SITTER"].rule_ids()
+
+
+def test_backtest_resolves_derived_norms_per_snapshot(tmp_path, config):
+    cfg = _derived_cfg(config)
+    store = _future_dwell_store(tmp_path, cfg)
+
+    resolved = fn.resolve_aging_config(store, cfg, D3)
+    assert resolved["aging_norm_days"]["develop"] == 14
+
+    from src import backtest as bt
+    h6 = next(r for r in bt.backtest(store, cfg, D3)[0] if r["rule"] == "H6")
+    assert h6["flagged"] == 0
+
+
+def test_brief_trend_resolves_derived_norms_per_snapshot(tmp_path, config):
+    cfg = _derived_cfg(config)
+    store = _future_dwell_store(tmp_path, cfg)
+
+    data = brief.build(store, D3, D3, cfg)
+    assert data["score_trend"] == [(D1, 100.0), (D2, 100.0), (D3, 100.0)]
 
 
 def test_config_schema_validates_aging_keys(config):

@@ -239,11 +239,13 @@ def _group_coverage_series(store, config, dates, dimension):
     owner_meta = config.get("owner_meta") or {}
     fy_start = config["fiscal_year_start_month"]
     records = []
+    from src.funnel import resolve_aging_config
     for d in dates:
+        snapshot_config = resolve_aging_config(store, config, d)
         snap = store.rows_with_history(d)
-        results = evaluate_snapshot(snap, config, d)
+        results = evaluate_snapshot(snap, snapshot_config, d)
         outcomes = store.closed_outcomes(d)
-        multiple, _ = required_coverage_multiple(outcomes, config)
+        multiple, _ = required_coverage_multiple(outcomes, snapshot_config)
         quarter = fiscal_quarter(d, fy_start)
         won_by_owner = {}
         for o in outcomes:
@@ -251,8 +253,8 @@ def _group_coverage_series(store, config, dates, dimension):
                     and fiscal_quarter(o["close_date"], fy_start) == quarter:
                 won_by_owner[o["owner"]] = (won_by_owner.get(o["owner"], 0.0)
                                             + (o["amount"] or 0.0))
-        groups = group_rollups(snap, results, config, owner_meta, dimension,
-                               multiple, won_by_owner)
+        groups = group_rollups(snap, results, snapshot_config, owner_meta,
+                               dimension, multiple, won_by_owner)
         for g in groups.values():
             if g.coverage_ratio is not None:
                 records.append({"snapshot": d.isoformat(), dimension: g.key,
@@ -263,7 +265,7 @@ def _group_coverage_series(store, config, dates, dimension):
 def build_page_model(*, store, config, snapshot_date, as_of, rows, data,
                      prev_summary, prev_opens, outcomes, validation,
                      f_owners=(), f_teams=(), f_stages=(), f_sev=(),
-                     controls=None):
+                     controls=None, trend_config=None):
     """Build the full page model from the same inputs the dashboard held after
     loading (`data` = brief.build_from_rows(...)). `store` is None for an
     in-memory upload; the multi-snapshot sections degrade exactly as before."""
@@ -355,7 +357,8 @@ def build_page_model(*, store, config, snapshot_date, as_of, rows, data,
                                        snapshot_dates_all)),
         Tab("Flow", _flow(config, waterfalls)),
         Tab("Owners", _owners(data, config, f_owner_set, results, rows_by_id)),
-        Tab("Teams", _teams(data, config, store, snapshot_dates_all)),
+        Tab("Teams", _teams(data, config, store, snapshot_dates_all,
+                            trend_config or config)),
         Tab("Appendix", _appendix(data, config, _matches, results, rows_by_id,
                                   prev_opens, store, snapshot_date, validation)),
     ]
@@ -740,7 +743,7 @@ def _group_records(groups, config):
     } for g in ranked]
 
 
-def _teams(data, config, store, snapshot_dates_all):
+def _teams(data, config, store, snapshot_dates_all, trend_config):
     blocks = [Heading("Teams and regions")]
     if not (config.get("owner_meta") or {}):
         blocks.append(Caption("No team/region metadata configured. Point "
@@ -773,7 +776,8 @@ def _teams(data, config, store, snapshot_dates_all):
                               "improving reads as a rising line — the trend the "
                               "single-snapshot tables above cannot show."))
         for dim in ("team", "region"):
-            recs = _group_coverage_series(store, config, snapshot_dates_all, dim)
+            recs = _group_coverage_series(
+                store, trend_config or config, snapshot_dates_all, dim)
             if not recs:
                 continue
             df = pd.DataFrame(recs)
@@ -928,8 +932,9 @@ def build_from_store(config_path, db_path, quotas_path=None, *,
 
     snapshot_date = snapshot_date or dates[-1]
     as_of = as_of or snapshot_date
+    base_config = config
     from src.funnel import resolve_aging_config
-    config = resolve_aging_config(store, config, snapshot_date)
+    config = resolve_aging_config(store, base_config, snapshot_date)
     store.config = config
     rows = store.rows_with_history(snapshot_date)
     validation = store.validation_report_dict(snapshot_date)
@@ -962,4 +967,5 @@ def build_from_store(config_path, db_path, quotas_path=None, *,
         store=store, config=config, snapshot_date=snapshot_date, as_of=as_of,
         rows=rows, data=data, prev_summary=prev_summary, prev_opens=prev_opens,
         outcomes=outcomes, validation=validation, f_owners=f_owners,
-        f_teams=f_teams, f_stages=f_stages, f_sev=f_sev, controls=controls)
+        f_teams=f_teams, f_stages=f_stages, f_sev=f_sev, controls=controls,
+        trend_config=base_config)
