@@ -8,11 +8,13 @@ the shared brief.render (plan §1, §9, §12). The Task 0 spike already proved t
 charts actually draw offline in a real browser.
 """
 import re
+from datetime import date
 from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
 
+from app import server as server_module
 from src import brief, pipeline_hygiene_view as V
 from app.server import app
 from tests.parity._build import build_empty, build_full_multi
@@ -105,20 +107,100 @@ def test_empty_store_shows_warning(tmp_path, monkeypatch):
     assert "tab-btn" not in r.text
 
 
-def test_upload_validates_without_storing(tmp_path, monkeypatch):
+def _post_upload(tmp_path, name="opps_2026-08-10.csv"):
+    csv_path = Path(tmp_path) / name
+    with csv_path.open("rb") as f:
+        return client.post("/upload", data={"stage_map": "default"},
+                           files={"upload": (name, f, "text/csv")})
+
+
+def _upload_token(response):
+    m = re.search(r'name="upload_token"\s+value="([\w-]+)"', response.text)
+    assert m, "upload response must carry an upload_token"
+    return m.group(1)
+
+
+def test_upload_renders_uploaded_snapshot(tmp_path, monkeypatch):
     env = build_full_multi(tmp_path)
     for k, v in env.items():
         monkeypatch.setenv(k, v)
-    csv_path = Path(tmp_path) / "opps_2026-08-10.csv"
-    with csv_path.open("rb") as f:
-        r = client.post("/upload",
-                        data={"stage_map": "default"},
-                        files={"upload": ("opps_2026-08-10.csv", f,
-                                          "text/csv")})
+    r = _post_upload(tmp_path)
     assert r.status_code == 200
+    # Status caption swaps #upload-status; the page renders below.
     assert "id=\"upload-status\"" in r.text
-    assert "Uploaded snapshot 2026-08-10 validated: accepted" in r.text
-    assert "does not yet re-render uploaded CSVs" in r.text
+    assert "Uploaded snapshot 2026-08-10 rendered below" in r.text
+    assert "does not yet re-render" not in r.text
+    # #content and the sidebar filters come back as out-of-band swaps.
+    assert 'hx-swap-oob="true"' in r.text
+    assert "metric-card" in r.text and "tab-btn" in r.text
+    assert 'id="sidebar-dynamic"' in r.text
+    assert re.search(r'name="upload_token"\s+value="[\w-]+"', r.text)
+    assert "Return to the stored view" in r.text
+
+
+def test_uploaded_snapshot_drilldown_and_download_use_token(tmp_path,
+                                                            monkeypatch):
+    import json
+
+    from src.ingest import load_config, validate_csv
+    env = build_full_multi(tmp_path)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    r = _post_upload(tmp_path)
+    token = _upload_token(r)
+
+    # Rebuild the expected uploaded view independently for parity checks.
+    config = load_config(env["PIPELINE_HYGIENE_CONFIG"])
+    with open(env["PIPELINE_HYGIENE_QUOTAS"], encoding="utf-8") as f:
+        config = brief.merge_quota_payload(config, json.load(f))
+    csv_path = Path(tmp_path) / "opps_2026-08-10.csv"
+    rows, report = validate_csv(csv_path, config, "default")
+    validation = dict(report.to_dict(), source_file="opps_2026-08-10.csv")
+    data = brief.build_from_rows(
+        rows, date(2026, 8, 10), date(2026, 8, 10), config,
+        validation=validation, prev_summary=None, outcomes=None,
+        prev_opens=[], patterns=None, ledger=None)
+
+    # /download with the token renders the UPLOADED snapshot, byte-identical to
+    # the shared brief.render over the uploaded rows (not the stored snapshot).
+    d = client.get("/download", params={"upload_token": token})
+    assert d.status_code == 200
+    assert d.text == brief.render(data, config)
+
+    # /content with the token stays in the uploaded view.
+    c = client.get("/content", params={"upload_token": token})
+    assert c.status_code == 200 and "metric-card" in c.text
+
+    # /drilldown with the token resolves owners from the uploaded rows.
+    owner = next(iter(data["owners"].values())).owner
+    dd = client.get("/drilldown", params={"owner": owner,
+                                          "upload_token": token})
+    assert dd.status_code == 200 and "owner-drilldown" in dd.text
+
+    # An unknown token silently falls back to the stored view (no crash).
+    fb = client.get("/content", params={"upload_token": "nope"})
+    assert fb.status_code == 200 and "metric-card" in fb.text
+
+
+def test_upload_sessions_expire_and_remain_bounded(tmp_path, monkeypatch):
+    env = build_full_multi(tmp_path)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setattr(server_module, "_UPLOAD_TTL_SECONDS", 10)
+    monkeypatch.setattr(server_module, "_UPLOAD_MAX_SESSIONS", 2)
+    server_module._UPLOAD_SESSIONS.clear()
+
+    r1 = _post_upload(tmp_path)
+    t1 = _upload_token(r1)
+    server_module._UPLOAD_SESSIONS[t1]["ts"] -= 11
+    assert client.get("/content", params={"upload_token": t1}).status_code == 200
+    assert t1 not in server_module._UPLOAD_SESSIONS
+
+    t2 = _upload_token(_post_upload(tmp_path))
+    t3 = _upload_token(_post_upload(tmp_path))
+    t4 = _upload_token(_post_upload(tmp_path))
+    assert set(server_module._UPLOAD_SESSIONS) == {t3, t4}
+    assert t2 not in server_module._UPLOAD_SESSIONS
 
 
 def test_upload_rejects_filename_without_snapshot_date(full_env):
