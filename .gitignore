@@ -10,3 +10,7 @@ out/digests/
 app/tools/
 node_modules/
 .sesskey
+
+# Working plans — local-only scratch; convention documented in the tracked README
+docs/plans/*
+!docs/plans/README.md

@@ -49,6 +49,16 @@ def test_full_multi_renders_all_sections(tmp_path):
     assert any(c.startswith("Coverage basis:") for c in dump["caption"])
 
 
+def test_full_multi_charts_use_container_width(tmp_path):
+    env = build_full_multi(tmp_path)
+    page = V.build_from_store(env["PIPELINE_HYGIENE_CONFIG"],
+                              env["PIPELINE_HYGIENE_DB"],
+                              env["PIPELINE_HYGIENE_QUOTAS"])
+    charts = flatten(page)["charts"]
+    assert charts, "expected dashboard charts in full fixture"
+    assert all(c.get("width") == "container" for c in charts)
+
+
 def test_full_multi_download_is_shared_brief_render(tmp_path):
     """The .md download must be the shared pure brief.render — not reimplemented
     — so it stays byte-identical to the CLI/Streamlit export (plan §1, §10)."""

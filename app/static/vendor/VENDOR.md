@@ -15,7 +15,7 @@ on every update, and re-verify (`sha256sum -c`).
 | vega-embed.min.js | 7.1.0 | `c36254270219eee58fb9b1d954decad954fb07bfc9ab780c5d4401bd445cd50c` | `cdn.jsdelivr.net/npm/vega-embed@7.1.0/build/vega-embed.min.js` |
 | vega-interpreter.bundle.js | 2.3.1 (bundled) | `4cd272e83df53623826da36fbeab137c5789a9fd72ae40285b6372c7e0bf463e` | esbuild IIFE of `vega-interpreter@2.3.1` — see below |
 | embed.js | (local) | `b91401736de4d42053f089e161d312c13b62ac8678b5e338aa6dba7cb580886d` | this repo |
-| ui.js | (local) | `b8dea92a2f5492d0c6aa32a91d23572b2b713bb5ec81bcf47950fe7f306ae7a3` | this repo |
+| ui.js | (local) | `3219da907f6394eae1027ad3d4d88a31903c9c5e06f5cc0cf3e26710e3917c53` | this repo |
 
 The CSP-safe **AST interpreter** is why Vega runs under a strict CSP with no
 `unsafe-eval` (Vega otherwise compiles spec expressions via `new Function`). It
