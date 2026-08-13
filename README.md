@@ -408,23 +408,27 @@ the code, and git history.
 
 ## Handoff
 
+Recently implemented in this stack:
+
+- Seed series stage progression: `--progress-per-week` can now create
+  mid-funnel movement for later conversion and dwell analytics.
+- Org-specific backtesting: `python -m src.backtest` reports each rule's
+  flagged opportunities joined to final observed outcomes from stored history.
+- Stage-funnel analytics from stored snapshots: `python -m src.funnel`
+  reports width, advancement, closed outcomes, and observed median dwell by
+  open stage without reading the seed delta manifest.
+- Optional derived H6 aging norms: set `aging_norm_mode: derived` and
+  `aging_norm_derived_multiple` to replace static `aging_norm_days` with
+  per-stage norms derived from observed dwell, with static fallback below the
+  configured sample floor.
+
 Next session candidates (recorded, deliberately NOT built) — reviewed this
 session against the code; all remain unimplemented:
 
-- Aging thresholds derived from the org's own per-stage medians (1.5-2x
-  median), replacing the static `aging_norm_days` in `config.yaml`.
-- Org-specific backtesting: a flagged-vs-outcome table from the org's own
-  stored history — turns vendor benchmark stats into auditable org
-  evidence.
 - Dashboard explainability panel: rule + threshold + triggering snapshot
   values per flag (the anti-black-box wedge).
 - Slack/email push delivery of the brief and digests (top 3-5 cap, weekly,
   digest not firehose — alert fatigue kills adoption).
 - Cross-CRM connector via `stage_map` (original spec handoff option).
-- Funnel / stage-transition analytics (deferred across earlier sessions):
-  blocked on the simulator producing no mid-funnel stage transitions, so
-  there is nothing yet to measure conversion against. Unblock the seed data
-  first.
-
 Start the next session by reading `README.md`, `SPEC.md`,
 `data/seed_manifest.json`, and `data/delta_manifest.json`.
