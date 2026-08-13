@@ -84,6 +84,30 @@ def test_owner_drilldown_partial(full_env):
     assert "owner-drilldown" in r.text
 
 
+def test_owner_drilldown_explainability_panel(full_env):
+    # an owner with flagged opps renders the per-flag explanation panel,
+    # pairing each rule with its trip line and observed value.
+    import src.brief as brief
+    from html import escape
+    from src.rules import is_open
+    page = V.build_from_store(full_env["PIPELINE_HYGIENE_CONFIG"],
+                              full_env["PIPELINE_HYGIENE_DB"],
+                              full_env["PIPELINE_HYGIENE_QUOTAS"])
+    data = page.controls["data"]
+    rows_by_id = {r["opp_id"]: r for r in page.controls["rows"]}
+    owner = next(rows_by_id[r.opp_id]["owner"]
+                 for r in data["results"].values()
+                 if r.violations and is_open(rows_by_id[r.opp_id]))
+    exp = brief.flag_explanations(owner, data["results"], rows_by_id,
+                                  page.controls["config"])
+    r = client.get("/drilldown", params={"owner": owner})
+    assert r.status_code == 200
+    assert "Why flagged — rule, threshold, and observed value per flag" in r.text
+    # a real trip line and its rule label are both surfaced
+    assert escape(exp[0]["trips when"], quote=False) in r.text
+    assert exp[0]["flag"] in r.text
+
+
 def test_download_is_byte_identical_to_brief_render(full_env):
     r = client.get("/download")
     assert r.status_code == 200

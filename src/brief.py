@@ -991,6 +991,27 @@ def owner_flagged_opps(owner, results, rows_by_id, config):
     return recs
 
 
+def flag_explanations(owner, results, rows_by_id, config):
+    """One row per (flagged opp, violation) for the drill-down explainability
+    panel: the rule and its label, the trip line it crosses (the config
+    threshold, from rule_trip), and the observed value that tripped it (the
+    engine's own detail). Same opp ordering as owner_flagged_opps; within an
+    opp, rules ascend by number. The anti-black-box view — every flag shown
+    with the rule, the threshold, and the snapshot value side by side."""
+    rows = []
+    for rec in owner_flagged_opps(owner, results, rows_by_id, config):
+        result = results[rec["opp_id"]]
+        for v in sorted(result.violations, key=lambda v: int(v.rule_id[1:])):
+            rows.append({
+                "opp_id": rec["opp_id"],
+                "rule": v.rule_id,
+                "flag": RULE_LABELS[v.rule_id],
+                "trips when": rule_trip(v.rule_id, config),
+                "observed": v.detail,
+            })
+    return rows
+
+
 def _staleness_tiers(lines, data, config):
     """Escalation ladder over H1-stale opps, rendered only when the OPTIONAL
     staleness_escalation config block is present (absent -> the brief is
