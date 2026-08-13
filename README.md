@@ -16,18 +16,15 @@ stays in sync with them (CI rebuilds it whenever the screenshots change).
 
 ## Security & secure-by-design
 
-This tool handles sales-pipeline data, so it is built to keep that data local, inert, and hard to exfiltrate. The security posture is a design property, not a bolt-on:
+This tool handles sales-pipeline data, so it keeps that data local, inert, and hard to exfiltrate by design:
 
-- **Read-only over the data.** The tool never writes back to a CRM, never contacts sellers, and never mutates source files or the snapshot store. Viewing, filtering, drilling down, and downloading a brief all record nothing — there is no write path to abuse.
-- **Local-only by default.** `python -m app.server` binds `127.0.0.1`. Binding to a non-local host is refused unless you explicitly opt in with `PIPELINE_HYGIENE_ALLOW_NONLOCAL_HOST=1`, so the private data is never served to the network by accident.
-- **Strict Content-Security-Policy on every response.** `default-src 'self'; style-src 'self' 'unsafe-inline'`. Scripts are same-origin only — no inline JavaScript and no `eval`; only inline *styles* are permitted.
-- **Zero-CDN, fully offline, integrity-pinned assets.** htmx, vega/vega-lite/vega-embed, the CSP-safe AST interpreter, and the Tailwind stylesheet are all vendored under `app/static` and served locally — no third-party requests, no CDN supply-chain exposure, no external tracking. Each asset's upstream version and SHA-256 are recorded in `app/static/vendor/VENDOR.md` and re-verified on update (`sha256sum -c`).
-- **CSP-safe chart rendering.** Charts render through the Vega AST interpreter specifically so the app needs no `unsafe-eval` — the strict CSP above holds with no exceptions carved out for charting.
-- **Uploaded CSVs never persist.** An uploaded snapshot is validated and held in a transient in-memory session keyed by an opaque `secrets`-generated token, then pruned on expiry. Nothing from an upload is written to disk or into the snapshot store.
-- **Auth at the platform edge, not hand-rolled.** The app ships no bespoke authentication. It serves synthetic demo data openly; for real data you place sign-in *in front* of it (e.g. Azure App Service "Easy Auth" / Entra `RequireAuthentication`), a clean boundary with no auth code to get wrong. The deploy guide explicitly warns not to point it at real pipeline data until sign-in is enabled.
-- **Small, auditable surface.** A single read-only FastHTML + htmx process with minimal dependencies and no database writes keeps the attack surface small and the behavior easy to reason about.
+- **Read-only.** It never writes back to a CRM, contacts sellers, or mutates source files or the snapshot store — viewing, filtering, and downloading a brief record nothing.
+- **Local-only by default.** `python -m app.server` binds `127.0.0.1`; serving to a non-local host requires an explicit `PIPELINE_HYGIENE_ALLOW_NONLOCAL_HOST=1` opt-in.
+- **Offline, locked-down front-end.** All assets (htmx, vega, Tailwind) are vendored under `app/static` and integrity-pinned — no CDNs or third-party calls — under a strict `default-src 'self'` CSP with no `unsafe-eval`.
+- **Uploads never persist.** An uploaded CSV is validated and held in a transient in-memory session, then pruned on expiry — nothing is written to disk or the store.
+- **Auth at the platform edge.** The app ships no bespoke auth; for real data you put sign-in in front of it (e.g. Azure "Easy Auth" / Entra), so there's no auth code to get wrong.
 
-This is a demo-grade tool, not a hardened multi-tenant service: there is no built-in RBAC, audit logging, or activity capture. The design goal is that the default posture is safe (local, read-only, offline) and that using it with real data is a deliberate, gated step.
+This is a demo-grade tool, not a hardened multi-tenant service (no built-in RBAC or audit logging): the default posture is safe (local, read-only, offline), and using it with real data is a deliberate, gated step.
 
 ## Bring your own CSV
 
@@ -246,6 +243,9 @@ config.yaml     runtime thresholds, stage_map, rule weights
 ```
 python -m src.seed --rows 400 --as-of 2026-08-10        # single snapshot + ground-truth manifest
 python -m src.seed --series 4 --as-of 2026-08-10        # weekly snapshots T0..T3 + delta manifest
+                                                        # add --progress-per-week N to advance N clean
+                                                        # opps one stage forward each week (mid-funnel
+                                                        # movement; the shipped demo data uses 8)
 python -m src.ingest --init your_export.csv             # "doctor": inspect a CSV, print a stage_map
                                                         # skeleton (FIXME per unmatched stage); exits
                                                         # nonzero only on missing required columns
@@ -267,6 +267,12 @@ python -m src.brief --as-of 2026-08-10 --quotas data/seed_manifest.json --commit
                                                         # commit/best_case opp + checklist columns;
                                                         # no brief, never records a run; composes
                                                         # with --owner/--team/--region
+python -m src.backtest --as-of 2026-08-10               # out/backtest_<as_of>.md: for each rule, how
+                                                        # its flagged opps actually resolved (won/lost/
+                                                        # open) from this org's own stored history
+python -m src.funnel --as-of 2026-08-10                 # out/funnel_<as_of>.md: per-stage width,
+                                                        # advancement (advanced/stalled/won/lost) and
+                                                        # median observed dwell, from stored snapshots
 python -m app.server                                    # read-only dashboard (127.0.0.1:5100)
 pytest -q                                               # full test suite
 ```
@@ -374,12 +380,79 @@ the code, and git history.
   calendar year it ends in (with `fiscal_year_start_month: 7`, 2026-08 is
   FY2027-Q1).
 
+## Future State Architecture & Automation
+
+> Status: design/roadmap. Everything below is planned evolution of the current read-only, CSV-first tool. Nothing here changes the core principle: **agents inspect and draft; people decide and sell.**
+
+### Design position
+
+Pipeline-hygiene is deliberately built vendor-neutral and export-agnostic: it never assumes a source schema, never connects directly to a CRM, and never writes to a system of record. The column-mapping layer treats any pipeline export as a config problem, not a code problem. That's not a limitation — it's what lets the same tool run against any CRM export on day one, and what keeps its approval footprint at zero.
+
+The future state keeps that core and upgrades the **edges**: how data arrives, how outputs are delivered, and how the whole thing runs governed inside an enterprise tenant.
+
+### Target architecture
+
+```
+┌─ Ingestion edge (native, swappable) ─────────────────────────┐
+│  Scheduled BI subscription ──► mailbox rule / flow ──► watched folder
+│  Low-code flow (e.g. Power Automate + Dataverse connector) ──► CSV drop
+│  Paste / drag-in (ad hoc)                                    │
+└──────────────┬───────────────────────────────────────────────┘
+               ▼
+┌─ Adapter layer ──────────────────────────────────────────────┐
+│  Normalizes every source into two shapes:                    │
+│    records  — structured rows w/ provenance (snapshots, quotas)
+│    notes    — raw text w/ metadata (meeting notes, transcripts)
+│  Adapters only normalize. No business logic at the edge.     │
+└──────────────┬───────────────────────────────────────────────┘
+               ▼
+┌─ Core (unchanged) ───────────────────────────────────────────┐
+│  Canonical schema · mapping profiles · snapshot store        │
+│  Deterministic rules engine (hygiene, slippage, coverage)    │
+│  Work queue: every proposal is draft-only until a human accepts
+└──────────────┬───────────────────────────────────────────────┘
+               ▼
+┌─ Delivery edge ──────────────────────────────────────────────┐
+│  Dashboard (manager) · per-seller digest (email/chat, push)  │
+│  All artifacts trace to source data; nothing auto-sends      │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Ingestion roadmap
+
+| Phase | Path | Mechanism |
+|---|---|---|
+| Today | Manual export | Upload/paste a CSV; saved mapping profile applies in seconds |
+| Next | Watched folder | Cloud-synced folder polled by the tool; newest export auto-ingests |
+| Next | Scheduled export | BI-layer subscription delivers the export on a cadence; a low-code mail rule lands it in the watched folder — a fully automated nightly refresh built entirely from sanctioned, existing tooling |
+| Later | Native low-code pull | Where permitted, a low-code flow (e.g. Power Automate with a Dataverse connector) queries the opportunity table under the operator's own delegated permissions and drops a CSV — no new application registration, no elevated access |
+| Later | Notes sources | Meeting notes and transcripts via paste/drag first; then delegated-permission reads of the operator's own notebooks and mail, normalized through the same adapter layer |
+
+The ordering is deliberate: each phase removes friction without raising the approval threshold. Every path uses the operator's existing access through sanctioned tooling.
+
+### Enterprise deployment (in-tenant)
+
+When deployed inside a Microsoft-centric enterprise, the vendor-neutral core stays; the edges go native:
+
+- **Compute & data:** containerized API + SPA on Azure Container Apps; PostgreSQL (Azure Database) replacing local storage for multi-user concurrency.
+- **Identity:** Entra ID sign-in; roles (manager / seller / read-only) mapped from security groups; row-level scoping by opportunity owner.
+- **Ingestion:** Power Automate flows replace file-watching — first-party connectors for the CRM/Dataverse, mail, Teams, and OneNote feed the same adapter layer.
+- **Agent governance:** extraction and drafting agents are registered with their own agent identities (Entra Agent ID) and operate under an agent-governance control plane (Agent 365), so every agent action is inventoried, attributable, and auditable — the same governance posture the security stack sells to customers, applied to the tooling itself.
+
+The work-queue design doubles as the audit trail: every agent proposal and every human accept/edit/dismiss decision is timestamped and attributed. Draft-only agents plus a decision log is the governance answer built into the architecture, not bolted on.
+
+### What will not change
+
+- Read-only against systems of record. The tool proposes; humans commit changes through the CRM's own interface.
+- Deterministic, explainable rules for anything that scores or flags a deal. Model-assisted extraction is validated by code and evidenced by verbatim quotes before a human ever sees it.
+- One surface per persona. Sellers receive a digest where they already work; managers get the dashboard. New capability must reduce surfaces, not add them.
+
 ## Handoff
 
-Recently implemented in this stack:
+Recently implemented (now shipping):
 
-- Seed series stage progression: `--progress-per-week` can now create
-  mid-funnel movement for later conversion and dwell analytics.
+- Seed series stage progression: `--progress-per-week` creates mid-funnel
+  movement for conversion and dwell analytics.
 - Org-specific backtesting: `python -m src.backtest` reports each rule's
   flagged opportunities joined to final observed outcomes from stored history.
 - Stage-funnel analytics from stored snapshots: `python -m src.funnel`
@@ -389,14 +462,18 @@ Recently implemented in this stack:
   `aging_norm_derived_multiple` to replace static `aging_norm_days` with
   per-stage norms derived from observed dwell, with static fallback below the
   configured sample floor.
+- Dashboard explainability panel: the owner drill-down pairs each flag with
+  its rule, tripped threshold, and observed value.
+- Cross-CRM stage mapping: map any CRM's stage vocabulary with `stage_map`
+  (`--stage-map`, Dynamics/HubSpot presets in `config.yaml`, and
+  `python -m src.ingest --init` to scaffold a map from your own export).
 
-Next session candidates (recorded, deliberately NOT built) — reviewed this
-session against the code; all remain unimplemented:
+Deliberately deferred (product decision):
 
-- Dashboard explainability panel: rule + threshold + triggering snapshot
-  values per flag (the anti-black-box wedge).
-- Slack/email push delivery of the brief and digests (top 3-5 cap, weekly,
-  digest not firehose — alert fatigue kills adoption).
-- Cross-CRM connector via `stage_map` (original spec handoff option).
+- Slack/email push delivery of the brief and digests. Pushing to Slack/email
+  would break the local-only, no-services, inspect-only posture this tool is
+  built around; the reports are files you inspect or wire into your own
+  delivery.
+
 Start the next session by reading `README.md`, `SPEC.md`,
 `data/seed_manifest.json`, and `data/delta_manifest.json`.
