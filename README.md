@@ -20,13 +20,14 @@ stays in sync with them (CI rebuilds it whenever the screenshots change).
 
 This tool handles sales-pipeline data, so it keeps that data local, inert, and hard to exfiltrate by design:
 
-- **Read-only.** It never writes back to a CRM, contacts sellers, or mutates source files or the snapshot store — viewing, filtering, and downloading a brief record nothing.
+- **Read-only against source.** It never writes back to a CRM, contacts sellers, or mutates source files or the snapshot store — viewing, filtering, and downloading a brief record nothing. The one writable surface is the optional local packet ledger (`work_items` / `work_item_events`, behind `PIPELINE_HYGIENE_PACKETS`): draft work items you accept/edit/dismiss, never source data, and every decision is timestamped in an append-only audit trail.
 - **Local-only by default.** `python -m app.server` binds `127.0.0.1`; serving to a non-local host requires an explicit `PIPELINE_HYGIENE_ALLOW_NONLOCAL_HOST=1` opt-in.
-- **Offline, locked-down front-end.** All assets (htmx, vega, Tailwind) are vendored under `app/static` and integrity-pinned — no CDNs or third-party calls — under a strict `default-src 'self'` CSP with no `unsafe-eval`.
+- **No LLM, API, or network egress.** Nothing in the tool calls out. The optional notes-capture flow is *manual entry* — a human types the note; there is no model or hosted extractor. Notes are stored locally, credential-scrubbed before storage, and each proposed field update must quote the note verbatim (validated in code) before a human ever sees it.
+- **Offline, locked-down front-end.** All assets (htmx, vega, Tailwind) are vendored under `app/static` and integrity-pinned — no CDNs or third-party calls — under a strict `default-src 'self'` CSP (with `form-action`/`connect-src 'self'`) and no `unsafe-eval`.
 - **Uploads never persist.** An uploaded CSV is validated and held in a transient in-memory session, then pruned on expiry — nothing is written to disk or the store.
-- **Auth at the platform edge.** The app ships no bespoke auth; for real data you put sign-in in front of it (e.g. Azure "Easy Auth" / Entra), so there's no auth code to get wrong.
+- **Auth at the platform edge.** The app ships no bespoke auth; the packet write routes are single-operator by design, same-origin guarded, and localhost-bound by default. If you deliberately opt into a non-local bind for real data, put sign-in in front of it (e.g. Azure "Easy Auth" / Entra), so there's no auth code to get wrong.
 
-This is a demo-grade tool, not a hardened multi-tenant service (no built-in RBAC or audit logging): the default posture is safe (local, read-only, offline), and using it with real data is a deliberate, gated step.
+This is a demo-grade tool, not a hardened multi-tenant service (no built-in RBAC or multi-user access control — though the optional packet ledger keeps an append-only decision log): the default posture is safe (local, read-only against source, offline), and using it with real data is a deliberate, gated step.
 
 ## Bring your own CSV
 
@@ -127,6 +128,25 @@ history sparklines, plus the validation report and the download-brief
 button.
 
 ![Appendix tab](docs/screenshots/tab-appendix.png)
+
+### Packets (optional — draft actions)
+
+Behind the `PIPELINE_HYGIENE_PACKETS` flag (off by default), the dashboard gains
+a **Packets** tab — the one place the tool drafts *action* rather than only
+inspecting. For each owner it assembles their open work items (proposed field
+updates, next steps, draft emails, review docs, and 1:1 agenda items),
+dollar-ranked, with a computed minutes-to-clear estimate and a paste-ready CRM
+block built only from the updates you accept. Every packet carries the verbatim
+header *"Drafts only — review before use… Nothing was sent or written on your
+behalf,"* and exports to `.md`/`.html` — the app never sends anything.
+
+This is the tool's **one writable surface**, and it stays local: writes go only
+to the packet ledger (`work_items` / `work_item_events`), never to source data;
+each accept / edit / dismiss is timestamped in an append-only audit trail; the
+routes are single-operator and localhost-bound. Capture is manual entry — there
+is no LLM, API, or network call anywhere.
+
+![Packets tab](docs/screenshots/tab-packets.png)
 
 ## Install & run
 
@@ -385,6 +405,8 @@ the code, and git history.
 ## Future State Architecture & Automation
 
 > Status: design/roadmap. Everything below is planned evolution of the current read-only, CSV-first tool. Nothing here changes the core principle: **agents inspect and draft; people decide and sell.**
+
+**Today vs. the enterprise future.** The shipped tool is deliberately *local-only*: no LLM, no API, no network egress, and capture is manual entry validated in code. The work queue described below is already real — `work_items` / `work_item_events` back the Packets tab and the per-owner packets. What the architecture below adds is the **in-tenant enterprise deployment**, where the tool runs governed inside an organization's own environment and the edges go native. That is the context where interconnectivity and model-assisted (LLM) extraction come into play — under agent governance, first-party connectors, and delegated permissions — not the standalone local tool.
 
 ### Design position
 
